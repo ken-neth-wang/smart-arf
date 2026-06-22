@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# Run the SMART-ARF unit tests.
+#
+# Usage:
+#   ./scripts/test                 # run the whole suite once
+#   ./scripts/test --watch         # watch mode
+#   ./scripts/test scoring         # run only files matching "scoring"
+#   ./scripts/test --coverage      # coverage report
+#
+# Any args are forwarded to jest, so all jest flags work.
+# This wrapper is self-contained: it relies on the standalone config in
+# tests/jest.config.js and the babel pieces already in node_modules, so it
+# does not require jest to be added to package.json (it runs via npx).
+
+set -euo pipefail
+
+# Always resolve the project root from this script's location, so it works no
+# matter which directory you call it from.
+cd "$(dirname "$0")/.."
+
+exec npx --yes jest@29 --config tests/jest.config.js "$@"
