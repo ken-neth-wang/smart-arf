@@ -1,0 +1,3835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a5fa8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SMART-ARF">
+<link rel="manifest" href="manifest.json">
+<title>SMART-ARF</title>
+<style>
+  :root {
+    --primary: #1a5fa8;
+    --primary-dark: #134a85;
+    --primary-light: #e8f0fb;
+    --success: #1a7a4a;
+    --success-bg: #e8f5ee;
+    --warning: #b45309;
+    --warning-bg: #fef3c7;
+    --danger: #c0392b;
+    --danger-bg: #fde8e8;
+    --urgent: #7c2d12;
+    --urgent-bg: #fde8e4;
+    --gray: #6b7280;
+    --gray-light: #f3f4f6;
+    --border: #d1d5db;
+    --text: #111827;
+    --text-secondary: #4b5563;
+    --radius: 14px;
+    --shadow: 0 2px 14px rgba(0,0,0,0.09);
+    --tap: 52px; /* minimum tap target height */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { font-size: 16px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Roboto', 'Segoe UI', sans-serif;
+    background: #eef2f7;
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Header ---- */
+  .header {
+    background: var(--primary);
+    color: white;
+    padding: 18px 20px 14px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.5px; }
+  .header p  { font-size: 0.75rem; opacity: 0.82; margin-top: 2px; }
+
+  /* ---- Patient ID banner ---- */
+  .patient-banner {
+    background: #0f3d6e;
+    color: white;
+    padding: 8px 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .patient-banner.visible { display: flex; }
+  .patient-banner .pb-name { font-size: 0.88rem; font-weight: 800; }
+  .patient-banner .pb-meta { font-size: 0.75rem; opacity: 0.8; }
+
+  /* ---- Progress ---- */
+  .progress-wrap {
+    background: var(--primary-dark);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .progress-bar-bg   { flex: 1; background: rgba(255,255,255,0.22); border-radius: 99px; height: 5px; }
+  .progress-bar-fill { background: white; height: 5px; border-radius: 99px; transition: width 0.4s ease; }
+  .progress-label    { color: rgba(255,255,255,0.85); font-size: 0.7rem; white-space: nowrap; font-weight: 600; }
+
+  /* ---- Score tally bar ---- */
+  .score-tally {
+    background: var(--primary-dark);
+    color: white;
+    text-align: center;
+    padding: 7px 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: none;
+    letter-spacing: 0.2px;
+  }
+  .score-tally.visible { display: block; }
+  .score-tally .tally-num { font-size: 1.15rem; font-weight: 900; }
+
+  /* ---- Container ---- */
+  .container { max-width: 560px; margin: 0 auto; padding: 16px 12px 0; }
+
+  /* ---- Card ---- */
+  .card {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+
+  .step-badge {
+    display: inline-block;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 0.67rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    margin-bottom: 10px;
+  }
+  .card h2    { font-size: 1.05rem; font-weight: 800; margin-bottom: 5px; line-height: 1.3; }
+  .card .subtitle { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
+
+  /* ---- Form ---- */
+  label.field-label { display: block; font-size: 0.87rem; font-weight: 700; margin-bottom: 6px; }
+  input[type="text"], input[type="tel"], input[type="number"], select {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    color: var(--text);
+    margin-bottom: 16px;
+    outline: none;
+    transition: border 0.2s;
+    background: white;
+    -webkit-appearance: none;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--primary); }
+
+  /* ---- Yes/No buttons ---- */
+  .yn-group { display: flex; gap: 10px; margin-bottom: 18px; }
+  .yn-btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-align: center;
+    color: var(--text-secondary);
+    min-height: var(--tap);
+  }
+  .yn-btn.selected-yes { border-color: var(--success); background: var(--success-bg); color: var(--success); }
+  .yn-btn.selected-no  { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+
+  /* ---- Section header within card ---- */
+  .section-divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 20px 0 12px;
+  }
+  .section-divider hr   { flex:1; border:none; border-top:1.5px solid var(--border); }
+  .section-divider span { font-size: 0.68rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+
+  /* ---- Category block ---- */
+  .cat-block {
+    background: var(--gray-light);
+    border-radius: 12px;
+    padding: 14px 14px 10px;
+    margin-bottom: 14px;
+    border: 1.5px solid var(--border);
+  }
+  .cat-block.cat-active { border-color: var(--primary); background: var(--primary-light); }
+  .cat-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .cat-title { font-size: 0.9rem; font-weight: 800; color: var(--text); }
+  .cat-score-badge {
+    background: var(--primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 99px;
+  }
+  .cat-score-badge.earned { background: var(--success); }
+  .cat-desc { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 10px; font-style: italic; }
+
+  /* ---- Radio items (joint) ---- */
+  .radio-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: white;
+    min-height: var(--tap);
+  }
+  .radio-item:active { transform: scale(0.99); }
+  .radio-item.selected { border-color: var(--primary); background: var(--primary-light); }
+  .radio-item input[type="radio"] { width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+  .radio-item .ri-text { flex: 1; }
+  .radio-item .ri-name { font-size: 0.9rem; font-weight: 700; }
+  .radio-item .ri-desc { font-size: 0.76rem; color: var(--text-secondary); margin-top: 2px; }
+  .radio-item .ri-pts  { font-size: 0.78rem; font-weight: 800; color: var(--primary); white-space: nowrap; }
+  .radio-item.selected .ri-pts { color: var(--primary-dark); }
+
+  /* ---- Symptom checkboxes ---- */
+  .sym-list { display: flex; flex-direction: column; gap: 7px; }
+  .sym-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 12px;
+    border-radius: 9px;
+    border: 1.5px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: white;
+    min-height: var(--tap);
+  }
+  .sym-item:active { transform: scale(0.99); }
+  .sym-item.sym-checked { border-color: var(--primary); background: #ddeafa; }
+  .sym-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+  .sym-item .sym-label { font-size: 0.88rem; font-weight: 600; flex: 1; line-height: 1.35; }
+  .sym-item .sym-sub   { font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px; line-height: 1.35; }
+
+  /* ---- Not Available toggle ---- */
+  .na-toggle {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+    border-radius: 10px;
+    border: 2px dashed var(--border);
+    cursor: pointer;
+    background: white;
+    margin-bottom: 14px;
+    transition: all 0.18s;
+    min-height: var(--tap);
+  }
+  .na-toggle.active { border-color: var(--warning); background: var(--warning-bg); }
+  .na-toggle input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--warning); flex-shrink: 0; }
+  .na-toggle .na-text { font-size: 0.9rem; font-weight: 700; color: var(--text-secondary); }
+  .na-toggle.active .na-text { color: var(--warning); }
+
+  .lb-section { transition: opacity 0.2s; }
+  .lb-section.disabled { opacity: 0.4; pointer-events: none; }
+
+  /* ---- Alerts ---- */
+  .alert {
+    border-radius: 10px; padding: 13px 14px; margin-bottom: 14px;
+    font-size: 0.85rem; line-height: 1.5; border-left: 4px solid;
+  }
+  .alert-info    { background: var(--primary-light); border-color: var(--primary); color: var(--primary-dark); }
+  .alert-warning { background: var(--warning-bg);    border-color: var(--warning); color: #92400e; }
+  .alert strong  { font-weight: 800; }
+
+  /* ---- Buttons ---- */
+  .btn {
+    display: block; width: 100%;
+    padding: 15px; border-radius: 11px; border: none;
+    font-size: 1rem; font-weight: 800; cursor: pointer;
+    transition: all 0.18s; text-align: center;
+    min-height: var(--tap);
+  }
+  .btn-primary   { background: var(--primary); color: white; }
+  .btn-primary:active { background: var(--primary-dark); transform: scale(0.98); }
+  .btn-secondary { background: var(--gray-light); color: var(--text-secondary); border: 1.5px solid var(--border); margin-top: 10px; }
+  .btn-secondary:active { background: var(--border); transform: scale(0.98); }
+
+  /* ---- Result card ---- */
+  .result-card {
+    border-radius: var(--radius); padding: 22px; margin-bottom: 14px; text-align: center;
+  }
+  .result-card.unlikely { background: var(--success-bg); border: 2px solid var(--success); }
+  .result-card.possible { background: var(--warning-bg); border: 2px solid var(--warning); }
+  .result-card.likely   { background: var(--danger-bg);  border: 2px solid var(--danger); }
+  .result-card.urgent   { background: var(--urgent-bg);  border: 2px solid var(--urgent); }
+
+  .result-score { font-size: 3.2rem; font-weight: 900; line-height: 1; margin-bottom: 5px; }
+  .result-label { font-size: 1.15rem; font-weight: 800; margin-bottom: 3px; }
+  .result-range { font-size: 0.78rem; opacity: 0.75; margin-bottom: 16px; }
+
+  .action-box { background: rgba(255,255,255,0.7); border-radius: 10px; padding: 14px; text-align: left; }
+  .action-box h4 { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .action-box ul { padding-left: 18px; }
+  .action-box li { font-size: 0.87rem; margin-bottom: 6px; line-height: 1.4; }
+
+  /* ---- Score breakdown ---- */
+  .score-breakdown { background: white; border-radius: 11px; padding: 16px; margin-bottom: 14px; }
+  .score-breakdown h3 { font-size: 0.72rem; font-weight: 800; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.8px; }
+  .bd-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-light); font-size: 0.85rem; }
+  .bd-row:last-child { border-bottom: none; font-weight: 800; font-size: 0.92rem; }
+  .bd-pts { font-weight: 800; color: var(--primary); }
+  .bd-row.subtotal { background: var(--gray-light); margin: 4px -4px; padding: 6px 4px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; color: var(--text-secondary); }
+  .bd-row.subtotal .bd-pts { color: var(--text-secondary); }
+
+  .disclaimer { font-size: 0.73rem; color: var(--text-secondary); text-align: center; padding: 0 10px; line-height: 1.55; margin-top: 6px; }
+
+  /* ---- Live score mini card ---- */
+  .live-score-card { background: white; border-radius: 12px; box-shadow: var(--shadow); padding: 14px; text-align: center; margin-bottom: 14px; }
+  .live-score-card .ls-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-secondary); margin-bottom: 3px; }
+  .live-score-card .ls-num   { font-size: 2.6rem; font-weight: 900; color: var(--primary); line-height: 1; }
+  .live-score-card .ls-interp { font-size: 0.82rem; margin-top: 3px; font-weight: 600; }
+
+  .hidden { display: none !important; }
+
+  /* ---- Inline point badge per item ---- */
+  .item-pts {
+    background: var(--primary);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 4px 9px;
+    border-radius: 99px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 6px;
+  }
+  .item-pts-muted { background: var(--gray); }
+  .item-pts-group { background: #6366f1; }
+
+  .sym-label-wrap { min-width: 0; }
+
+  /* ---- Chorea alert banner ---- */
+  .chorea-banner {
+    background: var(--urgent-bg);
+    border: 2px solid var(--urgent);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    color: var(--urgent);
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+  .chorea-banner strong { display:block; font-size: 0.9rem; margin-bottom: 3px; }
+
+  /* ---- Bottom navigation ---- */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1.5px solid var(--border);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+    display: flex;
+    z-index: 90;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav .bn-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px 6px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    transition: color 0.15s;
+    min-height: 56px;
+  }
+  .bottom-nav .bn-item:active { background: var(--gray-light); }
+  .bottom-nav .bn-icon { font-size: 1.3rem; line-height: 1; margin-bottom: 3px; }
+  .bottom-nav .bn-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.3px; }
+  .bottom-nav .bn-item.active { color: var(--primary); }
+  .bottom-nav .bn-item.active .bn-label { font-weight: 800; }
+
+  /* ---- BPG screen ---- */
+  .bpg-step {
+    display: flex; gap: 12px;
+    padding: 14px;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .bpg-step.placeholder { opacity: 0.55; border-style: dashed; }
+  .bpg-step .bpg-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900;
+    flex-shrink: 0;
+  }
+  .bpg-step.placeholder .bpg-num { background: var(--gray); }
+  .bpg-step .bpg-body { flex: 1; font-size: 0.88rem; }
+  .bpg-step .bpg-title { font-weight: 800; margin-bottom: 4px; }
+  .bpg-step .bpg-desc  { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.45; }
+
+  /* ---- Records search ---- */
+  .records-search {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    margin-bottom: 14px;
+  }
+  .records-search:focus { border-color: var(--primary); outline: none; }
+
+  /* ---- Auth screens ---- */
+  .auth-screen {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, #1a5fa8 0%, #134a85 100%);
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 60px 18px 24px;
+    overflow-y: auto;
+  }
+  .auth-screen.hidden { display: none; }
+  .auth-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 28px 22px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .auth-logo {
+    font-size: 1.5rem; font-weight: 900; letter-spacing: 1.5px;
+    color: var(--primary); text-align: center;
+    margin-bottom: 6px;
+  }
+  .auth-title {
+    font-size: 1.15rem; font-weight: 800; text-align: center;
+    margin-bottom: 6px;
+  }
+  .auth-hint {
+    font-size: 0.82rem; color: var(--text-secondary);
+    text-align: center; line-height: 1.5; margin-bottom: 18px;
+  }
+  .auth-card input[type="text"],
+  .auth-card input[type="password"] {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    margin-bottom: 10px;
+    outline: none;
+  }
+  .auth-card input:focus { border-color: var(--primary); }
+  .auth-card .btn { margin-top: 6px; }
+  .auth-card code {
+    background: var(--gray-light);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* When any auth screen is visible, hide bottom nav */
+  body.locked .bottom-nav { display: none; }
+
+  /* Auto-blur when app goes to background */
+  body.bg-blur > *:not(.auth-screen):not(#bgBlurOverlay) { filter: blur(20px); transition: filter 0.15s; }
+  #bgBlurOverlay {
+    position: fixed; inset: 0; background: rgba(26,95,168,0.92); z-index: 800;
+    display: none; align-items: center; justify-content: center; color: white;
+    font-size: 1.1rem; font-weight: 700; text-align: center; padding: 24px;
+  }
+  body.bg-blur #bgBlurOverlay { display: flex; }
+
+  /* ---- Patient code card ---- */
+  .patient-code-card {
+    background: white;
+    border: 2px dashed var(--primary);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .patient-code-card .pcc-label {
+    font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--text-secondary); margin-bottom: 8px;
+  }
+  .patient-code-card .pcc-code {
+    font-family: 'Courier New', monospace;
+    font-size: 1.7rem; font-weight: 900; letter-spacing: 2px;
+    color: var(--primary); margin-bottom: 8px;
+    word-break: break-all;
+  }
+  .patient-code-card .pcc-hint {
+    font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+  }
+
+  /* ---- Lookup screen ---- */
+  .lookup-input {
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem !important;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .followup-card {
+    background: var(--primary-light);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .followup-card .fc-header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.78rem; font-weight: 800; color: var(--primary-dark);
+    margin-bottom: 6px;
+  }
+  .followup-card .fc-body {
+    font-size: 0.85rem; line-height: 1.5;
+  }
+  .followup-card .fc-row {
+    margin-bottom: 4px;
+  }
+  .followup-card .fc-key {
+    font-weight: 700; color: var(--text-secondary); font-size: 0.78rem;
+  }
+
+  /* ---- Sync bar ---- */
+  .sync-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 16px; font-size: 0.8rem; font-weight: 600; gap: 10px;
+  }
+  .sync-bar.syncing  { background: #dbeafe; color: #1e40af; }
+  .sync-bar.pending  { background: #fef3c7; color: #92400e; }
+  .sync-bar.synced   { background: #d1fae5; color: #065f46; }
+  .sync-bar.error    { background: #fee2e2; color: #991b1b; }
+  .sync-now-btn {
+    background: rgba(0,0,0,0.1); border: none; border-radius: 6px;
+    padding: 4px 10px; font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    white-space: nowrap; color: inherit;
+  }
+  .sync-now-btn:active { opacity: 0.7; }
+
+  /* sync dot on patient cards */
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sync-dot.ok      { background: var(--success); }
+  .sync-dot.pending { background: var(--warning); }
+  .sync-dot.na      { background: var(--border); }
+
+  /* ---- Landing page ---- */
+  .landing-header {
+    background: var(--primary);
+    color: white;
+    padding: 36px 20px 28px;
+    text-align: center;
+  }
+  .landing-header h1 { font-size: 2rem; font-weight: 900; letter-spacing: 1px; }
+  .landing-header p  { font-size: 0.85rem; opacity: 0.82; margin-top: 5px; }
+  .landing-header .version { font-size: 0.68rem; opacity: 0.55; margin-top: 6px; }
+
+  .btn-new-patient {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 16px;
+    border-radius: 12px; border: none;
+    background: var(--primary); color: white;
+    font-size: 1.05rem; font-weight: 800; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(26,95,168,0.35);
+    transition: all 0.18s;
+    min-height: var(--tap);
+  }
+  .btn-new-patient:active { background: var(--primary-dark); transform: scale(0.98); }
+  .btn-new-patient .plus { font-size: 1.4rem; line-height: 1; }
+
+  .section-heading {
+    font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-secondary);
+    margin: 20px 0 10px; padding: 0 2px;
+  }
+
+  .patient-card {
+    background: white; border-radius: 12px; box-shadow: var(--shadow);
+    padding: 16px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 14px;
+    cursor: pointer; transition: all 0.18s;
+    border: 1.5px solid transparent;
+  }
+  .patient-card:active { transform: scale(0.99); border-color: var(--primary); }
+  .patient-card .pc-dot {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 900; flex-shrink: 0; color: white;
+  }
+  .pc-dot.unlikely { background: var(--success); }
+  .pc-dot.possible { background: var(--warning); }
+  .pc-dot.likely   { background: var(--danger); }
+  .pc-dot.urgent   { background: var(--urgent); }
+  .pc-dot.chorea   { background: var(--urgent); }
+  .pc-dot.incomplete { background: var(--gray); }
+
+  .patient-card .pc-body { flex: 1; min-width: 0; }
+  .patient-card .pc-name { font-size: 0.95rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .patient-card .pc-sub  { font-size: 0.76rem; color: var(--text-secondary); margin-top: 2px; }
+  .patient-card .pc-result { font-size: 0.75rem; font-weight: 700; margin-top: 3px; }
+  .patient-card .pc-chevron { color: var(--border); font-size: 1.1rem; flex-shrink: 0; }
+
+  .empty-state {
+    text-align: center; padding: 36px 20px;
+    color: var(--text-secondary); font-size: 0.88rem;
+  }
+  .empty-state .empty-icon { font-size: 2.8rem; margin-bottom: 10px; }
+  .empty-state p { line-height: 1.6; }
+
+  .btn-danger-sm {
+    background: none; border: 1.5px solid var(--border);
+    color: var(--danger); font-size: 0.78rem; font-weight: 700;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  }
+
+  /* ---- View record modal overlay ---- */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 200;
+    overflow-y: auto; padding: 20px 12px 40px;
+  }
+  .modal-overlay.open { display: block; }
+  .modal-box {
+    background: white; border-radius: var(--radius);
+    max-width: 540px; margin: 0 auto;
+    overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    background: var(--primary); color: white;
+    padding: 16px 18px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 1rem; font-weight: 800; }
+  .modal-close {
+    background: rgba(255,255,255,0.2); border: none; color: white;
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
+  }
+  .modal-body { padding: 18px; }
+
+  @media (max-width: 380px) {
+    .card { padding: 16px 12px; }
+    .result-score { font-size: 2.7rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     AUTHENTICATION SCREENS
+═══════════════════════════════════════════════ -->
+
+<!-- Background blur overlay -->
+<div id="bgBlurOverlay">SMART-ARF — hidden while in background</div>
+
+<!-- Loading screen during boot crypto init -->
+<div id="bootScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">SMART-ARF</div>
+    <p class="auth-hint" id="bootMsg">Initializing secure storage…</p>
+  </div>
+</div>
+
+<!-- Set Password (first launch) -->
+<div id="setPasswordScreen" class="auth-screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">SMART-ARF</div>
+    <h2 class="auth-title">Welcome — Set Your Password</h2>
+    <p class="auth-hint">This password protects all patient data on this device. It's also used to reset your PIN.<br><strong>If you forget it, you'll need to reset this device — all local data will be lost (server data is preserved).</strong></p>
+
+    <label class="field-label">New password</label>
+    <input type="password" id="sp-password" autocomplete="new-password" placeholder="8+ characters with mixed case, digit, symbol" />
+    <div id="sp-strength" style="font-size:0.78rem;margin-bottom:14px;min-height:18px"></div>
+
+    <label class="field-label">Confirm password</label>
+    <input type="password" id="sp-confirm" autocomplete="new-password" placeholder="Re-enter your password" style="margin-bottom:16px" />
+
+    <div id="sp-error" class="hidden"></div>
+    <button class="btn btn-primary" id="sp-submit" onclick="submitSetPassword()">Set Password &amp; Continue</button>
+  </div>
+</div>
+
+<!-- Set PIN (immediately after password) -->
+<div id="setPinScreen" class="auth-screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">SMART-ARF</div>
+    <h2 class="auth-title">Set Your Daily PIN</h2>
+    <p class="auth-hint">Use a 6-digit PIN for quick daily unlock. Your password is still needed for sensitive actions (settings, exports, admin).</p>
+
+    <label class="field-label">6-digit PIN</label>
+    <input type="password" id="spin-pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" style="font-size:1.3rem;letter-spacing:0.5em;text-align:center" />
+
+    <label class="field-label">Confirm PIN</label>
+    <input type="password" id="spin-confirm" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" style="font-size:1.3rem;letter-spacing:0.5em;text-align:center;margin-bottom:16px" />
+
+    <div id="spin-error" class="hidden"></div>
+    <button class="btn btn-primary" onclick="submitSetPin()">Set PIN &amp; Continue</button>
+  </div>
+</div>
+
+<!-- Daily PIN unlock -->
+<div id="unlockPinScreen" class="auth-screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">SMART-ARF</div>
+    <h2 class="auth-title">Enter PIN</h2>
+
+    <input type="password" id="up-pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" autocomplete="off" autofocus style="font-size:1.6rem;letter-spacing:0.6em;text-align:center;margin-top:10px" />
+
+    <div id="up-error" class="hidden"></div>
+    <button class="btn btn-primary" onclick="submitUnlockPin()">Unlock</button>
+
+    <p style="text-align:center;margin-top:18px;font-size:0.82rem">
+      <a href="#" onclick="event.preventDefault();showForgotPin()" style="color:var(--primary);text-decoration:underline">Forgot PIN?</a>
+    </p>
+  </div>
+</div>
+
+<!-- Password unlock (sensitive actions / forgot PIN) -->
+<div id="unlockPasswordScreen" class="auth-screen hidden">
+  <div class="auth-card">
+    <div class="auth-logo">SMART-ARF</div>
+    <h2 class="auth-title" id="upw-title">Enter Password</h2>
+    <p class="auth-hint" id="upw-hint">Confirm your password to continue.</p>
+
+    <input type="password" id="upw-password" autocomplete="current-password" placeholder="Your password" />
+
+    <div id="upw-error" class="hidden"></div>
+    <button class="btn btn-primary" onclick="submitUnlockPassword()">Continue</button>
+    <button class="btn btn-secondary" id="upw-cancel" onclick="cancelUnlockPassword()">Cancel</button>
+
+    <p style="text-align:center;margin-top:18px;font-size:0.82rem">
+      <a href="#" onclick="event.preventDefault();showResetDevice()" style="color:var(--danger);text-decoration:underline">Forgot password? Reset device</a>
+    </p>
+  </div>
+</div>
+
+<!-- Device revoked (permanent lock) -->
+<div id="deviceRevokedScreen" class="auth-screen hidden">
+  <div class="auth-card" style="border:2px solid var(--danger);text-align:center">
+    <div class="auth-logo" style="color:var(--danger)">⛔ Device Revoked</div>
+    <p class="auth-hint" style="line-height:1.6">This device's access has been revoked by your clinic administrator. Local patient data remains encrypted on this device but cannot be unlocked here.<br><br>Please contact your administrator.</p>
+  </div>
+</div>
+
+<!-- Reset Device confirmation -->
+<div id="resetDeviceScreen" class="auth-screen hidden">
+  <div class="auth-card" style="border:2px solid var(--danger)">
+    <div class="auth-logo" style="color:var(--danger)">⚠ Reset Device</div>
+
+    <div class="alert alert-warning" style="margin:14px 0;border-color:var(--danger);background:var(--danger-bg);color:var(--danger);line-height:1.55">
+      <strong>This will permanently erase all local patient records and settings on this device.</strong><br><br>
+      You'll need to be online and have your clinic API key to re-sync from the server. Records already synced to the server will be restored. Records not yet synced will be <strong>lost.</strong><br><br>
+      <strong>This cannot be undone.</strong>
+    </div>
+
+    <label class="field-label">Type <code>RESET</code> to confirm</label>
+    <input type="text" id="rd-confirm" autocomplete="off" placeholder="Type RESET in capital letters" />
+
+    <button class="btn btn-primary" style="background:var(--danger);margin-top:14px" onclick="submitResetDevice()">Erase &amp; Reset</button>
+    <button class="btn btn-secondary" onclick="cancelResetDevice()">Cancel</button>
+  </div>
+</div>
+
+<!-- Assessment header (hidden on landing) -->
+<div id="appHeader" class="hidden">
+  <div class="header">
+    <h1>SMART-ARF</h1>
+    <p>ARF Clinical Decision Support &amp; Triage</p>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel">Step 1 of 5</div>
+  </div>
+  <div class="patient-banner" id="patientBanner">
+    <span class="pb-name" id="pbName"></span>
+    <span class="pb-meta" id="pbMeta"></span>
+  </div>
+  <div class="score-tally" id="scoreTally">
+    Level A Score: <span class="tally-num" id="tallyValue">0</span> / 23
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     LANDING PAGE
+═══════════════════════════════════════════════ -->
+<div id="landingPage">
+  <div class="landing-header">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button onclick="openSettings()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700">⚙ Settings</button>
+    </div>
+    <h1>SMART-ARF</h1>
+    <p>Clinical Decision Support &amp; Triage for Acute Rheumatic Fever</p>
+    <div class="version">Version 6 · For frontline healthcare workers</div>
+  </div>
+
+  <!-- Sync status bar -->
+  <div id="syncBar" class="sync-bar hidden">
+    <span id="syncBarText"></span>
+    <button id="syncNowBtn" onclick="syncNow()" class="sync-now-btn">Sync Now</button>
+  </div>
+
+  <div class="container">
+    <button class="btn-new-patient" onclick="startNewAssessment()">
+      <span class="plus">＋</span> New Patient Assessment
+    </button>
+
+    <button class="btn btn-secondary" style="margin-top:10px" onclick="openLookup()">
+      🔍 Look Up Patient by Code
+    </button>
+
+    <div class="section-heading" id="historyHeading">Recent Assessments</div>
+
+    <div id="patientHistoryList">
+      <!-- filled by JS -->
+    </div>
+
+    <div style="text-align:right;margin-top:6px" id="clearAllWrap"></div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Settings</h3>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:18px;line-height:1.5">
+        Configure your clinic details and sync server. These settings are saved on this device.
+      </p>
+
+      <label class="field-label">Clinic / Site Name</label>
+      <input type="text" id="set-clinicName" placeholder="e.g. Kordofan District Clinic" style="margin-bottom:16px" />
+
+      <label class="field-label">Clinic API Key <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary)">(provided by your data coordinator)</span></label>
+      <input type="text" id="set-apiKey" placeholder="Paste your API key here" style="margin-bottom:16px;font-family:monospace;font-size:0.85rem" autocomplete="off" />
+
+      <label class="field-label">Sync Server URL</label>
+      <input type="text" id="set-serverUrl" placeholder="https://your-server.com" style="margin-bottom:6px" />
+      <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:16px">The address of the SMART-ARF sync server.</div>
+
+      <div id="pingResult" style="margin-bottom:16px"></div>
+      <button class="btn btn-secondary" style="margin-bottom:10px" onclick="testConnection()">Test Connection</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+
+      <!-- Admin MFA section (visible only when role=admin) -->
+      <div id="mfaSection" class="hidden" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin-bottom:8px">
+          Multi-Factor Authentication (Admin)
+        </div>
+        <div id="mfaStatus" style="font-size:0.85rem;margin-bottom:10px"></div>
+        <div id="mfaActions"></div>
+      </div>
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin-bottom:8px">Device Info</div>
+        <div style="font-size:0.78rem;color:var(--text-secondary)" id="deviceInfoBlock"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MFA enrollment modal -->
+<div class="modal-overlay" id="mfaEnrollModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Enroll Multi-Factor Authentication</h3>
+      <button class="modal-close" onclick="closeMfaEnroll()">✕</button>
+    </div>
+    <div class="modal-body" id="mfaEnrollBody">
+      <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.5;margin-bottom:14px">
+        Open your authenticator app (Google Authenticator, Authy, etc.) and add a new account by manually entering the secret below.
+      </p>
+
+      <label class="field-label">Account Name</label>
+      <div id="mfa-account-name" style="font-family:monospace;background:var(--gray-light);padding:8px 10px;border-radius:6px;margin-bottom:12px"></div>
+
+      <label class="field-label">Secret (type into Authenticator)</label>
+      <div id="mfa-secret" style="font-family:monospace;background:var(--gray-light);padding:10px 12px;border-radius:6px;margin-bottom:6px;font-size:1.05rem;letter-spacing:1px;word-break:break-all"></div>
+      <button class="btn btn-secondary" style="margin-bottom:14px;padding:8px" onclick="copyMfaSecret()">📋 Copy Secret</button>
+
+      <div class="alert alert-warning" style="margin:14px 0">
+        <strong>Save these recovery codes now.</strong> They are your only way back in if you lose your authenticator. They will not be shown again.
+      </div>
+
+      <label class="field-label">Recovery codes (one-time use)</label>
+      <div id="mfa-recovery" style="font-family:monospace;background:white;border:1.5px solid var(--border);padding:12px;border-radius:6px;margin-bottom:6px;font-size:0.95rem;line-height:1.8;white-space:pre-wrap"></div>
+      <button class="btn btn-secondary" style="margin-bottom:14px;padding:8px" onclick="window.print()">🖨️ Print Recovery Codes</button>
+
+      <label class="field-label">Enter 6-digit code from Authenticator to confirm</label>
+      <input type="text" id="mfa-confirm-token" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" style="font-size:1.2rem;letter-spacing:0.4em;text-align:center;margin-bottom:6px" />
+
+      <div id="mfa-confirm-error" class="hidden"></div>
+      <button class="btn btn-primary" onclick="confirmMfaEnroll()">Confirm &amp; Enable MFA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record view modal -->
+<div class="modal-overlay" id="recordModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modalPatientName">Patient Record</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Soft-delete modal -->
+<div class="modal-overlay" id="softDeleteModal">
+  <div class="modal-box">
+    <div class="modal-header" style="background:var(--danger)">
+      <h3>Remove Patient Record</h3>
+      <button class="modal-close" onclick="closeSoftDelete()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.5;margin-bottom:14px">
+        This record will be removed from your device. It will be retained on the server for audit purposes and remains accessible to administrators.
+      </p>
+
+      <label class="field-label">Reason for removal <span style="color:var(--danger)">*</span></label>
+      <select id="sd-reason" style="margin-bottom:16px">
+        <option value="">Select a reason…</option>
+        <option value="duplicate">Duplicate entry</option>
+        <option value="wrong-patient">Wrong patient / data entered for wrong person</option>
+        <option value="test-entry">Test / training entry</option>
+        <option value="data-entry-error">Significant data entry error (cannot be edited)</option>
+        <option value="patient-withdrew">Patient withdrew consent</option>
+        <option value="other">Other</option>
+      </select>
+
+      <div id="sd-error" class="hidden"></div>
+
+      <button class="btn btn-primary" style="background:var(--danger)" onclick="confirmSoftDelete()">Remove Record</button>
+      <button class="btn btn-secondary" onclick="closeSoftDelete()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="appContent" class="hidden">
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════
+     BPG PROTOCOL SCREEN (placeholder)
+═══════════════════════════════════════════════ -->
+<div id="bpgScreen" class="step-section hidden">
+  <div class="card">
+    <span class="step-badge">BPG Protocol</span>
+    <h2>Benzathine Penicillin G — 5-Step Protocol</h2>
+    <p class="subtitle">Quick reference for administering BPG to suspected ARF patients. Detailed steps and reference photos will be added.</p>
+
+    <div class="bpg-step placeholder">
+      <div class="bpg-num">1</div>
+      <div class="bpg-body"><div class="bpg-title">Verify indication &amp; allergy history</div><div class="bpg-desc">Confirm ARF suspicion. Ask about penicillin allergy — never administer if history of severe reaction.</div></div>
+    </div>
+    <div class="bpg-step placeholder">
+      <div class="bpg-num">2</div>
+      <div class="bpg-body"><div class="bpg-title">Prepare BPG injection</div><div class="bpg-desc">Reconstitute according to weight-based dosing (≤27 kg: 600,000 IU; &gt;27 kg: 1.2 million IU). [Photo to be added]</div></div>
+    </div>
+    <div class="bpg-step placeholder">
+      <div class="bpg-num">3</div>
+      <div class="bpg-body"><div class="bpg-title">Administer deep IM injection</div><div class="bpg-desc">Inject into upper outer quadrant of gluteus or vastus lateralis (children). Use Z-track technique. [Photo to be added]</div></div>
+    </div>
+    <div class="bpg-step placeholder">
+      <div class="bpg-num">4</div>
+      <div class="bpg-body"><div class="bpg-title">Observe patient for 30 minutes</div><div class="bpg-desc">Monitor for anaphylaxis or other reactions before discharge.</div></div>
+    </div>
+    <div class="bpg-step placeholder">
+      <div class="bpg-num">5</div>
+      <div class="bpg-body"><div class="bpg-title">Schedule follow-up dose</div><div class="bpg-desc">Repeat every 3–4 weeks. Provide patient with referral code &amp; written schedule.</div></div>
+    </div>
+
+    <p class="disclaimer" style="margin-top:14px">⚕️ Full protocol with reference photos pending — content will be inserted here.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     RECORDS SCREEN (full searchable list)
+═══════════════════════════════════════════════ -->
+<div id="recordsScreen" class="step-section hidden">
+  <div class="card">
+    <span class="step-badge">Patient Records</span>
+    <h2>All Assessments</h2>
+    <p class="subtitle">Search and review every assessment saved on this device.</p>
+    <input type="text" id="recordsSearch" class="records-search" placeholder="🔍 Search by name, MRN, or code…" oninput="renderRecordsList()" />
+    <div id="recordsList"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     LOOKUP SCREEN
+═══════════════════════════════════════════════ -->
+<div id="lookupScreen" class="step-section hidden">
+  <div class="card">
+    <span class="step-badge">Patient Lookup</span>
+    <h2>Find Patient by Code</h2>
+    <p class="subtitle">Enter the patient's referral code (e.g. <code>ARF-XXXX-XXXX</code>) to view their assessment and add follow-up.</p>
+
+    <label class="field-label">Referral Code</label>
+    <input type="text" id="lookupCode" class="lookup-input" placeholder="ARF-XXXX-XXXX" autocomplete="off" />
+
+    <div id="lookupError" class="hidden"></div>
+    <button class="btn btn-primary" onclick="doLookup()">Look Up Patient</button>
+    <button class="btn btn-secondary" onclick="showLanding()">Cancel</button>
+  </div>
+
+  <p class="disclaimer">The lookup requires internet connection and a valid clinic API key configured in Settings.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     LOOKUP RESULT SCREEN
+═══════════════════════════════════════════════ -->
+<div id="lookupResultScreen" class="step-section hidden">
+  <div class="card" id="lookupResultCard">
+    <span class="step-badge">Patient Record</span>
+    <h2 id="lrName">—</h2>
+    <p class="subtitle" id="lrMeta"></p>
+
+    <div id="lrAssessment"></div>
+
+    <button class="btn btn-primary" style="margin-top:14px" onclick="showFollowupForm()">＋ Add Follow-Up Visit</button>
+    <button class="btn btn-secondary" onclick="showLanding()">Back to Home</button>
+  </div>
+
+  <div class="card" id="lrFollowupsCard" style="margin-top:14px">
+    <span class="step-badge">Follow-Up History</span>
+    <h2 id="lrFollowupsHeading">Previous Follow-Ups</h2>
+    <div id="lrFollowupsList"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     FOLLOW-UP FORM
+═══════════════════════════════════════════════ -->
+<div id="followupScreen" class="step-section hidden">
+  <div class="card">
+    <span class="step-badge">Follow-Up Visit</span>
+    <h2>Record Follow-Up</h2>
+    <p class="subtitle">Patient: <strong id="fuPatientName">—</strong> · <span id="fuPatientCode" style="font-family:monospace;font-weight:700"></span></p>
+
+    <label class="field-label">Visit Date</label>
+    <input type="date" id="fu-visitDate" />
+    <div style="height:16px"></div>
+
+    <label class="field-label">Confirmed Diagnosis at This Visit</label>
+    <select id="fu-confirmedDx">
+      <option value="">Select…</option>
+      <option value="arf">ARF Confirmed</option>
+      <option value="not-arf">Not ARF — Alternative Diagnosis</option>
+      <option value="uncertain">Uncertain / Pending Further Evaluation</option>
+    </select>
+
+    <label class="field-label">Final Diagnosis <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary)">(if not ARF)</span></label>
+    <input type="text" id="fu-finalDx" placeholder="e.g. Reactive arthritis, JIA, viral infection" />
+
+    <label class="field-label">BPG (Benzathine Penicillin G) Status</label>
+    <select id="fu-bpgStatus">
+      <option value="">Select…</option>
+      <option value="started">Started at this visit</option>
+      <option value="continued">Continued from earlier</option>
+      <option value="stopped">Stopped — not indicated</option>
+      <option value="not-given">Not given</option>
+    </select>
+
+    <label class="field-label">Echo Findings <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary)">(optional)</span></label>
+    <input type="text" id="fu-echoFindings" placeholder="e.g. Mild mitral regurgitation" />
+
+    <label class="field-label">Complications <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary)">(optional)</span></label>
+    <input type="text" id="fu-complications" placeholder="e.g. Heart failure, recurrent ARF" />
+
+    <label class="field-label">Notes <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary)">(optional)</span></label>
+    <input type="text" id="fu-notes" placeholder="Additional observations" />
+
+    <div id="fuResult" class="hidden"></div>
+    <button class="btn btn-primary" onclick="submitFollowup()">Submit Follow-Up</button>
+    <button class="btn btn-secondary" onclick="cancelFollowup()">Cancel</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 1 — PATIENT INFO
+═══════════════════════════════════════════════ -->
+<div id="step1" class="step-section">
+  <div class="card">
+    <span class="step-badge">Step 1 — Patient</span>
+    <h2>Patient Information</h2>
+    <p class="subtitle">Enter patient identification and basic details to begin the ARF triage assessment.</p>
+
+    <div style="display:flex;gap:10px;">
+      <div style="flex:1">
+        <label class="field-label">First Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="patientFirst" placeholder="First name" autocomplete="given-name" style="margin-bottom:16px" />
+      </div>
+      <div style="flex:1">
+        <label class="field-label">Last Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="patientLast" placeholder="Last name" autocomplete="family-name" style="margin-bottom:16px" />
+      </div>
+    </div>
+
+    <label class="field-label">MRN / Patient ID <span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem">(optional)</span></label>
+    <input type="text" id="patientMRN" placeholder="e.g. 00123456" inputmode="text" />
+
+    <label class="field-label">Primary Phone <span style="color:var(--danger)">*</span></label>
+    <input type="tel" id="patientPhone1" placeholder="e.g. +249 91 234 5678" inputmode="tel" autocomplete="tel" />
+
+    <label class="field-label">Secondary Phone <span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem">(optional)</span></label>
+    <input type="tel" id="patientPhone2" placeholder="Alternate contact number" inputmode="tel" autocomplete="tel" />
+
+    <label class="field-label">Patient Age (years) <span style="color:var(--danger)">*</span></label>
+    <input type="number" id="patientAge" min="1" max="25" placeholder="e.g. 10" inputmode="numeric" />
+
+    <label class="field-label">Patient Gender</label>
+    <select id="patientGender">
+      <option value="">Select…</option>
+      <option value="male">Male</option>
+      <option value="female">Female</option>
+      <option value="other">Other / Not specified</option>
+    </select>
+
+    <label class="field-label">Setting</label>
+    <select id="patientSetting">
+      <option value="">Select…</option>
+      <option value="endemic">RHD Endemic Area</option>
+      <option value="nonendemic">Non-Endemic Area</option>
+      <option value="unknown">Unknown</option>
+    </select>
+
+    <label class="na-toggle" id="isTestToggle" onclick="toggleIsTest()" style="margin-top:4px">
+      <input type="checkbox" id="isTest" onclick="e(event)" />
+      <span class="na-text">This is a test / training entry</span>
+    </label>
+
+    <button class="btn btn-primary" onclick="step1Next()">Continue</button>
+  </div>
+  <p class="disclaimer">SMART-ARF targets children &amp; adolescents aged 3–18 in RHD-endemic settings.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 2 — ENTRY CRITERIA
+═══════════════════════════════════════════════ -->
+<div id="step2" class="step-section hidden">
+  <div class="card">
+    <span class="step-badge">Step 2 — Entry Criteria</span>
+    <h2>Is This an ARF Triage Case?</h2>
+    <p class="subtitle">Answer all three questions before scoring.</p>
+
+    <label class="field-label">1. Does the patient currently have a fever?</label>
+    <div class="yn-group">
+      <button class="yn-btn" id="feverYes" onclick="setYN('fever',true)">Yes</button>
+      <button class="yn-btn" id="feverNo"  onclick="setYN('fever',false)">No</button>
+    </div>
+
+    <label class="field-label">2. Are abnormal involuntary movements (chorea) present?</label>
+    <div class="yn-group">
+      <button class="yn-btn" id="choreaYes" onclick="setYN('chorea',true)">Yes</button>
+      <button class="yn-btn" id="choreaNo"  onclick="setYN('chorea',false)">No</button>
+    </div>
+
+    <label class="field-label">3. Is there an obvious cause for the fever?
+      <span style="font-weight:400;font-size:0.78rem;color:var(--text-secondary);display:block;margin-top:2px">e.g. cough &amp; runny nose (URI), diarrhea or vomiting (GI illness)</span>
+    </label>
+    <div class="yn-group">
+      <button class="yn-btn" id="altCauseYes" onclick="setYN('altCause',true)">Yes</button>
+      <button class="yn-btn" id="altCauseNo"  onclick="setYN('altCause',false)">No</button>
+    </div>
+
+    <div id="entryWarning" class="hidden"></div>
+    <button class="btn btn-primary" onclick="evalEntry()">Continue to Scoring</button>
+    <button class="btn btn-secondary" onclick="showStep(1)">Back</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CHOREA EXIT
+═══════════════════════════════════════════════ -->
+<div id="stepChorea" class="step-section hidden">
+  <div class="result-card urgent">
+    <div style="font-size:2.8rem;margin-bottom:6px">⚠️</div>
+    <div class="result-label" style="color:var(--urgent)">Chorea Detected</div>
+    <div class="result-range" style="color:var(--urgent)">Sydenham's chorea — major ARF criterion</div>
+    <div class="action-box" style="border:1px solid #f5a07a">
+      <h4>Immediate Actions</h4>
+      <ul>
+        <li>Consider ARF <strong>confirmed</strong> — major criterion met</li>
+        <li>Start <strong>Benzathine Penicillin G (BPG)</strong> prophylaxis immediately</li>
+        <li><strong>Refer urgently</strong> to secondary care</li>
+        <li>Initiate long-term secondary prophylaxis plan</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card"><button class="btn btn-primary" onclick="resetApp()">Start New Assessment</button></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     NO ARF EXIT
+═══════════════════════════════════════════════ -->
+<div id="stepNoARF" class="step-section hidden">
+  <div class="result-card unlikely">
+    <div style="font-size:2.8rem;margin-bottom:6px">✓</div>
+    <div class="result-label" style="color:var(--success)" id="noARFLabel">ARF Triage Not Indicated</div>
+    <div class="result-range" style="color:var(--success)" id="noARFReason"></div>
+    <div class="action-box">
+      <h4>Recommended Actions</h4>
+      <ul>
+        <li>Treat according to the identified clinical diagnosis</li>
+        <li>Schedule appropriate follow-up</li>
+        <li>Reassess if symptoms change or fever persists</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card"><button class="btn btn-primary" onclick="resetApp()">Start New Assessment</button></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 3 — LEVEL A SCORING
+═══════════════════════════════════════════════ -->
+<div id="step3" class="step-section hidden">
+  <div class="chorea-banner hidden chorea-banner-instance">
+    <strong>⚠ Chorea Confirmed — ARF Positive (major criterion)</strong>
+    Start Benzathine Penicillin G (BPG) and refer urgently. Continue the assessment below for record-keeping. Chorea automatically adds +5 to the score.
+  </div>
+  <div class="card">
+    <span class="step-badge">Step 3 — Level A: Clinical Assessment</span>
+    <h2>Signs &amp; Symptoms Checklist</h2>
+    <p class="subtitle">Check every finding that is present in this patient. For joint symptoms, select the most severe category that applies.</p>
+
+    <!-- ── JOINT SYMPTOMS ── -->
+    <div class="cat-block" id="cat-joint">
+      <div class="cat-header">
+        <span class="cat-title">Joint Symptoms</span>
+        <span class="cat-score-badge" id="badge-joint">+0</span>
+      </div>
+      <p class="cat-desc">Select the highest applicable joint finding (arthritis > polyarthralgia > monoarthralgia)</p>
+
+      <label class="radio-item" id="ri-none" onclick="pickJoint(0)">
+        <input type="radio" name="joint" value="0" checked />
+        <div class="ri-text"><div class="ri-name">None</div><div class="ri-desc">No joint symptoms</div></div>
+        <span class="ri-pts">+0</span>
+      </label>
+      <label class="radio-item" id="ri-mono" onclick="pickJoint(2)">
+        <input type="radio" name="joint" value="2" />
+        <div class="ri-text"><div class="ri-name">Monoarthralgia</div><div class="ri-desc">Pain in ONE joint only — no swelling or tenderness</div></div>
+        <span class="ri-pts">+2</span>
+      </label>
+      <label class="radio-item" id="ri-poly" onclick="pickJoint(3)">
+        <input type="radio" name="joint" value="3" />
+        <div class="ri-text"><div class="ri-name">Polyarthralgia</div><div class="ri-desc">Pain in MULTIPLE joints — no swelling or tenderness</div></div>
+        <span class="ri-pts">+3</span>
+      </label>
+      <label class="radio-item" id="ri-arthritis" onclick="pickJoint(5)">
+        <input type="radio" name="joint" value="5" />
+        <div class="ri-text"><div class="ri-name">Migratory Polyarthritis</div><div class="ri-desc">Swelling AND tenderness in joints, moves between joints</div></div>
+        <span class="ri-pts">+5</span>
+      </label>
+    </div>
+
+    <!-- ── CARDITIS / MURMUR ── -->
+    <div class="cat-block" id="cat-carditis">
+      <div class="cat-header">
+        <span class="cat-title">Heart / Carditis</span>
+        <span class="cat-score-badge" id="badge-carditis">+0</span>
+      </div>
+      <p class="cat-desc">Check the heart murmur first. If present, document severity findings below.</p>
+      <div class="sym-list">
+        <label class="sym-item" id="si-murmur" onclick="toggleSym('murmur')">
+          <input type="checkbox" id="chk-murmur" onclick="e(event)" onchange="updateScore()" />
+          <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Heart murmur</div><div class="sym-sub">Heard on auscultation</div></div>
+          <span class="item-pts">+5</span>
+        </label>
+      </div>
+
+      <div id="carditisSeverityWrap" style="margin-top:12px;padding:12px;border-top:1.5px dashed var(--border)">
+        <div style="font-size:0.78rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin-bottom:8px">
+          Severity descriptors <span style="font-weight:600;text-transform:none;letter-spacing:0;color:var(--gray)">(documentation only, no score)</span>
+        </div>
+        <div class="sym-list">
+          <label class="sym-item" id="si-sob" onclick="toggleSym('sob')">
+            <input type="checkbox" id="chk-sob" onclick="e(event)" onchange="updateScore()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Shortness of breath</div><div class="sym-sub">At rest or on exertion</div></div>
+            <span class="item-pts item-pts-muted">no score</span>
+          </label>
+          <label class="sym-item" id="si-edema" onclick="toggleSym('edema')">
+            <input type="checkbox" id="chk-edema" onclick="e(event)" onchange="updateScore()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Edema</div><div class="sym-sub">Swelling of feet, legs, or face</div></div>
+            <span class="item-pts item-pts-muted">no score</span>
+          </label>
+          <label class="sym-item" id="si-chestpain" onclick="toggleSym('chestpain')">
+            <input type="checkbox" id="chk-chestpain" onclick="e(event)" onchange="updateScore()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Chest discomfort or chest pain</div><div class="sym-sub">Any chest pain reported by patient</div></div>
+            <span class="item-pts item-pts-muted">no score</span>
+          </label>
+          <label class="sym-item" id="si-walking" onclick="toggleSym('walking')">
+            <input type="checkbox" id="chk-walking" onclick="e(event)" onchange="updateScore()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Unable to walk normal distances</div><div class="sym-sub">Due to pain or fatigue</div></div>
+            <span class="item-pts item-pts-muted">no score</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SKIN FINDINGS ── -->
+    <div class="cat-block" id="cat-skin">
+      <div class="cat-header">
+        <span class="cat-title">Skin Findings</span>
+        <span class="cat-score-badge" id="badge-skin">+0</span>
+      </div>
+      <div class="sym-list">
+        <label class="sym-item" id="si-em" onclick="toggleSym('em')">
+          <input type="checkbox" id="chk-em" onclick="e(event)" onchange="updateScore()" />
+          <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Erythema marginatum</div><div class="sym-sub">Pink/red ring-shaped rash on trunk or limbs (rarely on face)</div></div>
+          <span class="item-pts">+5</span>
+        </label>
+        <label class="sym-item" id="si-sn" onclick="toggleSym('sn')">
+          <input type="checkbox" id="chk-sn" onclick="e(event)" onchange="updateScore()" />
+          <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Subcutaneous nodules</div><div class="sym-sub">Firm, painless lumps over elbows, wrists, knees, or spine</div></div>
+          <span class="item-pts">+5</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ── EXCLUSION ── -->
+    <div class="cat-block" id="cat-excl">
+      <div class="cat-header">
+        <span class="cat-title">Alternative Diagnosis</span>
+        <span class="cat-score-badge" id="badge-excl">+0</span>
+      </div>
+      <div class="sym-list">
+        <label class="sym-item" id="si-noad" onclick="toggleSym('noad')">
+          <input type="checkbox" id="chk-noad" onclick="e(event)" onchange="updateScore()" />
+          <div class="sym-label-wrap" style="flex:1"><div class="sym-label">No obvious alternative diagnosis</div><div class="sym-sub">Sickle cell disease, congenital heart disease, and septic arthritis have been considered and are unlikely</div></div>
+          <span class="item-pts">+3</span>
+        </label>
+      </div>
+    </div>
+
+  </div><!-- /card -->
+
+  <!-- Live score -->
+  <div class="live-score-card">
+    <div class="ls-label">Current Level A Score</div>
+    <div class="ls-num" id="liveScore">0</div>
+    <div class="ls-interp" id="liveInterp" style="color:var(--gray)">Select findings above</div>
+  </div>
+
+  <button class="btn btn-primary" onclick="goToResult()">View Result &amp; Recommendations</button>
+  <button class="btn btn-secondary" onclick="showStep(2)">Back</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 4 — LEVEL A RESULT
+═══════════════════════════════════════════════ -->
+<div id="step4" class="step-section hidden">
+  <div class="chorea-banner hidden chorea-banner-instance">
+    <strong>⚠ Chorea Confirmed — ARF Positive (major criterion)</strong>
+    Start BPG and refer urgently regardless of total score.
+  </div>
+  <div id="resultCard" class="result-card">
+    <div class="result-score" id="resultScore">0</div>
+    <div class="result-label" id="resultLabel"></div>
+    <div class="result-range" id="resultRange"></div>
+    <div class="action-box" id="actionBox">
+      <h4>Recommended Actions</h4>
+      <ul id="actionList"></ul>
+    </div>
+  </div>
+
+  <div class="patient-code-card hidden" id="patientCodeCard">
+    <div class="pcc-label">Patient Referral Code</div>
+    <div class="pcc-code" id="codeValue">—</div>
+    <div class="pcc-hint">Write this code on the patient's referral slip. The receiving clinic can use it to view this assessment and add follow-up.</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-secondary" style="margin:0;flex:1;padding:10px" onclick="copyCode()">📋 Copy</button>
+      <button class="btn btn-secondary" style="margin:0;flex:1;padding:10px" onclick="window.print()">🖨️ Print Slip</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="step-badge">Referral</span>
+    <h2>Refer Patient (optional)</h2>
+    <p class="subtitle">Record where the patient is being referred for follow-up evaluation.</p>
+    <label class="field-label">Referred To</label>
+    <input type="text" id="referredTo" placeholder="e.g. Khartoum Pediatric Hospital" />
+    <button class="btn btn-primary" onclick="saveReferral()">Save Referral</button>
+  </div>
+
+  <div class="score-breakdown">
+    <h3>Level A Score Breakdown</h3>
+    <div id="breakdownRows"></div>
+  </div>
+
+  <div class="card">
+    <span class="step-badge">Optional — Level B</span>
+    <h2>Add Enhanced Findings?</h2>
+    <p class="subtitle">If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.</p>
+    <button class="btn btn-primary" onclick="showStep(5)">Add Level B Findings</button>
+    <button class="btn btn-secondary" onclick="resetApp()">Start New Assessment</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 5 — LEVEL B
+═══════════════════════════════════════════════ -->
+<div id="step5" class="step-section hidden">
+  <div class="chorea-banner hidden chorea-banner-instance">
+    <strong>⚠ Chorea Confirmed — ARF Positive (major criterion)</strong>
+    Continue documenting Level B findings for the record.
+  </div>
+  <div class="card">
+    <span class="step-badge">Step 5 — Level B: Jones Criteria</span>
+    <h2>Enhanced Findings</h2>
+    <p class="subtitle">Check all available investigation results. Mark a section as <strong>Not Available</strong> if the test was not performed.</p>
+
+    <!-- ── BLOOD TESTS ── -->
+    <div class="cat-block" id="cat-blood">
+      <div class="cat-header">
+        <span class="cat-title">Blood Tests <span style="font-size:0.72rem;font-weight:400">(max +8)</span></span>
+        <span class="cat-score-badge" id="badge-blood">+0</span>
+      </div>
+
+      <label class="na-toggle" id="na-blood-toggle" onclick="toggleNA('blood')">
+        <input type="checkbox" id="na-blood" onclick="e(event)" />
+        <span class="na-text">Not Available — blood tests were not done</span>
+      </label>
+
+      <div class="lb-section" id="lb-blood">
+        <div style="font-size:0.78rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin:6px 0 6px">
+          Non-specific inflammation markers <span style="font-weight:600;text-transform:none;letter-spacing:0;color:var(--gray)">(any one or more = +3)</span>
+        </div>
+        <div class="sym-list">
+          <label class="sym-item" id="si-wbc" onclick="toggleSym('wbc')">
+            <input type="checkbox" id="chk-wbc" onclick="e(event)" onchange="updateScoreB()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Elevated WBC</div><div class="sym-sub">White blood cell count above normal range for age</div></div>
+            <span class="item-pts item-pts-group">group</span>
+          </label>
+          <label class="sym-item" id="si-aso" onclick="toggleSym('aso')">
+            <input type="checkbox" id="chk-aso" onclick="e(event)" onchange="updateScoreB()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Elevated ASO</div><div class="sym-sub">Anti-streptolysin O titer raised</div></div>
+            <span class="item-pts item-pts-group">group</span>
+          </label>
+          <label class="sym-item" id="si-esr" onclick="toggleSym('esr')">
+            <input type="checkbox" id="chk-esr" onclick="e(event)" onchange="updateScoreB()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Elevated ESR or CRP</div><div class="sym-sub">Raised inflammatory markers</div></div>
+            <span class="item-pts item-pts-group">group</span>
+          </label>
+        </div>
+
+        <div style="font-size:0.78rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin:14px 0 6px;padding-top:10px;border-top:1.5px dashed var(--border)">
+          Specific Strep antibody
+        </div>
+        <div class="sym-list">
+          <label class="sym-item" id="si-antidnase" onclick="toggleSym('antidnase')">
+            <input type="checkbox" id="chk-antidnase" onclick="e(event)" onchange="updateScoreB()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Anti-DNase B positive</div><div class="sym-sub">Specific antibody confirming recent Group A Strep infection</div></div>
+            <span class="item-pts">+5</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ECG ── -->
+    <div class="cat-block" id="cat-ecg">
+      <div class="cat-header">
+        <span class="cat-title">ECG (Electrocardiogram)</span>
+        <span class="cat-score-badge" id="badge-ecg">+0</span>
+      </div>
+
+      <label class="na-toggle" id="na-ecg-toggle" onclick="toggleNA('ecg')">
+        <input type="checkbox" id="na-ecg" onclick="e(event)" />
+        <span class="na-text">Not Available — ECG was not done</span>
+      </label>
+
+      <div class="lb-section" id="lb-ecg">
+        <div class="sym-list">
+          <label class="sym-item" id="si-pr" onclick="toggleSym('pr')">
+            <input type="checkbox" id="chk-pr" onclick="e(event)" onchange="updateScoreB()" />
+            <div class="sym-label-wrap" style="flex:1"><div class="sym-label">Prolonged PR interval</div><div class="sym-sub">PR interval prolonged for age on 12-lead ECG</div></div>
+            <span class="item-pts">+3</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ECHO ── -->
+    <div class="cat-block" id="cat-echo">
+      <div class="cat-header">
+        <span class="cat-title">Echocardiogram</span>
+        <span class="cat-score-badge" id="badge-echo">+0</span>
+      </div>
+
+      <label class="na-toggle" id="na-echo-toggle" onclick="toggleNA('echo')">
+        <input type="checkbox" id="na-echo" onclick="e(event)" />
+        <span class="na-text">Not Available — echo was not performed</span>
+      </label>
+
+      <div class="lb-section" id="lb-echo">
+        <div class="radio-group" id="echoGroup">
+          <label class="radio-item" id="ri-echo-sugg" onclick="pickEcho('suggestive')">
+            <input type="radio" name="echo" value="suggestive" />
+            <div class="ri-text" style="flex:1"><div class="ri-name">Suggestive of RHD</div><div class="ri-desc">Mitral or aortic regurgitation, or subclinical RHD features</div></div>
+            <span class="ri-pts">+5</span>
+          </label>
+          <label class="radio-item" id="ri-echo-not" onclick="pickEcho('not-suggestive')">
+            <input type="radio" name="echo" value="not-suggestive" />
+            <div class="ri-text" style="flex:1"><div class="ri-name">Not suggestive</div><div class="ri-desc">Normal study or no RHD features</div></div>
+            <span class="ri-pts">+0</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /card -->
+
+  <div class="live-score-card">
+    <div class="ls-label">Combined Score (Level A + B)</div>
+    <div class="ls-num" id="liveScoreB">0</div>
+  </div>
+
+  <button class="btn btn-primary" onclick="showFinalResult()">View Final Result</button>
+  <button class="btn btn-secondary" onclick="showStep(4)">Back</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     STEP 6 — FINAL RESULT
+═══════════════════════════════════════════════ -->
+<div id="step6" class="step-section hidden">
+  <div class="chorea-banner hidden chorea-banner-instance">
+    <strong>⚠ Chorea Confirmed — ARF Positive (major criterion)</strong>
+    BPG must be started and patient referred urgently regardless of total score.
+  </div>
+  <div id="finalResultCard" class="result-card">
+    <div class="result-score" id="finalScore">0</div>
+    <div class="result-label" id="finalLabel"></div>
+    <div class="result-range" id="finalRange"></div>
+    <div class="action-box" id="finalActionBox">
+      <h4>Recommended Actions</h4>
+      <ul id="finalActionList"></ul>
+    </div>
+  </div>
+
+  <div class="patient-code-card hidden" id="finalPatientCodeCard">
+    <div class="pcc-label">Patient Referral Code</div>
+    <div class="pcc-code" id="finalCodeValue">—</div>
+    <div class="pcc-hint">Receiving clinic can look up this code to view the full assessment and add follow-up.</div>
+  </div>
+
+  <div class="score-breakdown">
+    <h3>Complete Score Breakdown</h3>
+    <div id="finalBreakdownRows"></div>
+  </div>
+
+  <div class="card">
+    <button class="btn btn-primary" onclick="resetApp()">Start New Assessment</button>
+  </div>
+  <p class="disclaimer" style="margin-top:6px">
+    ⚕️ SMART-ARF is a clinical decision-support tool. All findings must be interpreted by a qualified healthcare provider. This tool does not replace clinical judgment or the Jones Criteria.
+  </p>
+</div>
+
+</div><!-- /container -->
+</div><!-- /appContent -->
+
+<script>
+// ===================== STATE =====================
+const S = {
+  firstName:'', lastName:'', mrn:'', phone1:'', phone2:'',
+  isTest:false,
+  activeRecordId:null, patientCode:null, lookupPatient:null,
+  age:null, gender:'', setting:'',
+  fever:null, chorea:null, altCause:null,
+  choreaPositive:false,
+  joint:0,
+  murmur:false, sob:false, edema:false, chestpain:false, walking:false,
+  em:false, sn:false, noad:false,
+  // Level B
+  naBlood:false, naEcg:false, naEcho:false,
+  wbc:false, aso:false, esr:false, antidnase:false, pr:false, echo:null
+};
+
+function e(ev){ ev.stopPropagation(); }
+
+// ===================== LOCKOUT (failed-attempt cooldown, no wipe) =====================
+function getFailedAttempts(){ return parseInt(localStorage.getItem('smartarf_failedAttempts')||'0',10); }
+function setFailedAttempts(n){ localStorage.setItem('smartarf_failedAttempts', String(n)); }
+function getLockedUntil(){ return parseInt(localStorage.getItem('smartarf_lockedUntil')||'0',10); }
+function setLockedUntil(ts){ localStorage.setItem('smartarf_lockedUntil', String(ts)); }
+
+function isLockedOut(){ return Date.now() < getLockedUntil(); }
+function lockoutRemainingMs(){ return Math.max(0, getLockedUntil() - Date.now()); }
+function fmtLockoutRemaining(){
+  const ms = lockoutRemainingMs();
+  const mins = Math.ceil(ms / 60000);
+  return mins > 1 ? `${mins} minutes` : 'less than a minute';
+}
+
+function registerFailedAttempt(){
+  const n = getFailedAttempts() + 1;
+  setFailedAttempts(n);
+  if(n >= 10){
+    setLockedUntil(Date.now() + 30 * 60 * 1000); // 30 min
+  } else if(n >= 5){
+    setLockedUntil(Date.now() + 5 * 60 * 1000);  // 5 min
+  }
+  return n;
+}
+function clearFailedAttempts(){
+  setFailedAttempts(0);
+  setLockedUntil(0);
+}
+
+// ===================== AUTO-BLUR ON BACKGROUND =====================
+let _bgHiddenAt = 0;
+document.addEventListener('visibilitychange', async () => {
+  if(document.hidden){
+    _bgHiddenAt = Date.now();
+    document.body.classList.add('bg-blur');
+  } else {
+    const awayMs = Date.now() - _bgHiddenAt;
+    if(awayMs > 30 * 1000 && _sessionMasterKey){
+      // Backgrounded for >30s — require PIN re-unlock
+      lockSession('bg-timeout');
+    } else {
+      document.body.classList.remove('bg-blur');
+    }
+  }
+});
+
+// ===================== IDLE TIMER / SESSION LOCK =====================
+let _idleTimer = null;
+const _idleEvents = ['mousemove','keydown','touchstart','scroll'];
+function getIdleTimeoutMs(){
+  const cfg = parseInt((_settingsCache && _settingsCache.idleTimeoutMin) || '30', 10);
+  return Math.max(5, Math.min(60, cfg)) * 60 * 1000;
+}
+function _resetIdleTimer(){
+  if(_idleTimer) clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(() => lockSession('idle'), getIdleTimeoutMs());
+}
+function startIdleTimer(){
+  _idleEvents.forEach(ev => window.addEventListener(ev, _resetIdleTimer, { passive:true }));
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) _resetIdleTimer(); });
+  _resetIdleTimer();
+}
+function stopIdleTimer(){
+  if(_idleTimer){ clearTimeout(_idleTimer); _idleTimer = null; }
+  _idleEvents.forEach(ev => window.removeEventListener(ev, _resetIdleTimer));
+}
+function lockSession(reason){
+  console.log('[session] lock:', reason || 'manual');
+  _sessionMasterKey = null;
+  _historyCache = [];
+  _settingsCache = {};
+  stopIdleTimer();
+  // Clear sensitive in-memory session
+  _sensitiveSessionUntil = 0;
+  // Hide everything and show PIN unlock
+  document.body.classList.remove('bg-blur');
+  showAuthScreen('unlockPinScreen');
+  const pinInput = document.getElementById('up-pin');
+  if(pinInput){ pinInput.value = ''; pinInput.focus(); }
+}
+
+// ===================== CRYPTO / KEY DERIVATION =====================
+// Web Crypto API — works on Android 5+, iOS 11+, all modern browsers.
+// Session state: when unlocked, _sessionMasterKey holds the AES-GCM CryptoKey in memory.
+let _sessionMasterKey = null;
+
+// Base64 helpers
+function _b64encode(bytes){
+  let bin = '';
+  for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function _b64decode(str){
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function _randomBytes(n){
+  const a = new Uint8Array(n);
+  crypto.getRandomValues(a);
+  return a;
+}
+
+// PBKDF2 dynamic tuning — measure first launch and pick an iteration count
+// that targets ~1.0 s on the worker's actual device.
+async function _measureKdfIterations(){
+  const enc = new TextEncoder();
+  const probeKey = await crypto.subtle.importKey(
+    'raw', enc.encode('benchmark-probe'), { name:'PBKDF2' }, false, ['deriveKey']
+  );
+  const baseSalt = _randomBytes(16);
+  const t0 = performance.now();
+  await crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt:baseSalt, iterations:50000, hash:'SHA-256' },
+    probeKey,
+    { name:'AES-GCM', length:256 },
+    false, ['encrypt','decrypt']
+  );
+  const elapsedMs = performance.now() - t0;
+  // 50k took elapsedMs → scale to target 1000ms
+  let target = Math.round(50000 * (1000 / Math.max(elapsedMs, 50)));
+  // Floor 20k for very weak devices, ceiling 300k
+  target = Math.max(20000, Math.min(300000, target));
+  return target;
+}
+
+async function _deriveKey(password, salt, iterations, extractable){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name:'PBKDF2' }, false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations, hash:'SHA-256' },
+    baseKey,
+    { name:'AES-GCM', length:256 },
+    !!extractable, ['encrypt','decrypt']
+  );
+}
+
+async function _encryptJSON(key, obj){
+  const iv = _randomBytes(12);
+  const enc = new TextEncoder();
+  const cipher = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv },
+    key,
+    enc.encode(JSON.stringify(obj))
+  );
+  return { iv: _b64encode(iv), c: _b64encode(new Uint8Array(cipher)) };
+}
+
+async function _decryptJSON(key, blob){
+  const dec = new TextDecoder();
+  const plain = await crypto.subtle.decrypt(
+    { name:'AES-GCM', iv:_b64decode(blob.iv) },
+    key,
+    _b64decode(blob.c)
+  );
+  return JSON.parse(dec.decode(plain));
+}
+
+// Get / set the stored KDF iteration count (auto-tuned on first launch)
+async function getKdfIterations(){
+  let n = parseInt(localStorage.getItem('smartarf_kdfIterations') || '0', 10);
+  if(!n || n < 20000){
+    n = await _measureKdfIterations();
+    localStorage.setItem('smartarf_kdfIterations', String(n));
+    console.log('[crypto] tuned PBKDF2 iterations:', n);
+  }
+  return n;
+}
+
+// Derive a master key from the worker's password (used during password set / reset / sensitive re-auth)
+async function deriveMasterKeyFromPassword(password){
+  let saltB64 = localStorage.getItem('smartarf_kdfSalt');
+  let salt;
+  if(saltB64){ salt = _b64decode(saltB64); }
+  else{
+    salt = _randomBytes(16);
+    localStorage.setItem('smartarf_kdfSalt', _b64encode(salt));
+  }
+  const iterations = await getKdfIterations();
+  // Extractable=true so we can wrap with PIN
+  return _deriveKey(password, salt, iterations, true);
+}
+
+// Derive a wrapper key from PIN (used for daily unlock; wraps the master key)
+async function deriveWrapperKeyFromPin(pin){
+  let saltB64 = localStorage.getItem('smartarf_pinSalt');
+  let salt;
+  if(saltB64){ salt = _b64decode(saltB64); }
+  else{
+    salt = _randomBytes(16);
+    localStorage.setItem('smartarf_pinSalt', _b64encode(salt));
+  }
+  const iterations = await getKdfIterations();
+  // PIN wrapper key only encrypts/decrypts the wrapped master; never exported
+  return _deriveKey(pin, salt, iterations, false);
+}
+
+// After successful password set: encrypt a sentinel to verify future password attempts.
+async function setPasswordSentinel(masterKey){
+  const blob = await _encryptJSON(masterKey, { sentinel: 'smartarf-ok', ts: Date.now() });
+  localStorage.setItem('smartarf_kdfCheck', JSON.stringify(blob));
+}
+
+async function verifyPasswordSentinel(masterKey){
+  const raw = localStorage.getItem('smartarf_kdfCheck');
+  if(!raw) return false;
+  try{
+    const obj = await _decryptJSON(masterKey, JSON.parse(raw));
+    return obj && obj.sentinel === 'smartarf-ok';
+  }catch{ return false; }
+}
+
+// Wrap the master key with the PIN wrapper key and store
+async function storeWrappedMasterKey(masterKey, wrapperKey){
+  // export master key as raw bytes, encrypt with wrapper
+  const raw = await crypto.subtle.exportKey('raw', masterKey);
+  const iv = _randomBytes(12);
+  const cipher = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv },
+    wrapperKey,
+    raw
+  );
+  localStorage.setItem('smartarf_wrappedMasterKey', JSON.stringify({
+    iv: _b64encode(iv),
+    c:  _b64encode(new Uint8Array(cipher))
+  }));
+}
+
+// Unwrap the master key using the PIN wrapper key (called on PIN unlock)
+async function unwrapMasterKey(wrapperKey){
+  const raw = localStorage.getItem('smartarf_wrappedMasterKey');
+  if(!raw) return null;
+  const blob = JSON.parse(raw);
+  try{
+    const rawBytes = await crypto.subtle.decrypt(
+      { name:'AES-GCM', iv:_b64decode(blob.iv) },
+      wrapperKey,
+      _b64decode(blob.c)
+    );
+    return crypto.subtle.importKey('raw', rawBytes, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']);
+  }catch{ return null; }
+}
+
+// ===================== DATA MASKING (privacy in list views) =====================
+// Full unmasked values are only shown in the record-detail modal and during active edit.
+function maskPhone(s){
+  if(!s) return '';
+  const digits = String(s).replace(/\D/g, '');
+  if(digits.length < 4) return '****';
+  const tail = digits.slice(-2);
+  // Keep country/area prefix if input started with +
+  const prefix = String(s).trim().startsWith('+') ? '+' : '';
+  return `${prefix}${digits.slice(0, Math.min(3, digits.length-2)).replace(/./g,'•')} ••• **${tail}`;
+}
+function maskMRN(s){
+  if(!s) return '';
+  const str = String(s);
+  if(str.length <= 2) return '*'.repeat(str.length);
+  return '*'.repeat(Math.max(2, str.length - 2)) + str.slice(-2);
+}
+
+// ===================== XSS HARDENING =====================
+// All user-controlled fields (patient names, MRN, notes, etc.) must pass through escapeHTML
+// before being interpolated into innerHTML. Use textContent where possible.
+const _escapeHTMLMap = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '/':'&#x2F;' };
+function escapeHTML(str){
+  if(str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"'/]/g, ch => _escapeHTMLMap[ch]);
+}
+
+// ===================== STORAGE =====================
+// The session master key (when unlocked) encrypts all sensitive blobs.
+// When the master key is not yet derived (lock screen), all reads return empty defaults,
+// and writes are dropped — UI should not be issuing writes while locked.
+// Async wrappers (encryptedSaveAsync / encryptedLoadAsync) are used directly by the few
+// callers that need to await; the sync wrappers (loadHistory/saveHistory) operate on a
+// mirrored decrypted cache (`_historyCache`) maintained in memory once unlocked.
+
+let _historyCache = [];
+let _settingsCache = {};
+
+async function encryptedSaveAsync(storageKey, obj){
+  if(!_sessionMasterKey){ console.warn('[crypto] save while locked, dropped:', storageKey); return; }
+  const blob = await _encryptJSON(_sessionMasterKey, obj);
+  localStorage.setItem(storageKey, JSON.stringify(blob));
+}
+async function encryptedLoadAsync(storageKey, fallback){
+  if(!_sessionMasterKey) return fallback;
+  const raw = localStorage.getItem(storageKey);
+  if(!raw) return fallback;
+  try{
+    const blob = JSON.parse(raw);
+    if(blob && blob.iv && blob.c) return await _decryptJSON(_sessionMasterKey, blob);
+    // Legacy plaintext value — migrate on next save
+    return JSON.parse(raw);
+  }catch{ return fallback; }
+}
+
+// Load the decrypted history and settings into memory. Call ONCE on unlock.
+async function rehydrateCaches(){
+  _historyCache  = (await encryptedLoadAsync('smartarf_history',  [])) || [];
+  _settingsCache = (await encryptedLoadAsync('smartarf_settings', {})) || {};
+}
+
+function loadHistory(){ return _historyCache.slice(); }
+// Active (non-deleted) records — what the worker sees in lists.
+function loadActiveHistory(){ return loadHistory().filter(r => !r.inactive); }
+function saveHistory(arr){
+  _historyCache = arr.slice();
+  // Persist encrypted to disk (fire-and-forget; failures logged)
+  if(_sessionMasterKey) encryptedSaveAsync('smartarf_history', _historyCache).catch(err => console.error('[crypto] save history failed', err));
+}
+function saveRecord(record){
+  const arr = loadHistory();
+  // attach sync metadata
+  record.synced     = false;
+  record.syncedAt   = null;
+  record.clinicName = getSettings().clinicName || '';
+  record.deviceId   = getDeviceId();
+  arr.unshift(record);
+  if(arr.length > 200) arr.length = 200;
+  saveHistory(arr);
+  // attempt background sync
+  tryBackgroundSync();
+}
+function deleteRecord(id){
+  const arr = loadHistory().filter(r => r.id !== id);
+  saveHistory(arr);
+}
+
+// ===================== PATIENT CODE =====================
+// Format: ARF-XXXX-XXXX (no ambiguous chars: no 0/O/1/I/L)
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function generatePatientCode(){
+  function chunk(){ let s=''; for(let i=0;i<4;i++) s += CODE_ALPHABET[Math.floor(Math.random()*CODE_ALPHABET.length)]; return s; }
+  return 'ARF-' + chunk() + '-' + chunk();
+}
+
+// ===================== DEVICE ID =====================
+function getDeviceId(){
+  let id = localStorage.getItem('smartarf_deviceId');
+  if(!id){
+    id = 'dev-' + Math.random().toString(36).slice(2,10) + '-' + Date.now().toString(36);
+    localStorage.setItem('smartarf_deviceId', id);
+  }
+  return id;
+}
+
+// ===================== SETTINGS =====================
+// Settings live in encrypted storage too, mirrored in _settingsCache.
+function getSettings(){ return Object.assign({}, _settingsCache); }
+function setSettings(obj){
+  _settingsCache = Object.assign({}, obj);
+  if(_sessionMasterKey) encryptedSaveAsync('smartarf_settings', _settingsCache).catch(err => console.error('[crypto] save settings failed', err));
+}
+function openSettings(){
+  const s = getSettings();
+  document.getElementById('set-clinicName').value = s.clinicName || '';
+  document.getElementById('set-apiKey').value     = s.apiKey     || '';
+  document.getElementById('set-serverUrl').value  = s.serverUrl  || '';
+  // MFA section only visible for admin role
+  const mfaSec = document.getElementById('mfaSection');
+  if(s.role === 'admin'){ mfaSec.classList.remove('hidden'); renderMfaStatus(); }
+  else { mfaSec.classList.add('hidden'); }
+  // Display current role if known
+  if(s.role){
+    const badge = s.role === 'admin'
+      ? '<span style="background:var(--urgent);color:white;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:800">ADMIN</span>'
+      : '<span style="background:var(--primary);color:white;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:800">WORKER</span>';
+    document.getElementById('pingResult').innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:4px">Current role: ${badge}</div>`;
+  } else {
+    document.getElementById('pingResult').innerHTML = '';
+  }
+  document.getElementById('deviceInfoBlock').innerHTML =
+    `Device ID: <code style="background:var(--gray-light);padding:2px 6px;border-radius:4px">${getDeviceId()}</code>`;
+  document.getElementById('settingsModal').classList.add('open');
+  setActiveNav('settings');
+}
+function closeSettings(){
+  document.getElementById('settingsModal').classList.remove('open');
+  // Restore previous active nav based on which screen is visible
+  if(!document.getElementById('landingPage').classList.contains('hidden')) setActiveNav('home');
+  else if(!document.getElementById('bpgScreen').classList.contains('hidden')) setActiveNav('bpg');
+  else if(!document.getElementById('recordsScreen').classList.contains('hidden')) setActiveNav('records');
+  else if(inAssessmentFlow()) setActiveNav('assessment');
+  else setActiveNav('home');
+}
+async function saveSettings(){
+  const prev = getSettings();
+  const newApiKey = document.getElementById('set-apiKey').value.trim();
+  const newUrl    = document.getElementById('set-serverUrl').value.trim().replace(/\/+$/,'');
+  // Re-auth required when API key or server URL changes (sensitive)
+  const sensitive = (prev.apiKey !== newApiKey) || (prev.serverUrl !== newUrl);
+  if(sensitive){
+    const ok = await requireReauth('Change server / API key');
+    if(!ok) return;
+  }
+  const next = {
+    clinicName: document.getElementById('set-clinicName').value.trim(),
+    apiKey:     newApiKey,
+    serverUrl:  newUrl,
+    idleTimeoutMin: prev.idleTimeoutMin || 30
+  };
+  if(prev.apiKey === newApiKey && prev.role) next.role = prev.role;
+  setSettings(next);
+  closeSettings();
+  updateSyncBar();
+}
+async function testConnection(){
+  const s = getSettings();
+  const btn = document.querySelector('#settingsModal .btn-secondary');
+  const res = document.getElementById('pingResult');
+  if(!s.serverUrl || !s.apiKey){
+    res.innerHTML = `<div class="alert alert-warning" style="margin:0">Enter server URL and API key first.</div>`;
+    return;
+  }
+  btn.textContent = 'Testing…'; btn.disabled = true;
+  try{
+    const r = await fetch(s.serverUrl+'/api/ping', {
+      headers:{ 'Authorization': 'Bearer '+s.apiKey }
+    });
+    const json = await r.json();
+    if(r.ok){
+      // Persist role for the session
+      const settings = getSettings();
+      settings.role = json.role || 'worker';
+      settings.clinicName = json.clinic || settings.clinicName;
+      setSettings(settings);
+      const roleBadge = settings.role === 'admin'
+        ? '<span style="background:var(--urgent);color:white;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:800;margin-left:6px">ADMIN</span>'
+        : '<span style="background:var(--primary);color:white;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:800;margin-left:6px">WORKER</span>';
+      res.innerHTML = `<div class="alert alert-success" style="margin:0;background:var(--success-bg);border-color:var(--success);color:var(--success)">
+        ✓ Connected — Clinic: <strong>${json.clinic}</strong>${roleBadge}<br>
+        <span style="font-size:0.75rem">Server time: ${json.serverTime}</span></div>`;
+    } else {
+      res.innerHTML = `<div class="alert alert-warning" style="margin:0">Server error: ${json.error||r.status}</div>`;
+    }
+  } catch(err){
+    res.innerHTML = `<div class="alert alert-warning" style="margin:0">Could not reach server. Check URL and internet connection.</div>`;
+  }
+  btn.textContent = 'Test Connection'; btn.disabled = false;
+}
+document.getElementById('settingsModal').addEventListener('click', function(ev){
+  if(ev.target === this) closeSettings();
+});
+
+// ===================== ADMIN MFA UI =====================
+async function renderMfaStatus(){
+  const s = getSettings();
+  if(s.role !== 'admin') return;
+  const status = document.getElementById('mfaStatus');
+  const actions = document.getElementById('mfaActions');
+  // Probe enrollment by pinging admin endpoint and looking at server-stored flag
+  // Simplest: include a 'mfaEnrolled' cache in settings (server returns role on ping; we'll add enrollment status on test connection)
+  const enrolled = !!s.mfaEnrolled;
+  if(enrolled){
+    status.innerHTML = '<span style="color:var(--success);font-weight:700">✓ MFA enabled</span> — admin requests require a 6-digit code.';
+    actions.innerHTML = `<button class="btn btn-secondary" style="color:var(--danger);border-color:var(--danger)" onclick="disableMfa()">Disable MFA</button>`;
+  } else {
+    status.innerHTML = '<span style="color:var(--warning);font-weight:700">⚠ MFA not enabled</span><br><span style="font-size:0.78rem;color:var(--text-secondary)">Strongly recommended for admin accounts. Lost authenticator? Use a recovery code.</span>';
+    actions.innerHTML = `<button class="btn btn-primary" onclick="startMfaEnroll()">Enroll MFA</button>`;
+  }
+}
+
+async function startMfaEnroll(){
+  const s = getSettings();
+  if(!s.serverUrl || !s.apiKey){ alert('Configure server first.'); return; }
+  try{
+    const r = await fetch(s.serverUrl + '/admin/mfa/enroll', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + s.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const json = await r.json();
+    if(!r.ok) throw new Error(json.error || r.status);
+    // Stash the secret for confirm step
+    S._mfaPending = { secret: json.secret, otpauth: json.otpauth };
+    document.getElementById('mfa-account-name').textContent = s.clinicName || 'SMART-ARF Admin';
+    document.getElementById('mfa-secret').textContent = json.secret;
+    document.getElementById('mfa-recovery').textContent = json.recoveryCodes.join('\n');
+    document.getElementById('mfa-confirm-token').value = '';
+    document.getElementById('mfa-confirm-error').classList.add('hidden');
+    document.getElementById('mfaEnrollModal').classList.add('open');
+  } catch(e){ alert('Failed: ' + e.message); }
+}
+
+function copyMfaSecret(){
+  const sec = document.getElementById('mfa-secret').textContent;
+  navigator.clipboard?.writeText(sec);
+  alert('Secret copied: ' + sec);
+}
+
+async function confirmMfaEnroll(){
+  const token = document.getElementById('mfa-confirm-token').value.trim();
+  const err = document.getElementById('mfa-confirm-error');
+  err.classList.add('hidden');
+  if(!/^[0-9]{6}$/.test(token)){
+    err.className='alert alert-warning'; err.textContent='Enter the 6-digit code from your authenticator.'; err.classList.remove('hidden'); return;
+  }
+  const s = getSettings();
+  try{
+    const r = await fetch(s.serverUrl + '/admin/mfa/verify', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + s.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const json = await r.json();
+    if(!r.ok) throw new Error(json.error || r.status);
+    // Mark enrolled
+    const settings = getSettings(); settings.mfaEnrolled = true; setSettings(settings);
+    closeMfaEnroll();
+    renderMfaStatus();
+    alert('MFA enabled. Future admin actions require a 6-digit code from your authenticator app.');
+  } catch(e){
+    err.className='alert alert-warning'; err.textContent='Verification failed: ' + e.message; err.classList.remove('hidden');
+  }
+}
+
+function closeMfaEnroll(){
+  document.getElementById('mfaEnrollModal').classList.remove('open');
+  S._mfaPending = null;
+}
+document.getElementById('mfaEnrollModal').addEventListener('click', function(ev){
+  if(ev.target === this) closeMfaEnroll();
+});
+
+async function disableMfa(){
+  if(!confirm('Disable MFA? You will lose this layer of protection on admin actions.')) return;
+  const token = prompt('Enter current 6-digit code from your authenticator (or one of your recovery codes):');
+  if(!token) return;
+  const s = getSettings();
+  const headers = { 'Authorization': 'Bearer ' + s.apiKey, 'Content-Type': 'application/json' };
+  // Recovery code is alphanumeric; TOTP is 6 digits
+  if(/^[0-9]{6}$/.test(token)) headers['X-Totp'] = token;
+  else headers['X-Recovery-Code'] = token;
+  try{
+    const r = await fetch(s.serverUrl + '/admin/mfa/disable', { method:'POST', headers, body:'{}' });
+    const json = await r.json();
+    if(!r.ok) throw new Error(json.error || r.status);
+    const settings = getSettings(); settings.mfaEnrolled = false; setSettings(settings);
+    renderMfaStatus();
+    alert('MFA disabled.');
+  } catch(e){ alert('Failed: ' + e.message); }
+}
+
+// ===================== SYNC ENGINE =====================
+let _syncing = false;
+
+async function syncNow(){
+  if(_syncing) return;
+  const s = getSettings();
+  if(!s.serverUrl || !s.apiKey){
+    setSyncBar('error','⚠ Set server URL and API key in Settings to enable sync.');
+    return;
+  }
+  const pending = loadHistory().filter(r => !r.synced);
+  if(!pending.length){
+    setSyncBar('synced','✓ All records synced');
+    return;
+  }
+  _syncing = true;
+  setSyncBar('syncing',`⟳ Syncing ${pending.length} record${pending.length>1?'s':''}…`, false);
+
+  try{
+    const resp = await fetch(s.serverUrl+'/api/sync', {
+      method: 'POST',
+      headers:{ 'Authorization':'Bearer '+s.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({ deviceId: getDeviceId(), records: pending })
+    });
+    const json = await resp.json();
+    if(json && json.code === 'DEVICE_REVOKED'){
+      handleDeviceRevoked();
+      return;
+    }
+    if(!resp.ok) throw new Error(json.error || resp.status);
+
+    // Mark synced records
+    const syncedIds = new Set(json.synced.concat(json.skipped||[]));
+    const history   = loadHistory().map(r => {
+      if(syncedIds.has(r.id)) return { ...r, synced:true, syncedAt: new Date().toISOString() };
+      return r;
+    });
+    saveHistory(history);
+    localStorage.setItem('smartarf_lastSync', new Date().toISOString());
+    const count = json.synced.length;
+    setSyncBar('synced', `✓ Synced ${count} record${count!==1?'s':''} · ${fmtTime(new Date())}`);
+    renderHistory();
+  } catch(err){
+    setSyncBar('error', `✗ Sync failed: ${err.message}`);
+  }
+  _syncing = false;
+}
+
+function tryBackgroundSync(){
+  if(navigator.onLine){ syncNow(); }
+}
+
+function setSyncBar(state, text, showBtn=true){
+  const bar = document.getElementById('syncBar');
+  bar.className = 'sync-bar '+state;
+  bar.classList.remove('hidden');
+  document.getElementById('syncBarText').textContent = text;
+  document.getElementById('syncNowBtn').style.display = showBtn ? '' : 'none';
+}
+
+function updateSyncBar(){
+  const s       = getSettings();
+  const history = loadHistory();
+  const pending = history.filter(r => !r.synced).length;
+  if(!s.serverUrl || !s.apiKey){
+    setSyncBar('pending','⚙ Sync not configured — tap Settings to set up');
+    return;
+  }
+  if(!pending){
+    const last = localStorage.getItem('smartarf_lastSync');
+    setSyncBar('synced', last ? `✓ All synced · Last: ${fmtTime(new Date(last))}` : '✓ No pending records');
+    return;
+  }
+  setSyncBar('pending', `↑ ${pending} record${pending!==1?'s':''} pending sync`);
+}
+
+function fmtTime(d){
+  return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) +
+    ' ' + d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+}
+
+// Listen for online event
+window.addEventListener('online',  () => { tryBackgroundSync(); updateSyncBar(); });
+window.addEventListener('offline', () => { updateSyncBar(); });
+
+// ===================== LANDING PAGE =====================
+function showLanding(){
+  document.getElementById('landingPage').classList.remove('hidden');
+  document.getElementById('appContent').classList.add('hidden');
+  document.getElementById('appHeader').classList.add('hidden');
+  renderHistory();
+  updateSyncBar();
+  setActiveNav('home');
+  window.scrollTo(0,0);
+}
+
+// ===================== BOTTOM NAV =====================
+function setActiveNav(section){
+  ['home','assessment','bpg','records','settings'].forEach(id => {
+    document.getElementById('bn-'+id)?.classList.toggle('active', id === section);
+  });
+}
+
+function inAssessmentFlow(){
+  // Check if any assessment step (1-6) is currently visible inside appContent
+  for(let n=1;n<=6;n++){
+    const el = document.getElementById('step'+n);
+    if(el && !el.classList.contains('hidden')) return true;
+  }
+  return false;
+}
+
+function confirmLeaveAssessment(){
+  if(!inAssessmentFlow()) return true;
+  // Only ask if there's actual progress (non-zero score or step > 1)
+  return confirm('Leave the current assessment? Your in-progress assessment will be saved if you have reached the scoring screen.');
+}
+
+function navTo(section){
+  if(section !== 'assessment' && !confirmLeaveAssessment()) return;
+  switch(section){
+    case 'home':       showLanding(); break;
+    case 'assessment': startNewAssessment(); break;
+    case 'bpg':        showBPGScreen(); break;
+    case 'records':    showRecordsScreen(); break;
+    case 'settings':   openSettings(); break;
+  }
+}
+
+function showBPGScreen(){
+  document.getElementById('landingPage').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('appHeader').classList.add('hidden');
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById('bpgScreen').classList.remove('hidden');
+  setActiveNav('bpg');
+  window.scrollTo(0,0);
+}
+
+function showRecordsScreen(){
+  document.getElementById('landingPage').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('appHeader').classList.add('hidden');
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById('recordsScreen').classList.remove('hidden');
+  document.getElementById('recordsSearch').value = '';
+  renderRecordsList();
+  setActiveNav('records');
+  window.scrollTo(0,0);
+}
+
+function renderRecordsList(){
+  const q   = (document.getElementById('recordsSearch')?.value || '').toLowerCase().trim();
+  const all = loadActiveHistory();
+  const filtered = q ? all.filter(r => {
+    const hay = [r.firstName, r.lastName, r.mrn, r.patientCode, r.resultLabel].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  }) : all;
+  const list = document.getElementById('recordsList');
+  if(!list) return;
+  if(!filtered.length){
+    list.innerHTML = q
+      ? `<div class="empty-state"><p>No records match "<strong>${escapeHTML(q)}</strong>"</p></div>`
+      : `<div class="empty-state"><div class="empty-icon">📋</div><p>No records yet.</p></div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(r => {
+    const name = [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown Patient';
+    const initials = [(r.firstName||'?')[0], (r.lastName||'?')[0]].join('').toUpperCase();
+    const meta = [r.patientCode||'', r.mrn ? 'MRN: '+maskMRN(r.mrn) : '', r.age ? r.age+'y' : '', r.gender, r.date].filter(Boolean).join(' · ');
+    const lvl = r.level || 'incomplete';
+    const scoreLabel = r.score !== undefined ? `Score: ${r.score}` : '';
+    const resultLabel = r.resultLabel || 'Incomplete';
+    const resultColor = {unlikely:'var(--success)',possible:'var(--warning)',likely:'var(--danger)',urgent:'var(--urgent)',chorea:'var(--urgent)',incomplete:'var(--gray)'}[lvl];
+    const syncDotClass = r.synced ? 'ok' : 'pending';
+    return `<div class="patient-card" onclick="viewRecord('${escapeHTML(r.id)}')">
+      <div class="pc-dot ${lvl}">${escapeHTML(initials)}</div>
+      <div class="pc-body">
+        <div class="pc-name" style="display:flex;align-items:center;gap:7px">${escapeHTML(name)}<span class="sync-dot ${syncDotClass}"></span></div>
+        <div class="pc-sub">${escapeHTML(meta)}</div>
+        <div class="pc-result" style="color:${resultColor}">${scoreLabel ? scoreLabel+' · ' : ''}${escapeHTML(resultLabel)}</div>
+      </div>
+      <span class="pc-chevron">›</span>
+    </div>`;
+  }).join('');
+}
+
+function startNewAssessment(){
+  document.getElementById('landingPage').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('appHeader').classList.remove('hidden');
+  setActiveNav('assessment');
+  showStep(1);
+}
+
+function renderHistory(){
+  const arr = loadActiveHistory();
+  const list = document.getElementById('patientHistoryList');
+  const heading = document.getElementById('historyHeading');
+  const clearWrap = document.getElementById('clearAllWrap');
+
+  if(!arr.length){
+    heading.textContent = 'Recent Assessments';
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <p>No assessments yet.<br>Tap <strong>New Patient Assessment</strong> to get started.</p>
+    </div>`;
+    clearWrap.innerHTML = '';
+    return;
+  }
+
+  heading.textContent = `Recent Assessments (${arr.length})`;
+  list.innerHTML = arr.map(r => {
+    const name = [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown Patient';
+    const initials = [(r.firstName||'?')[0], (r.lastName||'?')[0]].join('').toUpperCase();
+    const meta = [r.patientCode ? r.patientCode : '', r.mrn ? 'MRN: '+maskMRN(r.mrn) : '', r.age ? r.age+'y' : '', r.gender, r.date].filter(Boolean).join(' · ');
+    const lvl = r.level || 'incomplete';
+    const scoreLabel = r.score !== undefined ? `Score: ${r.score}` : '';
+    const resultLabel = r.resultLabel || 'Incomplete';
+    const resultColor = {unlikely:'var(--success)',possible:'var(--warning)',likely:'var(--danger)',urgent:'var(--urgent)',chorea:'var(--urgent)',incomplete:'var(--gray)'}[lvl];
+    const syncDotClass = r.synced ? 'ok' : 'pending';
+    const syncTitle    = r.synced ? 'Synced' : 'Pending sync';
+    return `<div class="patient-card" onclick="viewRecord('${escapeHTML(r.id)}')">
+      <div class="pc-dot ${lvl}">${escapeHTML(initials)}</div>
+      <div class="pc-body">
+        <div class="pc-name" style="display:flex;align-items:center;gap:7px">
+          ${escapeHTML(name)}
+          <span class="sync-dot ${syncDotClass}" title="${syncTitle}"></span>
+        </div>
+        <div class="pc-sub">${escapeHTML(meta)}</div>
+        <div class="pc-result" style="color:${resultColor}">${scoreLabel ? scoreLabel+' · ' : ''}${escapeHTML(resultLabel)}</div>
+      </div>
+      <span class="pc-chevron">›</span>
+    </div>`;
+  }).join('');
+
+  clearWrap.innerHTML = `<button class="btn-danger-sm" onclick="confirmClearAll()">Clear all records</button>`;
+}
+
+function confirmClearAll(){
+  if(confirm('Delete all saved patient records? This cannot be undone.')){
+    localStorage.removeItem('smartarf_history');
+    renderHistory();
+  }
+}
+
+// ===================== VIEW RECORD MODAL =====================
+function viewRecord(id){
+  const arr = loadHistory();
+  const r = arr.find(x => x.id === id);
+  if(!r) return;
+  const name = [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown Patient';
+  document.getElementById('modalPatientName').textContent = name;
+
+  const lvlColor = {unlikely:'var(--success)',possible:'var(--warning)',likely:'var(--danger)',urgent:'var(--urgent)',chorea:'var(--urgent)',incomplete:'var(--gray)'}[r.level||'incomplete'];
+  const meta = [r.patientCode?'Code: '+r.patientCode:'', r.mrn?'MRN: '+r.mrn:'', r.age?'Age: '+r.age+'y':'', r.gender, r.setting].filter(Boolean);
+  if(r.phone1) meta.push('📞 '+r.phone1);
+  if(r.phone2) meta.push('📞 (alt) '+r.phone2);
+  if(r.referredTo) meta.push('→ '+r.referredTo);
+
+  let html = `<div style="margin-bottom:14px">`;
+  if(meta.length) html += `<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px">${escapeHTML(meta.join(' · '))}</div>`;
+  const syncStatus = r.synced
+    ? `<span style="color:var(--success);font-weight:700">✓ Synced ${r.syncedAt ? escapeHTML(fmtTime(new Date(r.syncedAt))) : ''}</span>`
+    : `<span style="color:var(--warning);font-weight:700">↑ Pending sync</span>`;
+  html += `<div style="font-size:0.75rem;color:var(--gray);margin-bottom:14px">📅 ${escapeHTML(r.date || 'Unknown date')} · ${syncStatus}</div>`;
+
+  // Result summary
+  html += `<div style="background:${lvlColor}18;border:2px solid ${lvlColor};border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
+    <div style="font-size:2rem;font-weight:900;color:${lvlColor}">${r.score !== undefined ? escapeHTML(r.score) : '—'}</div>
+    <div style="font-size:1rem;font-weight:800;color:${lvlColor}">${escapeHTML(r.resultLabel||'—')}</div>
+    <div style="font-size:0.78rem;color:${lvlColor};opacity:0.8">${escapeHTML(r.range||'')}</div>
+  </div>`;
+
+  // Breakdown
+  if(r.breakdown && r.breakdown.length){
+    html += `<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin-bottom:8px">Score Breakdown</div>`;
+    r.breakdown.forEach(b => {
+      html += `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--gray-light);font-size:0.85rem">
+        <span>${escapeHTML(b.l)}</span><span style="font-weight:800;color:var(--primary)">${b.p !== null ? '+'+escapeHTML(b.p) : ''}</span>
+      </div>`;
+    });
+  }
+
+  // Actions
+  if(r.actions && r.actions.length){
+    html += `<div style="margin-top:14px;background:var(--gray-light);border-radius:8px;padding:12px">
+      <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Recommended Actions</div>
+      <ul style="padding-left:16px">${r.actions.map(a=>`<li style="font-size:0.85rem;margin-bottom:5px;line-height:1.4">${a}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  html += `</div>`;
+  html += `<button class="btn btn-primary" style="margin-bottom:8px" onclick="editAssessment('${escapeHTML(r.id)}')">✏ Edit / Add to Assessment</button>`;
+  const removeLabel = r.isTest ? 'Remove test entry' : 'Remove record';
+  html += `<button class="btn btn-secondary" style="color:var(--danger);border-color:var(--danger)" onclick="deleteAndClose('${escapeHTML(r.id)}')">${removeLabel}</button>`;
+
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('recordModal').classList.add('open');
+}
+
+function editAssessment(id){
+  const arr = loadHistory();
+  const r = arr.find(x => x.id === id);
+  if(!r){ alert('Record not found'); return; }
+
+  // Rehydrate state S from stored inputs snapshot if available, otherwise reconstruct from basic fields
+  const inputs = r.inputs || {};
+  Object.assign(S, {
+    firstName: r.firstName || '',
+    lastName:  r.lastName  || '',
+    mrn:       r.mrn       || '',
+    phone1:    r.phone1    || '',
+    phone2:    r.phone2    || '',
+    age:       r.age       || null,
+    gender:    r.gender    || '',
+    setting:   r.setting   || '',
+    fever:           inputs.fever ?? null,
+    chorea:          inputs.chorea ?? null,
+    altCause:        inputs.altCause ?? null,
+    choreaPositive:  inputs.choreaPositive ?? !!(r.level === 'chorea' || (r.breakdown||[]).some(b=>String(b.l||'').toLowerCase().includes('chorea'))),
+    joint:           inputs.joint ?? 0,
+    murmur:          inputs.murmur ?? false,
+    sob:             inputs.sob ?? false,
+    edema:           inputs.edema ?? false,
+    chestpain:       inputs.chestpain ?? false,
+    walking:         inputs.walking ?? false,
+    em:              inputs.em ?? false,
+    sn:              inputs.sn ?? false,
+    noad:            inputs.noad ?? false,
+    naBlood:         inputs.naBlood ?? false,
+    naEcg:           inputs.naEcg ?? false,
+    naEcho:          inputs.naEcho ?? false,
+    wbc:             inputs.wbc ?? false,
+    aso:             inputs.aso ?? false,
+    esr:             inputs.esr ?? false,
+    antidnase:       inputs.antidnase ?? false,
+    pr:              inputs.pr ?? false,
+    echo:            inputs.echo ?? null,
+    activeRecordId:  r.id,
+    patientCode:     r.patientCode || null
+  });
+
+  // Apply state to the form widgets
+  closeModal();
+  document.getElementById('landingPage').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('appHeader').classList.remove('hidden');
+
+  // Populate patient inputs (Step 1)
+  if(document.getElementById('patientFirst'))  document.getElementById('patientFirst').value = S.firstName;
+  if(document.getElementById('patientLast'))   document.getElementById('patientLast').value  = S.lastName;
+  if(document.getElementById('patientMRN'))    document.getElementById('patientMRN').value   = S.mrn;
+  if(document.getElementById('patientPhone1')) document.getElementById('patientPhone1').value = S.phone1;
+  if(document.getElementById('patientPhone2')) document.getElementById('patientPhone2').value = S.phone2;
+  if(document.getElementById('patientAge'))    document.getElementById('patientAge').value   = S.age || '';
+  if(document.getElementById('patientGender')) document.getElementById('patientGender').value = S.gender;
+  if(document.getElementById('patientSetting'))document.getElementById('patientSetting').value = S.setting;
+  updatePatientBanner();
+
+  // Sync Step 2 yes/no buttons
+  ['fever','chorea','altCause'].forEach(f => {
+    if(S[f] === null) return;
+    document.getElementById(f+'Yes').className = 'yn-btn' + (S[f] ? ' selected-yes' : '');
+    document.getElementById(f+'No').className  = 'yn-btn' + (!S[f] ? ' selected-no' : '');
+  });
+
+  // Sync Step 3 controls
+  pickJoint(S.joint);
+  ['murmur','sob','edema','chestpain','walking','em','sn','noad'].forEach(k => {
+    const c = document.getElementById('chk-'+k);
+    if(c){ c.checked = !!S[k]; document.getElementById('si-'+k)?.classList.toggle('sym-checked', !!S[k]); }
+  });
+  ['wbc','aso','esr','antidnase','pr'].forEach(k => {
+    const c = document.getElementById('chk-'+k);
+    if(c){ c.checked = !!S[k]; document.getElementById('si-'+k)?.classList.toggle('sym-checked', !!S[k]); }
+  });
+  ['blood','ecg','echo'].forEach(s => {
+    const flag = 'na'+s.charAt(0).toUpperCase()+s.slice(1);
+    const active = !!S[flag];
+    const c = document.getElementById('na-'+s);
+    if(c) c.checked = active;
+    document.getElementById('na-'+s+'-toggle')?.classList.toggle('active', active);
+    document.getElementById('lb-'+s)?.classList.toggle('disabled', active);
+  });
+  if(S.echo === 'suggestive' || S.echo === 'not-suggestive') pickEcho(S.echo);
+
+  updateScore();
+  updateChoreaBanner();
+  showStep(3); // jump to Level A scoring directly
+}
+
+function closeModal(){
+  document.getElementById('recordModal').classList.remove('open');
+}
+
+function deleteAndClose(id){
+  // Find record; if it's a test entry, skip the reason dialog and soft-delete immediately
+  const rec = loadHistory().find(r => r.id === id);
+  if(!rec) return;
+  if(rec.isTest){
+    if(confirm('Remove this test/training entry from your device?')){
+      softDeleteLocal(id, { reason: 'test-entry', notes: '' });
+      closeModal();
+      renderHistory();
+      renderRecordsList();
+    }
+    return;
+  }
+  // Open the reason dialog
+  S._softDeleteId = id;
+  document.getElementById('sd-reason').value = '';
+  document.getElementById('sd-error').classList.add('hidden');
+  document.getElementById('softDeleteModal').classList.add('open');
+}
+
+function closeSoftDelete(){
+  document.getElementById('softDeleteModal').classList.remove('open');
+  S._softDeleteId = null;
+}
+
+document.getElementById('softDeleteModal').addEventListener('click', function(ev){
+  if(ev.target === this) closeSoftDelete();
+});
+
+async function confirmSoftDelete(){
+  const id     = S._softDeleteId;
+  const reason = document.getElementById('sd-reason').value;
+  const err    = document.getElementById('sd-error');
+  if(!reason){
+    err.className='alert alert-warning';
+    err.textContent='Please select a reason.';
+    err.classList.remove('hidden');
+    return;
+  }
+  softDeleteLocal(id, { reason, notes: '' });
+  // Try to notify the server immediately (best effort; sync engine retries on failure)
+  tryServerSoftDelete(id, reason, '');
+  closeSoftDelete();
+  closeModal();
+  renderHistory();
+  renderRecordsList();
+}
+
+function softDeleteLocal(id, { reason, notes }){
+  const hist = loadHistory();
+  const idx  = hist.findIndex(r => r.id === id);
+  if(idx < 0) return;
+  hist[idx].inactive      = true;
+  hist[idx].deletedBy     = (getSettings().clinicName || 'Unknown');
+  hist[idx].deletedAt     = new Date().toISOString();
+  hist[idx].deleteReason  = reason;
+  hist[idx].deleteNotes   = notes || '';
+  hist[idx].synced        = false;     // re-sync the inactive flag
+  saveHistory(hist);
+}
+
+async function tryServerSoftDelete(id, reason, notes){
+  const s = getSettings();
+  if(!s.serverUrl || !s.apiKey) return;
+  try{
+    await fetch(s.serverUrl + '/api/soft-delete', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + s.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localId: id, deleteReason: reason, deleteNotes: notes })
+    });
+  }catch{ /* will sync via normal record sync */ }
+}
+
+// Close modal on overlay click
+document.getElementById('recordModal').addEventListener('click', function(ev){
+  if(ev.target === this) closeModal();
+});
+
+// ===================== REFERRAL / CODE COPY =====================
+function copyCode(){
+  if(!S.patientCode) return;
+  navigator.clipboard?.writeText(S.patientCode);
+  alert('Patient code copied: ' + S.patientCode);
+}
+
+function saveReferral(){
+  const val = document.getElementById('referredTo').value.trim();
+  if(!S.activeRecordId) return;
+  const hist = loadHistory();
+  const idx  = hist.findIndex(r => r.id === S.activeRecordId);
+  if(idx >= 0){
+    hist[idx].referredTo = val;
+    hist[idx].synced     = false;
+    saveHistory(hist);
+    tryBackgroundSync();
+    alert('Referral saved' + (val ? ': '+val : ''));
+  }
+}
+
+// ===================== LOOKUP =====================
+function openLookup(){
+  document.getElementById('landingPage').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('appHeader').classList.add('hidden');
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById('lookupScreen').classList.remove('hidden');
+  document.getElementById('lookupCode').value = '';
+  document.getElementById('lookupError').classList.add('hidden');
+  window.scrollTo(0,0);
+  document.getElementById('lookupCode').focus();
+}
+
+async function doLookup(){
+  const code = document.getElementById('lookupCode').value.trim().toUpperCase().replace(/\s+/g,'');
+  const errEl = document.getElementById('lookupError');
+  if(!code){
+    errEl.className='alert alert-warning';
+    errEl.textContent='Enter a patient code to search.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  const s = getSettings();
+
+  // First check local history
+  const localRecord = loadHistory().find(r => (r.patientCode||'').toUpperCase() === code);
+
+  // If not configured, fall back to local only
+  if(!s.serverUrl || !s.apiKey){
+    if(localRecord){
+      renderLookupResult({ record: localRecord, followups: [] }, true);
+      return;
+    }
+    errEl.className='alert alert-warning';
+    errEl.textContent='Patient not found locally. Configure server and API key in Settings to search remote records.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // Try server
+  errEl.classList.add('hidden');
+  try{
+    const resp = await fetch(s.serverUrl + '/api/lookup/' + encodeURIComponent(code), {
+      headers: { 'Authorization': 'Bearer ' + s.apiKey }
+    });
+    if(resp.status === 404){
+      if(localRecord){
+        renderLookupResult({ record: localRecord, followups: [] }, true);
+        return;
+      }
+      errEl.className='alert alert-warning';
+      errEl.textContent='No patient record found for code ' + code;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(!resp.ok){
+      const j = await resp.json().catch(()=>({}));
+      throw new Error(j.error || resp.status);
+    }
+    const data = await resp.json();
+    renderLookupResult(data, false);
+  } catch(err){
+    if(localRecord){
+      renderLookupResult({ record: localRecord, followups: [] }, true);
+      return;
+    }
+    errEl.className='alert alert-warning';
+    errEl.textContent='Lookup failed: '+err.message+'. Check internet connection.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+function renderLookupResult(data, offline){
+  const r = data.record;
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById('lookupResultScreen').classList.remove('hidden');
+
+  document.getElementById('lrName').textContent = [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown Patient';
+  const meta = [
+    r.patientCode ? 'Code: '+r.patientCode : '',
+    r.mrn ? 'MRN: '+r.mrn : '',
+    r.age ? r.age+'y' : '',
+    r.gender,
+    r.originClinic ? 'Origin: '+r.originClinic : '',
+    offline ? '⚠ Offline (local only)' : ''
+  ].filter(Boolean).join(' · ');
+  // textContent avoids HTML injection from origin clinic name / referredTo etc.
+  document.getElementById('lrMeta').textContent = meta;
+
+  // Render the original assessment
+  const lvlColor = {unlikely:'var(--success)',possible:'var(--warning)',likely:'var(--danger)',urgent:'var(--urgent)',chorea:'var(--urgent)',incomplete:'var(--gray)'}[r.level||'incomplete'];
+  let html = `
+    <div style="background:${lvlColor}18;border:2px solid ${lvlColor};border-radius:10px;padding:14px;text-align:center;margin:14px 0">
+      <div style="font-size:2rem;font-weight:900;color:${lvlColor}">${r.score!==undefined?escapeHTML(r.score):'—'}</div>
+      <div style="font-size:1rem;font-weight:800;color:${lvlColor}">${escapeHTML(r.resultLabel||'—')}</div>
+      <div style="font-size:0.78rem;color:${lvlColor};opacity:0.8">${escapeHTML(r.range||'')}</div>
+    </div>
+    <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:10px">Original assessment: <strong>${escapeHTML(r.date||'—')}</strong>${r.referredTo?' · Referred to <strong>'+escapeHTML(r.referredTo)+'</strong>':''}</div>
+  `;
+  if(r.breakdown && r.breakdown.length){
+    html += `<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-secondary);margin:10px 0 6px">Score Breakdown</div>`;
+    r.breakdown.forEach(b => {
+      html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-light);font-size:0.84rem">
+        <span>${escapeHTML(b.l)}</span><span style="font-weight:800;color:var(--primary)">${b.p!==null?'+'+escapeHTML(b.p):''}</span></div>`;
+    });
+  }
+  document.getElementById('lrAssessment').innerHTML = html;
+
+  // Followups
+  const fuList = data.followups || [];
+  const card   = document.getElementById('lrFollowupsCard');
+  if(fuList.length === 0){
+    card.classList.add('hidden');
+  } else {
+    card.classList.remove('hidden');
+    document.getElementById('lrFollowupsHeading').textContent = `Follow-Ups (${fuList.length})`;
+    document.getElementById('lrFollowupsList').innerHTML = fuList.map(f => {
+      const dxLabel = {arf:'ARF Confirmed', 'not-arf':'Not ARF', uncertain:'Uncertain'}[f.confirmedDx] || '—';
+      const bpgLabel = {started:'Started',continued:'Continued',stopped:'Stopped','not-given':'Not given'}[f.bpgStatus] || '—';
+      return `<div class="followup-card">
+        <div class="fc-header">
+          <span>${escapeHTML(f.visitDate || '—')}</span>
+          <span style="font-weight:600;font-size:0.72rem">${escapeHTML(f.clinicName || '')}</span>
+        </div>
+        <div class="fc-body">
+          <div class="fc-row"><span class="fc-key">Diagnosis:</span> ${dxLabel}${f.finalDx?' — '+escapeHTML(f.finalDx):''}</div>
+          <div class="fc-row"><span class="fc-key">BPG:</span> ${bpgLabel}</div>
+          ${f.echoFindings?`<div class="fc-row"><span class="fc-key">Echo:</span> ${escapeHTML(f.echoFindings)}</div>`:''}
+          ${f.complications?`<div class="fc-row"><span class="fc-key">Complications:</span> ${escapeHTML(f.complications)}</div>`:''}
+          ${f.notes?`<div class="fc-row"><span class="fc-key">Notes:</span> ${escapeHTML(f.notes)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Stash for follow-up form
+  S.lookupPatient = r;
+  window.scrollTo(0,0);
+}
+
+function showFollowupForm(){
+  if(!S.lookupPatient) return;
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById('followupScreen').classList.remove('hidden');
+  const r = S.lookupPatient;
+  document.getElementById('fuPatientName').textContent = [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown';
+  document.getElementById('fuPatientCode').textContent = r.patientCode || '';
+  document.getElementById('fu-visitDate').value = new Date().toISOString().slice(0,10);
+  ['fu-confirmedDx','fu-finalDx','fu-bpgStatus','fu-echoFindings','fu-complications','fu-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  document.getElementById('fuResult').classList.add('hidden');
+  window.scrollTo(0,0);
+}
+
+function cancelFollowup(){
+  // Go back to lookup result if we have it, else landing
+  if(S.lookupPatient){
+    document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+    document.getElementById('lookupResultScreen').classList.remove('hidden');
+    window.scrollTo(0,0);
+  } else {
+    showLanding();
+  }
+}
+
+async function submitFollowup(){
+  const s = getSettings();
+  const r = S.lookupPatient;
+  if(!r || !r.patientCode){ alert('No patient context.'); return; }
+  const result = document.getElementById('fuResult');
+
+  if(!s.serverUrl || !s.apiKey){
+    result.className='alert alert-warning';
+    result.textContent='Configure server and API key in Settings before submitting.';
+    result.classList.remove('hidden');
+    return;
+  }
+
+  const payload = {
+    id: 'fu-' + Date.now(),
+    patientCode:  r.patientCode,
+    deviceId:     getDeviceId(),
+    visitDate:    document.getElementById('fu-visitDate').value,
+    confirmedDx:  document.getElementById('fu-confirmedDx').value,
+    finalDx:      document.getElementById('fu-finalDx').value.trim(),
+    bpgStatus:    document.getElementById('fu-bpgStatus').value,
+    echoFindings: document.getElementById('fu-echoFindings').value.trim(),
+    complications:document.getElementById('fu-complications').value.trim(),
+    notes:        document.getElementById('fu-notes').value.trim()
+  };
+
+  try{
+    const resp = await fetch(s.serverUrl+'/api/followup', {
+      method: 'POST',
+      headers: { 'Authorization':'Bearer '+s.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!resp.ok){
+      const j = await resp.json().catch(()=>({}));
+      throw new Error(j.error || resp.status);
+    }
+    result.className='alert alert-success';
+    result.style.background = 'var(--success-bg)';
+    result.style.borderColor = 'var(--success)';
+    result.style.color = 'var(--success)';
+    result.textContent = '✓ Follow-up saved successfully.';
+    result.classList.remove('hidden');
+
+    // Refresh the lookup result after a moment
+    setTimeout(()=>{ doLookup(); }, 1200);
+  } catch(err){
+    // Queue locally for later sync
+    const pendingFU = JSON.parse(localStorage.getItem('smartarf_pendingFollowups')||'[]');
+    pendingFU.push(payload);
+    localStorage.setItem('smartarf_pendingFollowups', JSON.stringify(pendingFU));
+    result.className='alert alert-warning';
+    result.textContent='No connection — follow-up queued locally and will sync when online.';
+    result.classList.remove('hidden');
+  }
+}
+
+async function syncPendingFollowups(){
+  const s = getSettings();
+  if(!s.serverUrl || !s.apiKey) return;
+  let pending = JSON.parse(localStorage.getItem('smartarf_pendingFollowups')||'[]');
+  if(!pending.length) return;
+  const remaining = [];
+  for(const fu of pending){
+    try{
+      const r = await fetch(s.serverUrl+'/api/followup', {
+        method: 'POST',
+        headers: { 'Authorization':'Bearer '+s.apiKey, 'Content-Type':'application/json' },
+        body: JSON.stringify(fu)
+      });
+      if(!r.ok) remaining.push(fu);
+    } catch{ remaining.push(fu); }
+  }
+  localStorage.setItem('smartarf_pendingFollowups', JSON.stringify(remaining));
+}
+
+// Patch tryBackgroundSync to include follow-ups
+const _origTryBgSync = tryBackgroundSync;
+tryBackgroundSync = function(){ if(navigator.onLine){ syncNow(); syncPendingFollowups(); } };
+
+// ===================== NAVIGATION =====================
+function showStep(n){
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  const el = document.getElementById('step'+n);
+  if(el) el.classList.remove('hidden');
+  const pct = ((n-1)/4)*100;
+  document.getElementById('progressBar').style.width = pct+'%';
+  document.getElementById('progressLabel').textContent = `Step ${n} of 5`;
+  document.getElementById('scoreTally').classList.toggle('visible', n===3);
+  setActiveNav('assessment');
+  updateChoreaBanner();
+  if(n === 3 && typeof updateScore === 'function') updateScore();
+  window.scrollTo(0,0);
+}
+function showSection(id){
+  document.querySelectorAll('.step-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.getElementById('scoreTally').classList.remove('visible');
+  window.scrollTo(0,0);
+}
+
+// ===================== STEP 1 =====================
+function step1Next(){
+  S.firstName = document.getElementById('patientFirst').value.trim();
+  S.lastName  = document.getElementById('patientLast').value.trim();
+  S.mrn       = document.getElementById('patientMRN').value.trim();
+  S.phone1    = document.getElementById('patientPhone1').value.trim();
+  S.phone2    = document.getElementById('patientPhone2').value.trim();
+  S.age       = parseInt(document.getElementById('patientAge').value) || null;
+  S.gender    = document.getElementById('patientGender').value;
+  S.setting   = document.getElementById('patientSetting').value;
+  S.isTest    = document.getElementById('isTest').checked;
+  if(S.firstName || S.lastName || S.mrn || S.phone1) updatePatientBanner();
+  showStep(2);
+}
+
+function toggleIsTest(){
+  const chk = document.getElementById('isTest');
+  chk.checked = !chk.checked;
+  S.isTest = chk.checked;
+  document.getElementById('isTestToggle').classList.toggle('active', chk.checked);
+}
+
+function updatePatientBanner(){
+  const banner = document.getElementById('patientBanner');
+  const name   = S.firstName + ' ' + S.lastName;
+  const meta   = [S.mrn ? 'MRN: '+maskMRN(S.mrn) : '', S.age ? S.age+'y' : '', S.gender, S.phone1 ? '📞 '+maskPhone(S.phone1) : ''].filter(Boolean).join(' · ');
+  document.getElementById('pbName').textContent = name;
+  document.getElementById('pbMeta').textContent = meta;
+  banner.classList.add('visible');
+}
+
+// ===================== STEP 2 — ENTRY =====================
+function setYN(field, val){
+  S[field] = val;
+  document.getElementById(field+'Yes').className = 'yn-btn' + (val ? ' selected-yes' : '');
+  document.getElementById(field+'No').className  = 'yn-btn' + (!val ? ' selected-no' : '');
+}
+function evalEntry(){
+  document.getElementById('entryWarning').classList.add('hidden');
+  // Chorea = positive → set flag, banner shown on Step 3+, automatic +5 added to score.
+  S.choreaPositive = S.chorea === true;
+  updateChoreaBanner();
+  showStep(3);
+}
+
+// ===================== STEP 3 — LEVEL A =====================
+function pickJoint(val){
+  S.joint = val;
+  ['none','mono','poly','arthritis'].forEach(id => {
+    const el = document.getElementById('ri-'+id);
+    if(el) el.classList.remove('selected');
+  });
+  const map = {0:'none',2:'mono',3:'poly',5:'arthritis'};
+  const sel = document.getElementById('ri-'+map[val]);
+  if(sel) sel.classList.add('selected');
+  // sync radio
+  const radios = document.querySelectorAll('input[name="joint"]');
+  radios.forEach(r => { r.checked = parseInt(r.value)===val; });
+  updateScore();
+}
+
+function toggleSym(key){
+  const chk = document.getElementById('chk-'+key);
+  if(!chk) return;
+  chk.checked = !chk.checked;
+  S[key] = chk.checked;
+  const si = document.getElementById('si-'+key);
+  if(si) si.classList.toggle('sym-checked', chk.checked);
+  updateScore();
+}
+
+// Carditis: any of the 5 sub-symptoms = +5
+function carditisScore(){ return S.murmur ? 5 : 0; }
+function skinScore(){ return (S.em?5:0)+(S.sn?5:0); }
+function calcLevelA(){ return S.joint + carditisScore() + skinScore() + (S.noad?3:0) + (S.choreaPositive?5:0); }
+function bloodInflammScore(){ return (S.wbc||S.aso||S.esr) ? 3 : 0; }
+function echoScore(){ return S.echo==='suggestive' ? 5 : 0; }
+function calcLevelB(){
+  return bloodInflammScore() + (S.antidnase?5:0) + (S.pr?3:0) + echoScore();
+}
+
+function getInterp(score){
+  if(score<=5)  return {label:'ARF Unlikely',    level:'unlikely', color:'var(--success)', range:'Score 0–5'};
+  if(score<=9)  return {label:'ARF Possible',    level:'possible', color:'var(--warning)', range:'Score 6–9'};
+  if(score<=14) return {label:'ARF Likely',      level:'likely',   color:'var(--danger)',  range:'Score 10–14'};
+  return           {label:'ARF Highly Likely', level:'urgent',   color:'var(--urgent)',  range:'Score ≥15'};
+}
+function getActions(score){
+  if(score<=5)  return ['Treat according to clinical diagnosis','Arrange appropriate follow-up','Reassess if fever persists or symptoms change'];
+  if(score<=9)  return ['ARF is possible — do not dismiss','Start <strong>Benzathine Penicillin G (BPG)</strong> prophylaxis','Refer to secondary care for confirmation','Document findings and initiate prophylaxis plan'];
+  if(score<=14) return ['ARF is likely — act promptly','Start <strong>Benzathine Penicillin G (BPG)</strong> prophylaxis immediately','Refer to secondary care for full evaluation','Initiate long-term secondary prophylaxis plan','Educate patient and family about RHD'];
+  return ['ARF is highly likely — urgent action required','Start <strong>Benzathine Penicillin G (BPG)</strong> prophylaxis <em>now</em>','<strong>Urgent referral</strong> to secondary care','Monitor for cardiac complications','Initiate long-term secondary prophylaxis plan'];
+}
+
+function updateScore(){
+  // sync checkboxes → state (new carditis severity keys: sob, edema, walking; chestpain kept)
+  ['murmur','sob','edema','chestpain','walking','em','sn','noad'].forEach(k=>{
+    const c=document.getElementById('chk-'+k);
+    if(c){ S[k]=c.checked; document.getElementById('si-'+k)?.classList.toggle('sym-checked',c.checked); }
+  });
+
+  const scoreA = calcLevelA();
+  const interp = getInterp(scoreA);
+
+  // update live score
+  document.getElementById('liveScore').textContent = scoreA;
+  document.getElementById('tallyValue').textContent = scoreA;
+  document.getElementById('liveInterp').textContent = interp.label;
+  document.getElementById('liveInterp').style.color = interp.color;
+
+  // Category badges
+  const jScore = S.joint;
+  const cScore = carditisScore();
+  const sScore = skinScore();
+  const eScore = S.noad?3:0;
+  setBadge('joint',   jScore);
+  setBadge('carditis',cScore);
+  setBadge('skin',    sScore);
+  setBadge('excl',    eScore);
+
+  // Active state on cat blocks
+  toggleCatActive('cat-joint',    jScore>0);
+  toggleCatActive('cat-carditis', cScore>0);
+  toggleCatActive('cat-skin',     sScore>0);
+  toggleCatActive('cat-excl',     eScore>0);
+
+  updateScoreB();
+}
+
+// Echo radio handler
+function pickEcho(val){
+  S.echo = val;
+  ['sugg','not'].forEach(id => document.getElementById('ri-echo-'+id)?.classList.remove('selected'));
+  const map = {'suggestive':'sugg','not-suggestive':'not'};
+  document.getElementById('ri-echo-'+map[val])?.classList.add('selected');
+  document.querySelectorAll('input[name="echo"]').forEach(r => { r.checked = r.value === val; });
+  updateScoreB();
+}
+
+// Update chorea banner visibility everywhere
+function updateChoreaBanner(){
+  document.querySelectorAll('.chorea-banner-instance').forEach(el => {
+    el.classList.toggle('hidden', !S.choreaPositive);
+  });
+}
+
+function setBadge(id, pts){
+  const b = document.getElementById('badge-'+id);
+  if(!b) return;
+  b.textContent = '+'+pts;
+  b.className = 'cat-score-badge' + (pts>0?' earned':'');
+}
+function toggleCatActive(id, active){
+  document.getElementById(id)?.classList.toggle('cat-active', active);
+}
+
+function updateScoreB(){
+  ['wbc','aso','esr','antidnase','pr'].forEach(k=>{
+    const c=document.getElementById('chk-'+k);
+    if(c){ S[k]=c.checked; document.getElementById('si-'+k)?.classList.toggle('sym-checked',c.checked); }
+  });
+  const bScore = calcLevelB();
+  const total  = calcLevelA()+bScore;
+  const el     = document.getElementById('liveScoreB');
+  if(el) el.textContent = total;
+
+  // Level B badges
+  const bloodScore = bloodInflammScore() + (S.antidnase?5:0);
+  const ecgScore   = S.pr?3:0;
+  const echoPts    = echoScore();
+  setBadge('blood', bloodScore);
+  setBadge('ecg',   ecgScore);
+  setBadge('echo',  echoPts);
+  toggleCatActive('cat-blood', bloodScore>0);
+  toggleCatActive('cat-ecg',   ecgScore>0);
+  toggleCatActive('cat-echo',  echoPts>0);
+}
+
+// ===================== NOT AVAILABLE TOGGLE =====================
+function toggleNA(section){
+  const chk = document.getElementById('na-'+section);
+  chk.checked = !chk.checked;
+  const active = chk.checked;
+  S['na'+section.charAt(0).toUpperCase()+section.slice(1)] = active;
+  document.getElementById('na-'+section+'-toggle').classList.toggle('active', active);
+  document.getElementById('lb-'+section).classList.toggle('disabled', active);
+  // uncheck items in that section if marked NA
+  if(active){
+    const section_items = { blood:['wbc','aso','esr','antidnase'], ecg:['pr'] };
+    (section_items[section]||[]).forEach(k=>{
+      const c=document.getElementById('chk-'+k);
+      if(c){ c.checked=false; S[k]=false; document.getElementById('si-'+k)?.classList.remove('sym-checked'); }
+    });
+    if(section === 'echo'){
+      S.echo = null;
+      ['sugg','not'].forEach(id => document.getElementById('ri-echo-'+id)?.classList.remove('selected'));
+      document.querySelectorAll('input[name="echo"]').forEach(r => r.checked = false);
+    }
+    updateScoreB();
+  }
+}
+
+// ===================== STEP 4 — RESULT =====================
+function buildBreakdownArray(){
+  const jLbl = {0:null,2:'Monoarthralgia',3:'Polyarthralgia',5:'Migratory Polyarthritis'};
+  const rows = [];
+  if(S.choreaPositive) rows.push({l:'Chorea (major criterion)', p:5});
+  if(S.joint>0)        rows.push({l:jLbl[S.joint],p:S.joint});
+  if(carditisScore()){
+    rows.push({l:'Heart Murmur',p:5});
+    const sev=[];
+    if(S.sob)       sev.push('SOB');
+    if(S.edema)     sev.push('Edema');
+    if(S.chestpain) sev.push('Chest pain');
+    if(S.walking)   sev.push("Can't walk normal distances");
+    if(sev.length) rows.push({l:'↳ Severity: '+sev.join(', '),p:null});
+  }
+  if(S.em)   rows.push({l:'Erythema Marginatum',p:5});
+  if(S.sn)   rows.push({l:'Subcutaneous Nodules',p:5});
+  if(S.noad) rows.push({l:'No Obvious Alternative Diagnosis',p:3});
+  return rows;
+}
+
+function buildFullBreakdownArray(){
+  const rows = buildBreakdownArray();
+  // Level B items
+  if(!S.naBlood && (S.wbc || S.aso || S.esr)){
+    const markers=[];
+    if(S.wbc) markers.push('WBC');
+    if(S.aso) markers.push('ASO');
+    if(S.esr) markers.push('ESR/CRP');
+    rows.push({l:'Inflammation markers ('+markers.join(', ')+')', p:3});
+  }
+  if(!S.naBlood && S.antidnase) rows.push({l:'Anti-DNase B positive', p:5});
+  if(!S.naEcg && S.pr) rows.push({l:'Prolonged PR interval', p:3});
+  if(!S.naEcho && S.echo === 'suggestive')     rows.push({l:'Echocardiogram — Suggestive', p:5});
+  if(!S.naEcho && S.echo === 'not-suggestive') rows.push({l:'Echocardiogram — Not suggestive', p:0});
+  return rows;
+}
+
+function goToResult(){
+  renderLevelAResult();
+  showStep(4);
+}
+function renderLevelAResult(){
+  const score = calcLevelA();
+  const interp = getInterp(score);
+  const actions = getActions(score);
+  const rc = document.getElementById('resultCard');
+  rc.className = 'result-card '+interp.level;
+  document.getElementById('resultScore').textContent = score;
+  document.getElementById('resultScore').style.color = interp.color;
+  document.getElementById('resultLabel').textContent = interp.label;
+  document.getElementById('resultLabel').style.color = interp.color;
+  const ptLine = S.firstName ? S.firstName+' '+S.lastName+(S.mrn?' · MRN: '+S.mrn:'') : '';
+  document.getElementById('resultRange').innerHTML = (ptLine?`<span style="display:block;font-weight:700;margin-bottom:2px">${escapeHTML(ptLine)}</span>`:'')+'Level A Score: '+score+' / 23  ('+interp.range+')';
+  document.getElementById('resultRange').style.color = interp.color;
+  document.getElementById('actionList').innerHTML = actions.map(a=>`<li>${a}</li>`).join('');
+  renderBreakdown('breakdownRows', score);
+  // Snapshot of raw inputs for later editing
+  const inputsSnapshot = {
+    fever:S.fever, chorea:S.chorea, altCause:S.altCause,
+    choreaPositive:S.choreaPositive,
+    joint:S.joint,
+    murmur:S.murmur, sob:S.sob, edema:S.edema, chestpain:S.chestpain, walking:S.walking,
+    em:S.em, sn:S.sn, noad:S.noad,
+    naBlood:S.naBlood, naEcg:S.naEcg, naEcho:S.naEcho,
+    wbc:S.wbc, aso:S.aso, esr:S.esr, antidnase:S.antidnase, pr:S.pr, echo:S.echo
+  };
+
+  // Save record to history (only create once per assessment)
+  if(!S.activeRecordId){
+    S.activeRecordId = Date.now().toString();
+    S.patientCode    = generatePatientCode();
+    saveRecord({
+      id: S.activeRecordId,
+      patientCode: S.patientCode,
+      date: new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+      firstName:S.firstName, lastName:S.lastName, mrn:S.mrn,
+      phone1:S.phone1, phone2:S.phone2,
+      age:S.age, gender:S.gender, setting:S.setting,
+      isTest:S.isTest, inactive:false,
+      score, level:interp.level, resultLabel:interp.label, range:interp.range,
+      breakdown: buildBreakdownArray(), actions,
+      referredTo: '', followups: [],
+      inputs: inputsSnapshot
+    });
+  } else {
+    // update existing record (e.g. after Level B or edit)
+    const hist = loadHistory();
+    const idx  = hist.findIndex(r => r.id === S.activeRecordId);
+    if(idx >= 0){
+      hist[idx].score      = score;
+      hist[idx].level      = interp.level;
+      hist[idx].resultLabel= interp.label;
+      hist[idx].range      = interp.range;
+      hist[idx].breakdown  = buildBreakdownArray();
+      hist[idx].actions    = actions;
+      hist[idx].inputs     = inputsSnapshot;
+      hist[idx].updatedAt  = new Date().toISOString();
+      hist[idx].synced     = false;
+      saveHistory(hist);
+    }
+  }
+  // Render the patient code card on the result
+  showPatientCodeCard();
+}
+
+function showPatientCodeCard(){
+  const el = document.getElementById('patientCodeCard');
+  if(!el || !S.patientCode) return;
+  el.classList.remove('hidden');
+  document.getElementById('codeValue').textContent = S.patientCode;
+}
+
+function renderBreakdown(containerId, total){
+  const jLbl = {0:null,2:'Monoarthralgia',3:'Polyarthralgia',5:'Migratory Polyarthritis'};
+  const rows = [];
+  if(S.joint>0)    rows.push({l:jLbl[S.joint],p:S.joint,tag:'A'});
+  if(carditisScore()){
+    rows.push({l:'Murmur / Carditis Signs',p:5,tag:'A'});
+    const syms=[];
+    if(S.murmur)    syms.push('Murmur');
+    if(S.dyspnea)   syms.push('Dyspnea');
+    if(S.exercise)  syms.push('Exercise intolerance');
+    if(S.palp)      syms.push('Palpitations');
+    if(S.chestpain) syms.push('Chest pain');
+    rows.push({l:syms.join(', '), p:null, tag:'A', sub:true});
+  }
+  if(S.em)   rows.push({l:'Erythema Marginatum',p:5,tag:'A'});
+  if(S.sn)   rows.push({l:'Subcutaneous Nodules',p:5,tag:'A'});
+  if(S.noad) rows.push({l:'No Obvious Alternative Diagnosis',p:3,tag:'A'});
+  const c = document.getElementById(containerId);
+  let html = rows.map(r=> r.sub
+    ? `<div class="bd-row" style="padding-left:14px;font-size:0.78rem;color:var(--text-secondary)"><span>↳ ${r.l}</span><span></span></div>`
+    : `<div class="bd-row"><span>${r.l}</span>${r.p!==null?`<span class="bd-pts">+${r.p}</span>`:''}</div>`
+  ).join('');
+  if(!rows.length) html = `<div class="bd-row"><span style="color:var(--gray)">No findings selected</span><span class="bd-pts">0</span></div>`;
+  html += `<div class="bd-row"><span>Total</span><span class="bd-pts">${total}</span></div>`;
+  c.innerHTML = html;
+}
+
+// ===================== STEP 6 — FINAL =====================
+function showFinalResult(){
+  const scoreA = calcLevelA();
+  const scoreB = calcLevelB();
+  const total  = scoreA + scoreB;
+  const interp = getInterp(total);
+  const actions = getActions(total);
+
+  const rc = document.getElementById('finalResultCard');
+  rc.className = 'result-card '+interp.level;
+  document.getElementById('finalScore').textContent = total;
+  document.getElementById('finalScore').style.color = interp.color;
+  document.getElementById('finalLabel').textContent = interp.label;
+  document.getElementById('finalLabel').style.color = interp.color;
+  const ptLine2 = S.firstName ? S.firstName+' '+S.lastName+(S.mrn?' · MRN: '+S.mrn:'') : '';
+  document.getElementById('finalRange').innerHTML = (ptLine2?`<span style="display:block;font-weight:700;margin-bottom:2px">${escapeHTML(ptLine2)}</span>`:'')+`Level A: ${scoreA} + Level B: ${scoreB} = Total: ${total}  (${interp.range})`;
+  document.getElementById('finalRange').style.color = interp.color;
+  document.getElementById('finalActionList').innerHTML = actions.map(a=>`<li>${a}</li>`).join('');
+
+  // Full breakdown
+  const jLbl = {0:null,2:'Monoarthralgia',3:'Polyarthralgia',5:'Migratory Polyarthritis'};
+  const rows = [];
+  if(S.joint>0)    rows.push({l:jLbl[S.joint],p:S.joint});
+  if(carditisScore()){
+    rows.push({l:'Murmur / Carditis Signs',p:5});
+    const syms=[];
+    if(S.murmur)    syms.push('Murmur');
+    if(S.dyspnea)   syms.push('Dyspnea');
+    if(S.exercise)  syms.push('Exercise intolerance');
+    if(S.palp)      syms.push('Palpitations');
+    if(S.chestpain) syms.push('Chest pain');
+    rows.push({l:syms.join(', '),p:null,sub:true});
+  }
+  if(S.em)   rows.push({l:'Erythema Marginatum',p:5});
+  if(S.sn)   rows.push({l:'Subcutaneous Nodules',p:5});
+  if(S.noad) rows.push({l:'No Obvious Alternative Diagnosis',p:3});
+
+  let html = '<div class="bd-row subtotal"><span>Level A Subtotal</span><span class="bd-pts">'+scoreA+'</span></div>';
+  html += rows.map(r=> r.sub
+    ? `<div class="bd-row" style="padding-left:14px;font-size:0.78rem;color:var(--text-secondary)"><span>↳ ${r.l}</span></div>`
+    : `<div class="bd-row"><span>${r.l}</span>${r.p!==null?`<span class="bd-pts">+${r.p}</span>`:''}</div>`
+  ).join('');
+
+  if(scoreB>0 || S.naBlood || S.naEcg || S.naEcho){
+    html += '<div class="bd-row subtotal"><span>Level B</span><span></span></div>';
+    if(S.naBlood) html+=`<div class="bd-row"><span>Blood Tests</span><span style="color:var(--gray);font-size:0.78rem">Not Available</span></div>`;
+    else{
+      if(S.wbc || S.aso || S.esr){
+        const markers=[];
+        if(S.wbc) markers.push('WBC');
+        if(S.aso) markers.push('ASO');
+        if(S.esr) markers.push('ESR/CRP');
+        html+=`<div class="bd-row"><span>Inflammation markers (${markers.join(', ')})</span><span class="bd-pts">+3</span></div>`;
+      }
+      if(S.antidnase) html+=`<div class="bd-row"><span>Anti-DNase B positive</span><span class="bd-pts">+5</span></div>`;
+    }
+    if(S.naEcg) html+=`<div class="bd-row"><span>ECG</span><span style="color:var(--gray);font-size:0.78rem">Not Available</span></div>`;
+    else if(S.pr) html+=`<div class="bd-row"><span>Prolonged PR Interval</span><span class="bd-pts">+3</span></div>`;
+    if(S.naEcho) html+=`<div class="bd-row"><span>Echocardiogram</span><span style="color:var(--gray);font-size:0.78rem">Not Available</span></div>`;
+    else if(S.echo === 'suggestive') html+=`<div class="bd-row"><span>Echocardiogram — Suggestive</span><span class="bd-pts">+5</span></div>`;
+    else if(S.echo === 'not-suggestive') html+=`<div class="bd-row"><span>Echocardiogram — Not suggestive</span><span class="bd-pts">+0</span></div>`;
+  }
+  html += `<div class="bd-row"><span>Total</span><span class="bd-pts">${total}</span></div>`;
+
+  document.getElementById('finalBreakdownRows').innerHTML = html;
+
+  // Update the existing record with Level B total
+  if(S.activeRecordId){
+    const hist = loadHistory();
+    const idx  = hist.findIndex(r => r.id === S.activeRecordId);
+    if(idx >= 0){
+      hist[idx].score      = total;
+      hist[idx].level      = interp.level;
+      hist[idx].resultLabel= interp.label;
+      hist[idx].range      = interp.range;
+      hist[idx].breakdown  = buildFullBreakdownArray();
+      hist[idx].actions    = actions;
+      hist[idx].includesLevelB = true;
+      hist[idx].inputs = {
+        fever:S.fever, chorea:S.chorea, altCause:S.altCause,
+        choreaPositive:S.choreaPositive,
+        joint:S.joint,
+        murmur:S.murmur, sob:S.sob, edema:S.edema, chestpain:S.chestpain, walking:S.walking,
+        em:S.em, sn:S.sn, noad:S.noad,
+        naBlood:S.naBlood, naEcg:S.naEcg, naEcho:S.naEcho,
+        wbc:S.wbc, aso:S.aso, esr:S.esr, antidnase:S.antidnase, pr:S.pr, echo:S.echo
+      };
+      hist[idx].updatedAt  = new Date().toISOString();
+      hist[idx].synced     = false;
+      saveHistory(hist);
+      tryBackgroundSync();
+    }
+  }
+
+  // Show patient code on final too
+  const cc = document.getElementById('finalPatientCodeCard');
+  if(cc && S.patientCode){
+    cc.classList.remove('hidden');
+    document.getElementById('finalCodeValue').textContent = S.patientCode;
+  }
+
+  showSection('step6');
+  document.getElementById('progressBar').style.width='100%';
+  document.getElementById('progressLabel').textContent='Complete';
+  window.scrollTo(0,0);
+}
+
+// ===================== RESET =====================
+function resetApp(){
+  Object.assign(S,{
+    firstName:'',lastName:'',mrn:'',phone1:'',phone2:'',
+    isTest:false,
+    activeRecordId:null, patientCode:null, lookupPatient:null,
+    age:null,gender:'',setting:'',
+    fever:null,chorea:null,altCause:null,
+    choreaPositive:false,
+    joint:0,
+    murmur:false,sob:false,edema:false,chestpain:false,walking:false,
+    em:false,sn:false,noad:false,
+    naBlood:false,naEcg:false,naEcho:false,
+    wbc:false,aso:false,esr:false,antidnase:false,pr:false,echo:null
+  });
+  document.getElementById('patientFirst').value='';
+  document.getElementById('patientLast').value='';
+  document.getElementById('patientMRN').value='';
+  document.getElementById('patientPhone1').value='';
+  document.getElementById('patientPhone2').value='';
+  document.getElementById('isTest').checked = false;
+  document.getElementById('isTestToggle').classList.remove('active');
+  document.getElementById('patientAge').value='';
+  document.getElementById('patientBanner').classList.remove('visible');
+  document.getElementById('patientGender').value='';
+  document.getElementById('patientSetting').value='';
+  ['fever','chorea','altCause'].forEach(f=>{
+    document.getElementById(f+'Yes').className='yn-btn';
+    document.getElementById(f+'No').className='yn-btn';
+  });
+  // reset radios
+  pickJoint(0);
+  // reset all checkboxes (new symptom keys + Level B)
+  ['murmur','sob','edema','chestpain','walking','em','sn','noad','wbc','aso','esr','antidnase','pr'].forEach(k=>{
+    const c=document.getElementById('chk-'+k);
+    if(c) c.checked=false;
+    document.getElementById('si-'+k)?.classList.remove('sym-checked');
+  });
+  // reset echo radio group
+  ['sugg','not'].forEach(id => document.getElementById('ri-echo-'+id)?.classList.remove('selected'));
+  document.querySelectorAll('input[name="echo"]').forEach(r => r.checked = false);
+  // reset NA toggles
+  ['blood','ecg','echo'].forEach(s=>{
+    const c=document.getElementById('na-'+s);
+    if(c) c.checked=false;
+    document.getElementById('na-'+s+'-toggle')?.classList.remove('active');
+    document.getElementById('lb-'+s)?.classList.remove('disabled');
+  });
+  document.getElementById('liveScore').textContent='0';
+  document.getElementById('liveInterp').textContent='Select findings above';
+  document.getElementById('liveInterp').style.color='var(--gray)';
+  document.getElementById('patientCodeCard')?.classList.add('hidden');
+  document.getElementById('finalPatientCodeCard')?.classList.add('hidden');
+  const refInput = document.getElementById('referredTo'); if(refInput) refInput.value='';
+  document.getElementById('entryWarning').classList.add('hidden');
+  ['joint','carditis','skin','excl','blood','ecg','echo'].forEach(id=>{
+    setBadge(id,0);
+    document.getElementById('cat-'+id)?.classList.remove('cat-active');
+  });
+  updateChoreaBanner();
+  showLanding();
+}
+
+// ===================== AUTH SCREEN HELPERS =====================
+const _authScreens = ['bootScreen','setPasswordScreen','setPinScreen','unlockPinScreen','unlockPasswordScreen','resetDeviceScreen','deviceRevokedScreen'];
+
+function handleDeviceRevoked(){
+  console.warn('[session] device revoked');
+  _sessionMasterKey = null;
+  _historyCache = [];
+  _settingsCache = {};
+  stopIdleTimer();
+  showAuthScreen('deviceRevokedScreen');
+}
+
+function showAuthScreen(id, opts){
+  // Hide all main app surfaces
+  document.body.classList.add('locked');
+  document.getElementById('landingPage')?.classList.add('hidden');
+  document.getElementById('appContent')?.classList.add('hidden');
+  document.getElementById('appHeader')?.classList.add('hidden');
+  // Hide all auth screens then show the one requested
+  _authScreens.forEach(s => document.getElementById(s)?.classList.add('hidden'));
+  document.getElementById(id)?.classList.remove('hidden');
+  window.scrollTo(0,0);
+}
+function hideAuthScreens(){
+  document.body.classList.remove('locked');
+  _authScreens.forEach(s => document.getElementById(s)?.classList.add('hidden'));
+}
+
+// ===================== PASSWORD POLICY =====================
+const _commonPasswords = [
+  'password','password1','passw0rd','12345678','123456789','1234567890','qwerty12','qwerty123',
+  'admin','admin123','admin1234','letmein','letmein1','welcome','welcome1','welcome123',
+  'monkey','monkey123','dragon','master','football','baseball','iloveyou','sunshine',
+  'princess','superman','batman','starwars','password!','password.','password@','p@ssword',
+  'p@ssw0rd','abc12345','abcdefgh','asdfghjk','qwertyui','zxcvbnm1','qazwsx','smartarf',
+  'smartarf1','arf12345','rheumatic','clinic1','clinic123','clinic2024','clinic2025','clinic2026',
+  'doctor1','doctor123','nurse1','nurse123','hospital','khartoum','sudan123','kordofan',
+  '00000000','11111111','22222222','aaaaaaaa','11223344'
+];
+function passwordPolicyCheck(pwd){
+  const errs = [];
+  // Passphrase mode: 3+ words separated by spaces, ≥18 chars total
+  const isPassphrase = /\s/.test(pwd) && pwd.trim().split(/\s+/).length >= 3 && pwd.length >= 18;
+  if(isPassphrase) return { ok: true, mode: 'passphrase' };
+  if(pwd.length < 8) errs.push('At least 8 characters.');
+  let classes = 0;
+  if(/[a-z]/.test(pwd)) classes++;
+  if(/[A-Z]/.test(pwd)) classes++;
+  if(/[0-9]/.test(pwd)) classes++;
+  if(/[^a-zA-Z0-9]/.test(pwd)) classes++;
+  if(classes < 3) errs.push('At least 3 of: uppercase, lowercase, digit, symbol.');
+  if(_commonPasswords.includes(pwd.toLowerCase())) errs.push('Too common — pick something else.');
+  return { ok: errs.length === 0, errors: errs, mode: 'standard' };
+}
+
+function pinPolicyCheck(pin){
+  if(!/^[0-9]{6}$/.test(pin)) return { ok:false, error:'PIN must be exactly 6 digits.' };
+  if(/^(\d)\1{5}$/.test(pin)) return { ok:false, error:'Cannot use the same digit repeated.' };
+  const sequences = ['012345','123456','234567','345678','456789','567890','987654','876543','765432','654321','543210'];
+  if(sequences.includes(pin)) return { ok:false, error:'Cannot use sequential digits.' };
+  const patterns = ['121212','212121','123123','456456','789789','111222','000111','010101'];
+  if(patterns.includes(pin)) return { ok:false, error:'Avoid simple repeating patterns.' };
+  return { ok:true };
+}
+
+// Strength meter for Set Password screen
+function updatePasswordStrength(){
+  const pwd = document.getElementById('sp-password').value;
+  const el  = document.getElementById('sp-strength');
+  if(!pwd){ el.textContent = ''; return; }
+  const r = passwordPolicyCheck(pwd);
+  if(r.ok){
+    el.style.color = 'var(--success)';
+    el.textContent = r.mode === 'passphrase' ? '✓ Strong passphrase' : '✓ Password meets policy';
+  } else {
+    el.style.color = 'var(--danger)';
+    el.textContent = '✗ ' + r.errors.join(' ');
+  }
+}
+
+// ===================== AUTH FLOW =====================
+
+async function bootSecure(){
+  showAuthScreen('bootScreen');
+  // Determine state
+  const hasSalt = !!localStorage.getItem('smartarf_kdfSalt');
+  const hasCheck = !!localStorage.getItem('smartarf_kdfCheck');
+  const hasWrapped = !!localStorage.getItem('smartarf_wrappedMasterKey');
+  const hasLegacyHistory = (() => {
+    try { const v = localStorage.getItem('smartarf_history'); return v && !JSON.parse(v).iv; }
+    catch { return false; }
+  })();
+
+  // Tune PBKDF2 once (fast on modern phones; benchmark on older)
+  document.getElementById('bootMsg').textContent = 'Calibrating encryption…';
+  await getKdfIterations();
+
+  if(!hasSalt || !hasCheck){
+    // First launch (or partial state) — set up password
+    showAuthScreen('setPasswordScreen');
+    document.getElementById('sp-password').addEventListener('input', updatePasswordStrength);
+    document.getElementById('sp-password').focus();
+    return;
+  }
+
+  if(!hasWrapped){
+    // Password is set but no PIN yet — force password unlock then PIN setup
+    showAuthScreen('unlockPasswordScreen', { reason:'pin-setup' });
+    document.getElementById('upw-title').textContent = 'Enter Password to Set PIN';
+    document.getElementById('upw-hint').textContent = 'A 6-digit daily PIN must be set after entering your password.';
+    S._pendingAfterPwUnlock = 'set-pin';
+    return;
+  }
+
+  // Normal launch — PIN unlock
+  showAuthScreen('unlockPinScreen');
+  document.getElementById('up-pin').focus();
+}
+
+// ── SET PASSWORD ───────────────────────────────────
+async function submitSetPassword(){
+  const pwd = document.getElementById('sp-password').value;
+  const conf = document.getElementById('sp-confirm').value;
+  const err = document.getElementById('sp-error');
+  err.classList.add('hidden');
+
+  const policy = passwordPolicyCheck(pwd);
+  if(!policy.ok){
+    err.className='alert alert-warning';
+    err.textContent = policy.errors.join(' ');
+    err.classList.remove('hidden');
+    return;
+  }
+  if(pwd !== conf){
+    err.className='alert alert-warning';
+    err.textContent='Passwords do not match.';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('sp-submit');
+  btn.textContent = 'Setting up…'; btn.disabled = true;
+  try{
+    // Make sure no stale crypto material — fresh salt
+    localStorage.removeItem('smartarf_kdfSalt');
+    const masterKey = await deriveMasterKeyFromPassword(pwd);
+    _sessionMasterKey = masterKey;
+    await setPasswordSentinel(masterKey);
+
+    // Store password hash history (for reuse check on future change)
+    const pwHash = await _sha256(pwd);
+    localStorage.setItem('smartarf_passwordHistory', JSON.stringify([pwHash]));
+
+    // Move to PIN setup
+    showAuthScreen('setPinScreen');
+    document.getElementById('spin-pin').focus();
+  } catch(e){
+    err.className='alert alert-warning';
+    err.textContent='Setup failed: ' + e.message;
+    err.classList.remove('hidden');
+    btn.textContent = 'Set Password & Continue';
+    btn.disabled = false;
+  }
+}
+
+async function _sha256(s){
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', enc.encode(s));
+  return _b64encode(new Uint8Array(hash));
+}
+
+// ── SET PIN ───────────────────────────────────
+async function submitSetPin(){
+  const pin = document.getElementById('spin-pin').value;
+  const conf = document.getElementById('spin-confirm').value;
+  const err = document.getElementById('spin-error');
+  err.classList.add('hidden');
+
+  const policy = pinPolicyCheck(pin);
+  if(!policy.ok){
+    err.className='alert alert-warning';
+    err.textContent = policy.error;
+    err.classList.remove('hidden');
+    return;
+  }
+  if(pin !== conf){
+    err.className='alert alert-warning';
+    err.textContent = 'PINs do not match.';
+    err.classList.remove('hidden');
+    return;
+  }
+  if(!_sessionMasterKey){
+    err.className='alert alert-warning';
+    err.textContent = 'Session expired — please reload.';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  try{
+    localStorage.removeItem('smartarf_pinSalt');
+    const wrapperKey = await deriveWrapperKeyFromPin(pin);
+    await storeWrappedMasterKey(_sessionMasterKey, wrapperKey);
+    // Initial empty encrypted caches
+    await rehydrateCaches();
+    await encryptedSaveAsync('smartarf_history', _historyCache);
+    await encryptedSaveAsync('smartarf_settings', _settingsCache);
+    // Done — proceed to app
+    finishUnlock();
+  } catch(e){
+    err.className='alert alert-warning';
+    err.textContent='Failed: ' + e.message;
+    err.classList.remove('hidden');
+  }
+}
+
+// ── DAILY PIN UNLOCK ───────────────────────────────────
+async function submitUnlockPin(){
+  const pin = document.getElementById('up-pin').value;
+  const err = document.getElementById('up-error');
+  err.classList.add('hidden');
+
+  if(isLockedOut()){
+    err.className='alert alert-warning';
+    err.textContent = 'Too many failed attempts. Try again in ' + fmtLockoutRemaining() + '.';
+    err.classList.remove('hidden');
+    return;
+  }
+  if(!/^[0-9]{6}$/.test(pin)){
+    err.className='alert alert-warning';
+    err.textContent='Enter your 6-digit PIN.';
+    err.classList.remove('hidden');
+    return;
+  }
+  try{
+    const wrapperKey = await deriveWrapperKeyFromPin(pin);
+    const masterKey  = await unwrapMasterKey(wrapperKey);
+    if(!masterKey){
+      const n = registerFailedAttempt();
+      err.className='alert alert-warning';
+      err.textContent = isLockedOut()
+        ? `Too many failed attempts. Locked for ${fmtLockoutRemaining()}.`
+        : `Incorrect PIN. ${Math.max(0, 5 - n)} attempts before short lockout.`;
+      err.classList.remove('hidden');
+      document.getElementById('up-pin').value = '';
+      return;
+    }
+    _sessionMasterKey = masterKey;
+    clearFailedAttempts();
+    await rehydrateCaches();
+    finishUnlock();
+  } catch(e){
+    err.className='alert alert-warning';
+    err.textContent='Unlock failed: ' + e.message;
+    err.classList.remove('hidden');
+  }
+}
+
+// ── PASSWORD UNLOCK (forgot PIN / sensitive actions) ───────────────────────────
+async function submitUnlockPassword(){
+  const pwd = document.getElementById('upw-password').value;
+  const err = document.getElementById('upw-error');
+  err.classList.add('hidden');
+
+  if(isLockedOut()){
+    err.className='alert alert-warning';
+    err.textContent = 'Too many failed attempts. Try again in ' + fmtLockoutRemaining() + '.';
+    err.classList.remove('hidden');
+    return;
+  }
+  if(!pwd){
+    err.className='alert alert-warning';
+    err.textContent = 'Enter your password.';
+    err.classList.remove('hidden');
+    return;
+  }
+  try{
+    const masterKey = await deriveMasterKeyFromPassword(pwd);
+    const ok = await verifyPasswordSentinel(masterKey);
+    if(!ok){
+      const n = registerFailedAttempt();
+      err.className='alert alert-warning';
+      err.textContent = isLockedOut()
+        ? `Too many failed attempts. Locked for ${fmtLockoutRemaining()}.`
+        : `Incorrect password. ${Math.max(0, 5 - n)} attempts before short lockout.`;
+      err.classList.remove('hidden');
+      return;
+    }
+    _sessionMasterKey = masterKey;
+    clearFailedAttempts();
+
+    if(S._pendingAfterPwUnlock === 'set-pin'){
+      S._pendingAfterPwUnlock = null;
+      showAuthScreen('setPinScreen');
+      document.getElementById('spin-pin').focus();
+      return;
+    }
+    if(S._pendingAfterPwUnlock === 'reset-pin'){
+      S._pendingAfterPwUnlock = null;
+      showAuthScreen('setPinScreen');
+      document.getElementById('spin-pin').focus();
+      return;
+    }
+    // Sensitive re-auth completed — invoke callback
+    if(S._reauthResolve){
+      const cb = S._reauthResolve; S._reauthResolve = null;
+      cb(true);
+      return;
+    }
+    await rehydrateCaches();
+    finishUnlock();
+  } catch(e){
+    err.className='alert alert-warning';
+    err.textContent = 'Failed: ' + e.message;
+    err.classList.remove('hidden');
+  }
+}
+
+function cancelUnlockPassword(){
+  // Only allow cancel when this is a re-auth modal, not a forced unlock
+  if(S._reauthResolve){
+    const cb = S._reauthResolve; S._reauthResolve = null;
+    cb(false);
+    document.getElementById('upw-password').value = '';
+    return;
+  }
+  // Otherwise return to PIN unlock
+  showAuthScreen('unlockPinScreen');
+}
+
+function showForgotPin(){
+  document.getElementById('upw-title').textContent = 'Reset PIN — Enter Password';
+  document.getElementById('upw-hint').textContent  = 'Enter your password to set a new daily PIN. Your data will not be lost.';
+  S._pendingAfterPwUnlock = 'reset-pin';
+  showAuthScreen('unlockPasswordScreen');
+  document.getElementById('upw-password').focus();
+}
+
+function showResetDevice(){
+  showAuthScreen('resetDeviceScreen');
+  document.getElementById('rd-confirm').focus();
+}
+function cancelResetDevice(){
+  document.getElementById('rd-confirm').value = '';
+  showAuthScreen('unlockPasswordScreen');
+}
+function submitResetDevice(){
+  const val = document.getElementById('rd-confirm').value;
+  if(val !== 'RESET'){
+    alert('Type RESET exactly to confirm.');
+    return;
+  }
+  // Wipe everything smartarf_*
+  const keys = [];
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith('smartarf_')) keys.push(k);
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+  _sessionMasterKey = null;
+  _historyCache = [];
+  _settingsCache = {};
+  // Restart boot
+  bootSecure();
+}
+
+// ── COMPLETE UNLOCK ───────────────────────────────────
+function finishUnlock(){
+  hideAuthScreens();
+  document.getElementById('up-pin') && (document.getElementById('up-pin').value = '');
+  document.getElementById('upw-password') && (document.getElementById('upw-password').value = '');
+  startIdleTimer();
+  pickJoint(0);
+  showLanding();
+}
+
+// ===================== SENSITIVE RE-AUTH =====================
+// Used by Settings changes, exports, admin console, etc.
+// Returns Promise<boolean>.
+let _sensitiveSessionUntil = 0;
+function isSensitiveSessionActive(){ return Date.now() < _sensitiveSessionUntil; }
+function startSensitiveSession(){ _sensitiveSessionUntil = Date.now() + 5*60*1000; }
+async function requireReauth(actionLabel){
+  if(isSensitiveSessionActive()) return true;
+  return new Promise(resolve => {
+    S._reauthResolve = (ok) => { if(ok) startSensitiveSession(); resolve(ok); hideAuthScreens(); document.body.classList.remove('locked'); };
+    document.getElementById('upw-title').textContent = 'Confirm: ' + actionLabel;
+    document.getElementById('upw-hint').textContent  = 'Re-enter your password to continue.';
+    document.getElementById('upw-password').value = '';
+    document.getElementById('upw-error').classList.add('hidden');
+    showAuthScreen('unlockPasswordScreen');
+    document.getElementById('upw-password').focus();
+  });
+}
+
+// Init
+pickJoint(0);
+bootSecure();
+</script>
+
+<!-- Bottom Navigation -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bn-item" id="bn-home"       onclick="navTo('home')">
+    <span class="bn-icon">🏠</span><span class="bn-label">Home</span>
+  </button>
+  <button class="bn-item" id="bn-assessment" onclick="navTo('assessment')">
+    <span class="bn-icon">＋</span><span class="bn-label">Assess</span>
+  </button>
+  <button class="bn-item" id="bn-bpg"        onclick="navTo('bpg')">
+    <span class="bn-icon">💉</span><span class="bn-label">BPG</span>
+  </button>
+  <button class="bn-item" id="bn-records"    onclick="navTo('records')">
+    <span class="bn-icon">📋</span><span class="bn-label">Records</span>
+  </button>
+  <button class="bn-item" id="bn-settings"   onclick="navTo('settings')">
+    <span class="bn-icon">⚙</span><span class="bn-label">Settings</span>
+  </button>
+</nav>
+
+<!-- PWA Service Worker registration -->
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
