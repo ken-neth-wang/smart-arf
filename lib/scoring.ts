@@ -55,11 +55,6 @@ export function getInterp(score: number): Interp {
   return { label: 'ARF Highly Likely', level: 'urgent', range: 'Score ≥15' };
 }
 
-/** Strip inline HTML (the source actions contain <strong>/<em>) for plain-text rendering. */
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
-}
-
 export function getActions(score: number): string[] {
   if (score <= 5) {
     return [
@@ -91,7 +86,7 @@ export function getActions(score: number): string[] {
     'Urgent referral to secondary care',
     'Monitor for cardiac complications',
     'Initiate long-term secondary prophylaxis plan',
-  ].map(stripHtml);
+  ];
 }
 
 const jointLabel: Record<number, string | null> = {

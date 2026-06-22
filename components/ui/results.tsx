@@ -232,7 +232,7 @@ const codeStyles = StyleSheet.create({
  * updateScore colours interp by tier). Empty string hides the line (Step 5 in
  * the HTML shows no interp — only number + label).
  */
-export function LiveScoreCard({ score, label, total = 23, subtitle }: { score: number; label: string; total?: number; subtitle?: string }) {
+export function LiveScoreCard({ score, label, subtitle }: { score: number; label: string; subtitle?: string }) {
   const interpColor = score <= 5 ? Colors.success : score <= 9 ? Colors.warning : score <= 14 ? Colors.danger : Colors.urgent;
   return (
     <View style={liveStyles.box}>

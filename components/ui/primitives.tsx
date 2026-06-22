@@ -230,7 +230,7 @@ const ynStyles = StyleSheet.create({
 });
 
 /* ---------------- Radio list (single select with points) ---------------- */
-export interface RadioOption {
+interface RadioOption {
   id: string;
   name: string;
   desc?: string;

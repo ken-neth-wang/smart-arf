@@ -5,7 +5,7 @@
  */
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
-import { emptyInputs, type AssessmentInputs, type FollowUp, type Gender, type PatientRecord, type Setting } from '@/lib/types';
+import { emptyInputs, type AssessmentInputs, type Gender, type PatientRecord, type Setting } from '@/lib/types';
 import {
   buildFullBreakdownArray,
   buildBreakdownArray,
@@ -229,6 +229,3 @@ export function useAssessment(): AssessmentContextValue {
   if (!ctx) throw new Error('useAssessment must be used within AssessmentProvider');
   return ctx;
 }
-
-/** Re-export for convenience in screens. */
-export type { FollowUp };

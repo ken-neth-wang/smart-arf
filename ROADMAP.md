@@ -58,6 +58,23 @@ This is what's currently deferred but specified in the HTML. It's plumbing, not 
 
 ---
 
-## What's deliberately not here
+## Phase 4 — Sense
 
-- **AI / voice / murmur detection** — real potential, but it belongs *after* Phase 3a. AI on top of an unencrypted, un-backed-up store amplifies the risk. When it comes, it should *assist capture*, not *diagnose* — the validated score stays authoritative. That keeps you in decision-support, not SaMD territory.
+**Goal:** Optional audio input that can *raise* suspicion, never *clear* it.
+
+Gated behind Phase 3a — no AI on top of an unencrypted, un-backed-up store.
+
+- **Murmur detection via phone mic or cheap stethoscope attachment.**
+- **Framed as a triage flag, not a diagnosis.** Auscultation has ~40% sensitivity and ~5% PPV for RHD specifically — it misses most real cases, and most "positives" are innocent murmurs common in children. The validated Jones score stays authoritative; audio can only *add* weight, never remove it.
+- **Start from an existing open-source model** — PhysioNet 2022 Challenge solutions (CirCor dataset) or HuggingFace `heart-sound-classification` checkpoints. Do not train from scratch in-house.
+- **Expect a domain gap.** Every open dataset (CirCor, PhysioNet 2016/2022) is digital-stethoscope audio, not phone-mic. Plan to collect a small phone-mic set and fine-tune, or accept lower accuracy and say so in the UI.
+- **Honest UI framing:** "Audio screening cannot rule out RHD — echo is required for diagnosis."
+
+**Done when:** an audio flag, combined with the clinical score, moves a borderline patient from "watch" to "refer for echo" — and never the reverse.
+
+---
+
+## What stays out of scope
+
+- **Autonomous diagnosis.** The app never decides on its own; it surfaces a validated score and supports a clinician's judgement. That keeps it in decision-support territory, not SaMD (Software as a Medical Device).
+- **Murmur → "this is RHD."** A murmur flag is one weak input among several. It never produces an RHD verdict.

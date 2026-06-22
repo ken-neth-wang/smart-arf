@@ -35,6 +35,3 @@ export const tierColor: Record<string, string> = {
   chorea: Colors.urgent,
   incomplete: Colors.gray,
 };
-
-export const radius = 14;
-export const tapHeight = 52;
