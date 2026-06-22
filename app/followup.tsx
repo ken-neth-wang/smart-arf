@@ -69,19 +69,19 @@ export default function FollowupScreen() {
         Patient: <Text style={styles.bold}>{name}</Text> · <Text style={styles.code}>{code}</Text>
       </CardSubtitle>
 
-      <TextField label="Visit Date (YYYY-MM-DD)" value={visitDate} onChangeText={setVisitDate} placeholder="2026-06-22" />
+      <TextField label="Visit Date" value={visitDate} onChangeText={setVisitDate} placeholder="2026-06-22" />
 
       <SelectField label="Confirmed Diagnosis at This Visit" value={confirmedDx} options={DX_OPTS} onChange={(v) => setConfirmedDx(v as ConfirmedDx)} />
 
-      <TextField label="Final Diagnosis" value={finalDx} onChangeText={setFinalDx} placeholder="e.g. Reactive arthritis, JIA, viral infection" />
+      <TextField label={<>Final Diagnosis <Text style={styles.suffix}>(if not ARF)</Text></>} value={finalDx} onChangeText={setFinalDx} placeholder="e.g. Reactive arthritis, JIA, viral infection" />
 
       <SelectField label="BPG (Benzathine Penicillin G) Status" value={bpgStatus} options={BPG_OPTS} onChange={(v) => setBpgStatus(v as BpgStatus)} />
 
-      <TextField label="Echo Findings" value={echoFindings} onChangeText={setEchoFindings} placeholder="e.g. Mild mitral regurgitation" />
+      <TextField label={<>Echo Findings <Text style={styles.suffix}>(optional)</Text></>} value={echoFindings} onChangeText={setEchoFindings} placeholder="e.g. Mild mitral regurgitation" />
 
-      <TextField label="Complications" value={complications} onChangeText={setComplications} placeholder="e.g. Heart failure, recurrent ARF" />
+      <TextField label={<>Complications <Text style={styles.suffix}>(optional)</Text></>} value={complications} onChangeText={setComplications} placeholder="e.g. Heart failure, recurrent ARF" />
 
-      <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Additional observations" />
+      <TextField label={<>Notes <Text style={styles.suffix}>(optional)</Text></>} value={notes} onChangeText={setNotes} placeholder="Additional observations" />
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
@@ -96,4 +96,5 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '800' },
   code: { fontFamily: 'Courier', fontWeight: '700' },
   err: { color: Colors.danger, fontSize: 13, marginBottom: 10 },
+  suffix: { fontWeight: '400', fontSize: 11, color: Colors.textSecondary },
 });

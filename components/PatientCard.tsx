@@ -24,7 +24,7 @@ export function PatientCard({ record, onPress }: { record: PatientRecord; onPres
   const name = fullName(record.firstName, record.lastName);
   const meta = [
     record.patientCode,
-    record.mrn ? `MRN ${maskMRN(record.mrn)}` : '',
+    record.mrn ? `MRN: ${maskMRN(record.mrn)}` : '',
     record.age ? `${record.age}y` : '',
     record.gender,
     record.date,
@@ -41,7 +41,7 @@ export function PatientCard({ record, onPress }: { record: PatientRecord; onPres
         <Text style={styles.name} numberOfLines={1}>{name}{record.isTest ? '  (test)' : ''}</Text>
         <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
         <Text style={[styles.result, { color: tierColor[record.level] ?? Colors.gray }]}>
-          Score {record.score} · {record.resultLabel}
+          Score: {record.score} · {record.resultLabel}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={Colors.border} />

@@ -144,12 +144,37 @@ export function buildFullBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
 }
 
 /**
- * Display breakdown for the Level A result card (Step 4).
- * Returns the same rows as buildBreakdownArray plus a trailing Total row.
- * Empty → "No findings selected" placeholder row.
+ * LIVE display rows for Level A on Steps 4 & 6 — mirrors the HTML's
+ * renderBreakdown() / showFinalResult() inline code (L3213 / L3261). NOTE: these
+ * are DIFFERENT from buildBreakdownArray (the saved breakdown shown in record
+ * detail): the live display OMITS the chorea row, labels carditis
+ * "Murmur / Carditis Signs", and the severity sub-row only ever lists
+ * "Murmur" / "Chest pain" (the HTML refs S.dyspnea/S.exercise/S.palp which are
+ * never in state, so SOB/Edema/walking do not appear here — a known HTML
+ * quirk reproduced faithfully since the HTML is the source of truth).
+ */
+function liveLevelARows(s: AssessmentInputs): BreakdownRow[] {
+  const rows: BreakdownRow[] = [];
+  if (s.joint > 0 && jointLabel[s.joint]) rows.push({ label: jointLabel[s.joint] as string, points: s.joint });
+  if (carditisScore(s)) {
+    rows.push({ label: 'Murmur / Carditis Signs', points: 5 });
+    const syms: string[] = [];
+    if (s.murmur) syms.push('Murmur');
+    if (s.chestpain) syms.push('Chest pain');
+    rows.push({ label: '↳ ' + syms.join(', '), points: null, kind: 'sub' });
+  }
+  if (s.em) rows.push({ label: 'Erythema Marginatum', points: 5 });
+  if (s.sn) rows.push({ label: 'Subcutaneous Nodules', points: 5 });
+  if (s.noad) rows.push({ label: 'No Obvious Alternative Diagnosis', points: 3 });
+  return rows;
+}
+
+/**
+ * Display breakdown for the Level A result card (Step 4). Mirrors HTML
+ * renderBreakdown() (L3213): Level A rows + trailing Total; empty → placeholder.
  */
 export function levelADisplayBreakdown(s: AssessmentInputs, total: number): BreakdownRow[] {
-  const items = buildBreakdownArray(s);
+  const items = liveLevelARows(s);
   const rows: BreakdownRow[] =
     items.length > 0 ? items : [{ label: 'No findings selected', points: 0, kind: 'empty' }];
   rows.push({ label: 'Total', points: total, kind: 'total' });
@@ -164,7 +189,7 @@ export function finalDisplayBreakdown(s: AssessmentInputs, scoreA: number, score
   const rows: BreakdownRow[] = [];
   rows.push({ label: 'Level A Subtotal', points: scoreA, kind: 'subtotal' });
 
-  const aItems = buildBreakdownArray(s);
+  const aItems = liveLevelARows(s);
   if (aItems.length === 0) {
     rows.push({ label: 'No findings selected', points: 0, kind: 'empty' });
   } else {

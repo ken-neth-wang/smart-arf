@@ -10,7 +10,6 @@ import { Card, CardSubtitle, CardTitle, StepBadge } from '@/components/ui/primit
 import { PatientCard } from '@/components/PatientCard';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
-import { fullName } from '@/lib/format';
 
 export default function RecordsScreen() {
   const router = useRouter();
@@ -18,9 +17,11 @@ export default function RecordsScreen() {
   const [q, setQ] = useState('');
 
   const query = q.trim().toLowerCase();
+  // Mirrors HTML renderRecordsList (L2158): hay = firstName, lastName, mrn,
+  // patientCode, resultLabel.
   const filtered = query
     ? activeRecords.filter((r) => {
-        const hay = `${fullName(r.firstName, r.lastName)} ${r.mrn} ${r.patientCode}`.toLowerCase();
+        const hay = `${r.firstName} ${r.lastName} ${r.mrn} ${r.patientCode} ${r.resultLabel}`.toLowerCase();
         return hay.includes(query);
       })
     : activeRecords;
@@ -37,7 +38,7 @@ export default function RecordsScreen() {
           <TextInput
             value={q}
             onChangeText={setQ}
-            placeholder="Search by name, MRN, or code…"
+            placeholder="🔍 Search by name, MRN, or code…"
             placeholderTextColor={Colors.gray}
             style={styles.search}
           />
@@ -45,8 +46,8 @@ export default function RecordsScreen() {
 
         {filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🗂️</Text>
-            <Text style={styles.emptyText}>{query ? 'No matching records.' : 'No assessments saved yet.'}</Text>
+            <Text style={styles.emptyIcon}>{query ? '🔍' : '📋'}</Text>
+            <Text style={styles.emptyText}>{query ? `No records match "${q.trim()}"` : 'No records yet.'}</Text>
           </View>
         ) : (
           filtered.map((r) => (

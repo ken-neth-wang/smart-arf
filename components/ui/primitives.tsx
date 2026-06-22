@@ -82,7 +82,7 @@ interface TextFieldProps {
   keyboardType?: KeyboardTypeOptions;
   multiline?: boolean;
   style?: TextStyle;
-  label?: string;
+  label?: React.ReactNode;
   required?: boolean;
   hint?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
@@ -133,7 +133,7 @@ export function SelectField({
   required,
   style,
 }: {
-  label?: string;
+  label?: React.ReactNode;
   value: string;
   options: SelectOption[];
   placeholder?: string;
@@ -283,6 +283,11 @@ const radioStyles = StyleSheet.create({
 });
 
 /* ---------------- Checkbox row ---------------- */
+/**
+ * pointsBadge: shown verbatim (e.g. "+5", "no score").
+ * group: when true the badge renders the literal text "group" with the indigo
+ *   group color — mirrors the HTML inflammation markers (L1438–1456).
+ */
 export function CheckboxRow({
   label,
   sub,
@@ -300,6 +305,7 @@ export function CheckboxRow({
   muted?: boolean;
   group?: boolean;
 }) {
+  const badgeText = group ? 'group' : pointsBadge;
   return (
     <Pressable
       style={[chkStyles.item, checked && chkStyles.itemChecked]}
@@ -312,9 +318,9 @@ export function CheckboxRow({
         <Text style={chkStyles.label}>{label}</Text>
         {sub ? <Text style={chkStyles.sub}>{sub}</Text> : null}
       </View>
-      {pointsBadge ? (
+      {badgeText ? (
         <View style={[chkStyles.pts, muted && { backgroundColor: Colors.gray }, group && { backgroundColor: Colors.groupBadge }]}>
-          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{pointsBadge}</Text>
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{badgeText}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -395,12 +401,14 @@ export function SectionDivider({ label }: { label: string }) {
 /* ---------------- Category block ---------------- */
 export function CategoryBlock({
   title,
+  titleSuffix,
   description,
   points,
   active,
   children,
 }: {
   title: string;
+  titleSuffix?: string; // e.g. "(max +8)" — smaller, regular weight (HTML L1422)
   description?: string;
   points: number;
   active: boolean;
@@ -409,7 +417,10 @@ export function CategoryBlock({
   return (
     <View style={[catStyles.block, active && { borderColor: Colors.primary, backgroundColor: Colors.primaryLight }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: description ? 6 : 10 }}>
-        <Text style={catStyles.title}>{title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', flex: 1, gap: 6 }}>
+          <Text style={catStyles.title}>{title}</Text>
+          {titleSuffix ? <Text style={{ fontSize: 11.5, fontWeight: '400', color: Colors.textSecondary }}>{titleSuffix}</Text> : null}
+        </View>
         <View style={{ backgroundColor: points > 0 ? Colors.success : Colors.primary, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}>
           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>+{points}</Text>
         </View>
@@ -424,3 +435,16 @@ const catStyles = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '800', color: Colors.text, flex: 1 },
   desc: { fontSize: 12, color: Colors.textSecondary, marginBottom: 10, fontStyle: 'italic' },
 });
+
+/* ---------------- Severity descriptors header ---------------- */
+/** The dashed "Severity descriptors (documentation only, no score)" label above
+ *  the carditis severity checkboxes — HTML L1364. */
+export function SeverityHeader({ label }: { label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 8 }}>
+      <View style={{ flex: 1, height: 1.5, backgroundColor: Colors.border }} />
+      <Text style={{ fontSize: 11, fontWeight: '800', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
+      <View style={{ flex: 1, height: 1.5, backgroundColor: Colors.border }} />
+    </View>
+  );
+}

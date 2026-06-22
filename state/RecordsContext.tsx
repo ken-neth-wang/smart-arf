@@ -12,7 +12,7 @@ interface RecordsContextValue {
   loading: boolean;
   refresh: () => Promise<void>;
   upsert: (record: PatientRecord) => Promise<void>;
-  softDelete: (id: string, reason: PatientRecord['deletedReason'], notes?: string) => Promise<void>;
+  softDelete: (id: string, reason: PatientRecord['deleteReason'], notes?: string) => Promise<void>;
   addFollowup: (patientCode: string, followup: FollowUp) => Promise<void>;
   setReferral: (id: string, referredTo: string) => Promise<void>;
   clearAll: () => Promise<void>;
@@ -57,10 +57,10 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const softDelete = useCallback(
-    async (id: string, reason: PatientRecord['deletedReason'], notes?: string) => {
+    async (id: string, reason: PatientRecord['deleteReason'], notes?: string) => {
       const next = records.map((r) =>
         r.id === id
-          ? { ...r, inactive: true, deletedReason: reason, deletedNotes: notes, deletedAt: new Date().toISOString() }
+          ? { ...r, inactive: true, deleteReason: reason, deleteNotes: notes, deletedAt: new Date().toISOString(), deletedBy: 'local' }
           : r,
       );
       await persist(next);

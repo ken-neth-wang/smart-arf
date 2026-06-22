@@ -434,7 +434,9 @@ describe('levelADisplayBreakdown', () => {
   it('with findings → items + trailing Total', () => {
     const rows = levelADisplayBreakdown(buildInputs({ murmur: true }), 5);
     expect(rows[rows.length - 1]).toEqual({ label: 'Total', points: 5, kind: 'total' });
-    expect(rows).toContainEqual({ label: 'Heart Murmur', points: 5 });
+    // HTML renderBreakdown (L3221) labels carditis "Murmur / Carditis Signs" in
+    // the LIVE display (distinct from the saved breakdown's "Heart Murmur").
+    expect(rows).toContainEqual({ label: 'Murmur / Carditis Signs', points: 5 });
   });
 });
 

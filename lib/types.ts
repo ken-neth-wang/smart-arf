@@ -118,8 +118,9 @@ export interface PatientRecord {
   inputs: AssessmentInputs;
   includesLevelB: boolean;
   updatedAt?: string;
-  // soft-delete metadata
-  deletedReason?: DeleteReason;
+  // soft-delete metadata (field names mirror HTML softDeleteLocal L2580–2586)
+  deletedBy?: string;
   deletedAt?: string;
-  deletedNotes?: string;
+  deleteReason?: DeleteReason;
+  deleteNotes?: string;
 }

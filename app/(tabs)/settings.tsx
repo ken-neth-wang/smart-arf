@@ -62,7 +62,6 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
-      <Text style={styles.footer}>smart-arf-app.html is the single source of truth for this app.</Text>
     </ScrollView>
   );
 }
@@ -73,5 +72,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.grayLight },
   rowLabel: { fontSize: 14, color: Colors.text },
   rowVal: { fontSize: 14, fontWeight: '800', color: Colors.primary },
-  footer: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center', marginTop: 10, lineHeight: 17 },
 });

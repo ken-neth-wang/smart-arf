@@ -21,6 +21,7 @@ import {
   SecondaryButton,
   SectionDivider,
   SelectField,
+  SeverityHeader,
   StepBadge,
   TextField,
   YesNoGroup,
@@ -74,7 +75,7 @@ export default function AssessScreen() {
 const styles = StyleSheet.create({
   container: { maxWidth: 560, width: '100%', alignSelf: 'center', padding: 12, paddingTop: 16 },
   disclaimer: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center', lineHeight: 18, marginTop: 10, paddingHorizontal: 10 },
-  hint: { fontSize: 12, color: Colors.textSecondary, marginTop: -12, marginBottom: 16 },
+  hintAbove: { fontSize: 12.5, fontWeight: '400', color: Colors.textSecondary, marginTop: -2, marginBottom: 8 },
 });
 
 /* ============== STEP 1 — Patient ============== */
@@ -107,13 +108,13 @@ function Step1() {
         </View>
       </View>
 
-      <TextField label="MRN / Patient ID" value={patient.mrn} onChangeText={(v) => setPatient({ mrn: v })} placeholder="e.g. 00123456" />
+      <TextField label="MRN / Patient ID" value={patient.mrn} onChangeText={(v) => setPatient({ mrn: v })} placeholder="e.g. 00123456" hint="(optional)" />
 
       <TextField label="Primary Phone" required value={patient.phone1} onChangeText={(v) => setPatient({ phone1: v })} placeholder="e.g. +249 91 234 5678" keyboardType="phone-pad" />
 
-      <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
+      <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" hint="(optional)" keyboardType="phone-pad" />
 
-      <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => setPatient({ age: v ? Number(v) : null })} placeholder="e.g. 10" keyboardType="numeric" />
+      <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => { const n = v ? Number(v) : null; setPatient({ age: n == null ? null : Math.max(1, Math.min(25, n)) }); }} placeholder="e.g. 10" keyboardType="numeric" />
 
       <SelectField label="Patient Gender" value={patient.gender} options={GENDER_OPTS} onChange={(v) => setPatient({ gender: v as Gender })} />
 
@@ -158,15 +159,17 @@ function Step2() {
       <CardTitle>Is This an ARF Triage Case?</CardTitle>
       <CardSubtitle>Answer all three questions before scoring.</CardSubtitle>
 
-      <FieldLabel>1. Does the patient currently have a fever?</FieldLabel>
+      <FieldLabel>{'1. Does the patient currently have a fever?'}</FieldLabel>
       <YesNoGroup value={inputs.fever} onChange={(v) => setEntry('fever', v)} />
 
-      <FieldLabel>2. Are abnormal involuntary movements (chorea) present?</FieldLabel>
+      <FieldLabel>{'2. Are abnormal involuntary movements (chorea) present?'}</FieldLabel>
       <YesNoGroup value={inputs.chorea} onChange={(v) => setEntry('chorea', v)} />
 
-      <FieldLabel>3. Is there an obvious cause for the fever?</FieldLabel>
+      <View style={{ marginBottom: 6 }}>
+        <FieldLabel>{'3. Is there an obvious cause for the fever?'}</FieldLabel>
+        <Text style={styles.hintAbove}>e.g. cough &amp; runny nose (URI), diarrhea or vomiting (GI illness)</Text>
+      </View>
       <YesNoGroup value={inputs.altCause} onChange={(v) => setEntry('altCause', v)} />
-      <Text style={styles.hint}>e.g. cough &amp; runny nose (URI), diarrhea or vomiting (GI illness)</Text>
 
       {warn ? <Alert variant="warning">{warn}</Alert> : null}
 
@@ -178,7 +181,7 @@ function Step2() {
 
 /* ============== STEP 3 — Level A ============== */
 const JOINT_OPTS = [
-  { id: 'none', name: 'None', desc: 'No joint complaints', points: '+0' },
+  { id: 'none', name: 'None', desc: 'No joint symptoms', points: '+0' },
   { id: 'mono', name: 'Monoarthralgia', desc: 'Pain in ONE joint only — no swelling or tenderness', points: '+2' },
   { id: 'poly', name: 'Polyarthralgia', desc: 'Pain in MULTIPLE joints — no swelling or tenderness', points: '+3' },
   { id: 'arthritis', name: 'Migratory Polyarthritis', desc: 'Swelling AND tenderness in joints, moves between joints', points: '+5' },
@@ -193,22 +196,23 @@ function Step3() {
 
   return (
     <>
-      {choreaPositive ? <ChoreaBanner step3 /> : null}
+      {choreaPositive ? <ChoreaBanner step={3} /> : null}
       <Card>
         <StepBadge>Step 3 — Level A: Clinical Assessment</StepBadge>
         <CardTitle>Signs &amp; Symptoms Checklist</CardTitle>
-        <CardSubtitle>Select all findings that are present. Scores update automatically.</CardSubtitle>
+        <CardSubtitle>Check every finding that is present in this patient. For joint symptoms, select the most severe category that applies.</CardSubtitle>
 
-        <CategoryBlock title="Joint Symptoms" description="Select the highest applicable joint finding (arthritis > polyarthralgia > monoarthralgia)." points={inputs.joint} active={inputs.joint > 0}>
+        <CategoryBlock title="Joint Symptoms" description="Select the highest applicable joint finding (arthritis > polyarthralgia > monoarthralgia)" points={inputs.joint} active={inputs.joint > 0}>
           <RadioList options={JOINT_OPTS} selectedId={VAL_JOINT[inputs.joint] ?? 'none'} onSelect={(id) => setInputs({ joint: JOINT_VAL[id] })} />
         </CategoryBlock>
 
         <CategoryBlock title="Heart / Carditis" description="Check the heart murmur first. If present, document severity findings below." points={inputs.murmur ? 5 : 0} active={inputs.murmur}>
           <View style={{ gap: 7 }}>
             <CheckboxRow label="Heart murmur" sub="Heard on auscultation" checked={inputs.murmur} onToggle={() => setInputs({ murmur: !inputs.murmur })} pointsBadge="+5" />
+            <SeverityHeader label="Severity descriptors (documentation only, no score)" />
             <CheckboxRow label="Shortness of breath" sub="At rest or on exertion" checked={inputs.sob} onToggle={() => setInputs({ sob: !inputs.sob })} pointsBadge="no score" muted />
             <CheckboxRow label="Edema" sub="Swelling of feet, legs, or face" checked={inputs.edema} onToggle={() => setInputs({ edema: !inputs.edema })} pointsBadge="no score" muted />
-            <CheckboxRow label="Chest discomfort or chest pain" sub="Any chest pain reported" checked={inputs.chestpain} onToggle={() => setInputs({ chestpain: !inputs.chestpain })} pointsBadge="no score" muted />
+            <CheckboxRow label="Chest discomfort or chest pain" sub="Any chest pain reported by patient" checked={inputs.chestpain} onToggle={() => setInputs({ chestpain: !inputs.chestpain })} pointsBadge="no score" muted />
             <CheckboxRow label="Unable to walk normal distances" sub="Due to pain or fatigue" checked={inputs.walking} onToggle={() => setInputs({ walking: !inputs.walking })} pointsBadge="no score" muted />
           </View>
         </CategoryBlock>
@@ -255,6 +259,7 @@ function Step4() {
   const interp = getInterp(scoreA);
   const choreaPositive = inputs.chorea === true;
   const [referredTo, setReferredTo] = useState('');
+  const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
     const existing = activeRecordId ? records.getById(activeRecordId) : undefined;
@@ -265,24 +270,27 @@ function Step4() {
 
   return (
     <>
-      {choreaPositive ? <ChoreaBanner /> : null}
+      {choreaPositive ? <ChoreaBanner step={4} /> : null}
       <ResultCard level={interp.level} score={scoreA} label={interp.label} rangeLine={rangeLine} actions={getActions(scoreA)} />
 
-      {patientCode ? <PatientCodeCard code={patientCode} /> : null}
+      {patientCode ? <PatientCodeCard code={patientCode} step={4} /> : null}
 
       <Card>
+        <StepBadge>Referral</StepBadge>
         <CardTitle>Refer Patient (optional)</CardTitle>
+        <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
         <TextField label="Referred To" value={referredTo} onChangeText={setReferredTo} placeholder="e.g. Khartoum Pediatric Hospital" />
-        <PrimaryButton title="Save Referral" onPress={() => activeRecordId && records.setReferral(activeRecordId, referredTo)} />
+        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeRecordId) { records.setReferral(activeRecordId, referredTo); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
       </Card>
 
-      <ScoreBreakdown title="Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />
+      <ScoreBreakdown title="Level A Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />
 
       <Card>
+        <StepBadge>Optional — Level B</StepBadge>
         <CardTitle>Add Enhanced Findings?</CardTitle>
-        <CardSubtitle>Level B (Jones Criteria) adds lab, ECG, and echo findings for a combined score.</CardSubtitle>
+        <CardSubtitle>If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.</CardSubtitle>
         <PrimaryButton title="Add Level B Findings" onPress={() => goStep(5)} />
-        <SecondaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/(tabs)/index'); }} />
+        <SecondaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       </Card>
     </>
   );
@@ -308,33 +316,33 @@ function Step5() {
 
   return (
     <>
-      {choreaPositive ? <ChoreaBanner /> : null}
+      {choreaPositive ? <ChoreaBanner step={5} /> : null}
       <Card>
         <StepBadge>Step 5 — Level B: Jones Criteria</StepBadge>
         <CardTitle>Enhanced Findings</CardTitle>
-        <CardSubtitle>Mark a section “Not Available” if the test was not performed.</CardSubtitle>
+        <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
 
-        <CategoryBlock title="Blood Tests" points={(inputs.wbc || inputs.aso || inputs.esr ? 3 : 0) + (inputs.antidnase ? 5 : 0)} active={!inputs.naBlood && ((inputs.wbc || inputs.aso || inputs.esr) || inputs.antidnase)}>
-          <NAToggle active={inputs.naBlood} onToggle={() => setNA('naBlood', !inputs.naBlood)} />
+        <CategoryBlock title="Blood Tests" titleSuffix="(max +8)" points={(inputs.wbc || inputs.aso || inputs.esr ? 3 : 0) + (inputs.antidnase ? 5 : 0)} active={!inputs.naBlood && ((inputs.wbc || inputs.aso || inputs.esr) || inputs.antidnase)}>
+          <NAToggle active={inputs.naBlood} onToggle={() => setNA('naBlood', !inputs.naBlood)} label="Not Available — blood tests were not done" />
           <View pointerEvents={inputs.naBlood ? 'none' : 'auto'} style={{ opacity: inputs.naBlood ? 0.4 : 1, gap: 7 }}>
-            <SectionDivider label="Inflammation markers (any = +3)" />
-            <CheckboxRow label="Elevated WBC" sub="White blood cell count above normal range for age" checked={inputs.wbc} onToggle={() => setInputs({ wbc: !inputs.wbc })} pointsBadge="+3" group />
-            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} pointsBadge="+3" group />
-            <CheckboxRow label="Elevated ESR or CRP" sub="Raised inflammatory markers" checked={inputs.esr} onToggle={() => setInputs({ esr: !inputs.esr })} pointsBadge="+3" group />
-            <SectionDivider label="Specific antibody" />
+            <SectionDivider label="Non-specific inflammation markers (any one or more = +3)" />
+            <CheckboxRow label="Elevated WBC" sub="White blood cell count above normal range for age" checked={inputs.wbc} onToggle={() => setInputs({ wbc: !inputs.wbc })} group />
+            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} group />
+            <CheckboxRow label="Elevated ESR or CRP" sub="Raised inflammatory markers" checked={inputs.esr} onToggle={() => setInputs({ esr: !inputs.esr })} group />
+            <SectionDivider label="Specific Strep antibody" />
             <CheckboxRow label="Anti-DNase B positive" sub="Specific antibody confirming recent Group A Strep infection" checked={inputs.antidnase} onToggle={() => setInputs({ antidnase: !inputs.antidnase })} pointsBadge="+5" />
           </View>
         </CategoryBlock>
 
         <CategoryBlock title="ECG (Electrocardiogram)" points={inputs.pr ? 3 : 0} active={!inputs.naEcg && inputs.pr}>
-          <NAToggle active={inputs.naEcg} onToggle={() => setNA('naEcg', !inputs.naEcg)} />
+          <NAToggle active={inputs.naEcg} onToggle={() => setNA('naEcg', !inputs.naEcg)} label="Not Available — ECG was not done" />
           <View pointerEvents={inputs.naEcg ? 'none' : 'auto'} style={{ opacity: inputs.naEcg ? 0.4 : 1 }}>
             <CheckboxRow label="Prolonged PR interval" sub="PR interval prolonged for age on 12-lead ECG" checked={inputs.pr} onToggle={() => setInputs({ pr: !inputs.pr })} pointsBadge="+3" />
           </View>
         </CategoryBlock>
 
         <CategoryBlock title="Echocardiogram" points={inputs.echo === 'suggestive' ? 5 : 0} active={!inputs.naEcho && inputs.echo === 'suggestive'}>
-          <NAToggle active={inputs.naEcho} onToggle={() => setNA('naEcho', !inputs.naEcho)} />
+          <NAToggle active={inputs.naEcho} onToggle={() => setNA('naEcho', !inputs.naEcho)} label="Not Available — echo was not performed" />
           <View pointerEvents={inputs.naEcho ? 'none' : 'auto'} style={{ opacity: inputs.naEcho ? 0.4 : 1 }}>
             <RadioList
               options={[
@@ -347,7 +355,7 @@ function Step5() {
           </View>
         </CategoryBlock>
 
-        <LiveScoreCard score={total} label={getInterp(total).label} subtitle="Combined Score (Level A + B)" />
+        <LiveScoreCard score={total} label="" subtitle="Combined Score (Level A + B)" />
 
         <PrimaryButton title="View Final Result" onPress={() => { commitFinal(); goStep(6); }} />
         <SecondaryButton title="Back" onPress={() => goStep(4)} />
@@ -367,11 +375,11 @@ function Step6() {
 
   return (
     <>
-      {choreaPositive ? <ChoreaBanner /> : null}
+      {choreaPositive ? <ChoreaBanner step={6} /> : null}
       <ResultCard level={interp.level} score={total} label={interp.label} rangeLine={rangeLine} actions={getActions(total)} />
-      {patientCode ? <PatientCodeCard code={patientCode} /> : null}
-      <ScoreBreakdown title="Full Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
-      <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/(tabs)/index'); }} />
+      {patientCode ? <PatientCodeCard code={patientCode} step={6} /> : null}
+      <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
+      <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       <Text style={styles.disclaimer}>⚕️ SMART-ARF is a clinical decision-support tool. All findings must be interpreted by a qualified healthcare provider. This tool does not replace clinical judgment or the Jones Criteria.</Text>
     </>
   );

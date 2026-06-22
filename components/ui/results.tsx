@@ -6,19 +6,30 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Ionicons } from '@expo/vector-icons';
+import * as Print from 'expo-print';
 import { Colors, tierColor } from '@/constants/theme';
 import type { BreakdownRow, TierLevel } from '@/lib/types';
 
-/* ---- Chorea banner (Steps 3–6) ---- */
-export function ChoreaBanner({ step3 = false }: { step3?: boolean }) {
+/**
+ * Chorea banner — exact per-step text from smart-arf-app.html:
+ *   step3 (L1226): "Start Benzathine Penicillin G (BPG) and refer urgently.
+ *                   Continue the assessment below for record-keeping.
+ *                   Chorea automatically adds +5 to the score."
+ *   step4 (L1361): "Start BPG and refer urgently regardless of total score."
+ *   step5 (L1412): "Continue documenting Level B findings for the record."
+ *   step6 (L1534): "BPG must be started and patient referred urgently regardless of total score."
+ */
+const CHOREA_BODIES: Record<3 | 4 | 5 | 6, string> = {
+  3: 'Start Benzathine Penicillin G (BPG) and refer urgently. Continue the assessment below for record-keeping. Chorea automatically adds +5 to the score.',
+  4: 'Start BPG and refer urgently regardless of total score.',
+  5: 'Continue documenting Level B findings for the record.',
+  6: 'BPG must be started and patient referred urgently regardless of total score.',
+};
+export function ChoreaBanner({ step }: { step: 3 | 4 | 5 | 6 }) {
   return (
     <View style={choreaStyles.wrap}>
       <Text style={choreaStyles.title}>⚠ Chorea Confirmed — ARF Positive (major criterion)</Text>
-      <Text style={choreaStyles.body}>
-        Start Benzathine Penicillin G (BPG) and refer urgently regardless of total score.
-        {step3 ? '\nChorea automatically adds +5 to the score.' : ''}
-      </Text>
+      <Text style={choreaStyles.body}>{CHOREA_BODIES[step]}</Text>
     </View>
   );
 }
@@ -155,7 +166,12 @@ const bdStyles = StyleSheet.create({
 });
 
 /* ---- Patient code card ---- */
-export function PatientCodeCard({ code }: { code: string }) {
+/**
+ * Hints from smart-arf-app.html:
+ *   step4 (L1513): "Write this code on the patient's referral slip. The receiving clinic can use it to view this assessment and add follow-up."
+ *   step6 (L1731): "Receiving clinic can look up this code to view the full assessment and add follow-up."
+ */
+export function PatientCodeCard({ code, step = 4 }: { code: string; step?: 4 | 6 }) {
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
@@ -166,17 +182,37 @@ export function PatientCodeCard({ code }: { code: string }) {
       /* clipboard unavailable */
     }
   };
+  // Mirrors HTML L1379 window.print() — prints a referral slip. expo-print
+  // works in Expo Go on native; on web it falls back to no-op.
+  const print = async () => {
+    try {
+      await Print.printAsync({
+        html: `<div style="font-family:sans-serif;text-align:center;padding:24px">
+          <h2 style="color:#1a5fa8;margin:0 0 4px">SMART-ARF Referral Code</h2>
+          <div style="font-size:32px;letter-spacing:3px;font-weight:900;color:#1a5fa8;margin:16px 0">${code}</div>
+          <p style="color:#4b5563;font-size:13px">Give this code to the receiving clinic for continuity of care.</p>
+        </div>`,
+      });
+    } catch {
+      /* print unavailable */
+    }
+  };
+  const hint = step === 6
+    ? 'Receiving clinic can look up this code to view the full assessment and add follow-up.'
+    : "Write this code on the patient's referral slip. The receiving clinic can use it to view this assessment and add follow-up.";
   return (
     <View style={codeStyles.wrap}>
       <Text style={codeStyles.label}>Patient Referral Code</Text>
       <Text style={codeStyles.code}>{code}</Text>
-      <Pressable onPress={copy} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Ionicons name={copied ? 'checkmark-circle' : 'copy-outline'} size={16} color={Colors.primary} />
-          <Text style={codeStyles.copy}>{copied ? 'Copied!' : 'Copy code'}</Text>
-        </View>
-      </Pressable>
-      <Text style={codeStyles.hint}>Share this code with the referred facility for continuity of care.</Text>
+      <View style={codeStyles.btnRow}>
+        <Pressable onPress={copy} style={({ pressed }) => [codeStyles.btn, pressed && { opacity: 0.6 }]}>
+          <Text style={codeStyles.copy}>{copied ? '✓ Copied' : '📋 Copy'}</Text>
+        </Pressable>
+        <Pressable onPress={print} style={({ pressed }) => [codeStyles.btn, pressed && { opacity: 0.6 }]}>
+          <Text style={codeStyles.copy}>🖨️ Print Slip</Text>
+        </Pressable>
+      </View>
+      <Text style={codeStyles.hint}>{hint}</Text>
     </View>
   );
 }
@@ -184,17 +220,25 @@ const codeStyles = StyleSheet.create({
   wrap: { backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.primary, borderStyle: 'dashed', borderRadius: 14, padding: 20, alignItems: 'center', marginBottom: 14 },
   label: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2, color: Colors.textSecondary, marginBottom: 8 },
   code: { fontFamily: 'Courier', fontSize: 27, fontWeight: '900', letterSpacing: 2, color: Colors.primary, marginBottom: 8 },
+  btnRow: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
+  btn: { backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
   copy: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
   hint: { fontSize: 12.5, color: Colors.textSecondary, lineHeight: 18, marginTop: 10, textAlign: 'center' },
 });
 
 /* ---- Live score mini card ---- */
+/**
+ * label: when provided, rendered as the tier-tinted interpretation line (HTML
+ * updateScore colours interp by tier). Empty string hides the line (Step 5 in
+ * the HTML shows no interp — only number + label).
+ */
 export function LiveScoreCard({ score, label, total = 23, subtitle }: { score: number; label: string; total?: number; subtitle?: string }) {
+  const interpColor = score <= 5 ? Colors.success : score <= 9 ? Colors.warning : score <= 14 ? Colors.danger : Colors.urgent;
   return (
     <View style={liveStyles.box}>
       <Text style={liveStyles.label}>{subtitle ?? 'Current Level A Score'}</Text>
       <Text style={liveStyles.num}>{score}</Text>
-      <Text style={liveStyles.interp}>{label}</Text>
+      {label ? <Text style={[liveStyles.interp, { color: interpColor }]}>{label}</Text> : null}
     </View>
   );
 }
