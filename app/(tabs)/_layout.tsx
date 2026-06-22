@@ -50,7 +50,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="assess"
         options={{ title: 'Assess', headerShown: false, tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={26} color={color} /> }}
-        listeners={{ tabPress: (e) => { e.preventDefault(); reset(); } }}
+        listeners={{ tabPress: () => { reset(); } }}
       />
       <Tabs.Screen
         name="bpg"
