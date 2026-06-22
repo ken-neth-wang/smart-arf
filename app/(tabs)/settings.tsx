@@ -4,7 +4,7 @@
  * (see SMART-ARF.md). This screen shows app info and local-data management.
  */
 import React, { useState } from 'react';
-import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card, CardTitle, PrimaryButton, StepBadge } from '@/components/ui/primitives';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
@@ -13,21 +13,31 @@ export default function SettingsScreen() {
   const { activeRecords, records, clearAll } = useRecords();
   const [busy, setBusy] = useState(false);
 
+  const doErase = async () => {
+    setBusy(true);
+    await clearAll();
+    setBusy(false);
+  };
+
+  // Alert.alert() is a no-op on react-native-web, so use window.confirm there.
+  // Native keeps the styled Alert dialog (Cancel / Erase All).
   const confirmClear = () => {
+    if (Platform.OS === 'web') {
+      if (
+        window.confirm(
+          'Erase all records?\n\nThis permanently removes all assessments from this device. This cannot be undone.',
+        )
+      ) {
+        void doErase();
+      }
+      return;
+    }
     RNAlert.alert(
       'Erase all records?',
       'This permanently removes all assessments from this device. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Erase All',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            await clearAll();
-            setBusy(false);
-          },
-        },
+        { text: 'Erase All', style: 'destructive', onPress: doErase },
       ],
     );
   };

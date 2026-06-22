@@ -44,9 +44,9 @@ export default function HomeScreen() {
           <Text style={styles.newBtnText}>New Patient Assessment</Text>
         </Pressable>
 
-        <Pressable style={styles.lookupBtn} onPress={() => router.push('/lookup')}>
+        <Pressable style={styles.lookupBtn} onPress={() => router.navigate('/(tabs)/records')}>
           <Ionicons name="search" size={16} color={Colors.textSecondary} />
-          <Text style={styles.lookupText}>Look Up Patient by Code</Text>
+          <Text style={styles.lookupText}>Search Records</Text>
         </Pressable>
 
         <Text style={styles.heading}>Recent Assessments</Text>

@@ -108,11 +108,11 @@ function Step1() {
         </View>
       </View>
 
-      <TextField label="MRN / Patient ID" value={patient.mrn} onChangeText={(v) => setPatient({ mrn: v })} placeholder="e.g. 00123456" hint="(optional)" />
+      <TextField label="MRN / Patient ID" value={patient.mrn} onChangeText={(v) => setPatient({ mrn: v })} placeholder="e.g. 00123456" />
 
       <TextField label="Primary Phone" required value={patient.phone1} onChangeText={(v) => setPatient({ phone1: v })} placeholder="e.g. +249 91 234 5678" keyboardType="phone-pad" />
 
-      <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" hint="(optional)" keyboardType="phone-pad" />
+      <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
 
       <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => { const n = v ? Number(v) : null; setPatient({ age: n == null ? null : Math.max(1, Math.min(25, n)) }); }} placeholder="e.g. 10" keyboardType="numeric" />
 

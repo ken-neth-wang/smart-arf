@@ -29,7 +29,6 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: Colors.bg },
             }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="lookup" options={{ title: 'Patient Lookup' }} />
             <Stack.Screen name="record" options={{ title: 'Patient Record' }} />
             <Stack.Screen name="followup" options={{ title: 'Follow-Up Visit' }} />
           </Stack>
