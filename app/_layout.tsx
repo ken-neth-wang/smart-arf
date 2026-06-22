@@ -1,24 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+/**
+ * Root layout — providers (records + assessment) and the top-level Stack that
+ * hosts the tab group plus the auxiliary routes (lookup / record / followup).
+ */
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
+import { RecordsProvider } from '@/state/RecordsContext';
+import { AssessmentProvider } from '@/state/AssessmentContext';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <RecordsProvider>
+        <AssessmentProvider>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: Colors.primary },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: '800' },
+              contentStyle: { backgroundColor: Colors.bg },
+            }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="lookup" options={{ title: 'Patient Lookup' }} />
+            <Stack.Screen name="record" options={{ title: 'Patient Record' }} />
+            <Stack.Screen name="followup" options={{ title: 'Follow-Up Visit' }} />
+          </Stack>
+        </AssessmentProvider>
+      </RecordsProvider>
+    </SafeAreaProvider>
   );
 }

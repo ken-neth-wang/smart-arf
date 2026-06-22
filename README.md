@@ -1,50 +1,57 @@
-# Welcome to your Expo app 👋
+# SMART-ARF (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Clinical Decision Support & Triage for **Acute Rheumatic Fever (ARF)** — a React
+Native / Expo port of the reference web app.
+
+> **The single source of truth for this application is
+> [`smart-arf-app.html`](./smart-arf-app.html).** See
+> [`SMART-ARF.md`](./SMART-ARF.md) for the full documentation and the
+> HTML‑is‑authoritative policy. Any discrepancy between this code and the HTML
+> should be resolved in favour of the HTML.
+
+## What's implemented (this build)
+
+This is the **Clinical core (MVP)** scope:
+
+- **Assessment wizard (Steps 1–6)** with the exact ARF scoring algorithm
+  (Level A max 23, Level B max 16, tiers Unlikely / Possible / Likely / Highly
+  Likely) and chorea auto‑+5 behaviour — ported verbatim from the HTML.
+- **Home / landing** with patient history.
+- **Records** — searchable list of all assessments.
+- **Patient record detail** — result, score breakdown, referral, follow‑up
+  history, edit, and soft‑delete with reason taxonomy.
+- **Lookup** by referral code (`ARF-XXXX-XXXX`, local device search).
+- **Follow‑up visit** form.
+- **BPG protocol** 5‑step reference.
+- Local persistence via `AsyncStorage`.
+
+Out of scope for this MVP (present in the source HTML, require a backend):
+encryption‑at‑rest, PIN/password auth, admin MFA, and server sync. See
+[`SMART-ARF.md`](./SMART-ARF.md).
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Open in **Expo Go** (iOS / Android) or a simulator/emulator. Web is also
+supported (`npx expo start --web`).
 
-## Learn more
+> Requires Expo SDK 54. `@react-native-async-storage/async-storage` is pinned to
+> **2.2.0** (v3.x is incompatible with SDK 54).
 
-To learn more about developing your project with Expo, look at the following resources:
+## Project layout
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+app/                     expo-router screens
+  (tabs)/                bottom-tab screens: index(home), assess, bpg, records, settings
+  lookup.tsx, record.tsx, followup.tsx   top-level routes
+components/              UI primitives, result components, WizardHeader, PatientCard
+lib/                     scoring.ts (algorithm), types.ts, format.ts, storage.ts
+state/                   RecordsContext, AssessmentContext
+constants/theme.ts       palette (mirrors HTML CSS variables)
+smart-arf-app.html       ★ the source of truth
+SMART-ARF.md             documentation / source-of-truth policy
+```
