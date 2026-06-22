@@ -1,43 +1,81 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# ─────────────────────────────────────────────────────────────
+# Node
+# ─────────────────────────────────────────────────────────────
 node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.log*
+.npm/
+.pnp.*
+.pnp.js
 
-# Expo
+# ─────────────────────────────────────────────────────────────
+# Expo / React Native (managed workflow)
+# https://docs.expo.dev/versions/v54.0.0/
+# ─────────────────────────────────────────────────────────────
 .expo/
 dist/
 web-build/
 expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-
-# Metro
+*.orig.*
 .metro-health-check*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# generated native folders
+# Prebuild / generated native folders (only when you eject/prebuild)
 /ios
 /android
+
+# Template leftovers
+app-example
+
+# ─────────────────────────────────────────────────────────────
+# Secrets & environment
+# NEVER commit these. Keep .env.example in the repo instead.
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# ─────────────────────────────────────────────────────────────
+# TypeScript / builds
+# ─────────────────────────────────────────────────────────────
+*.tsbuildinfo
+*.log
+.cache/
+.parcel-cache/
+
+# ─────────────────────────────────────────────────────────────
+# OS / editor noise
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+*.swp
+*.swo
+*~
+
+# Note: .vscode is intentionally committed for shared workspace
+# settings. Add the line below only if you want personal VS Code
+# settings ignored:
+# .vscode/settings.json
+
+# ─────────────────────────────────────────────────────────────
+# Testing / coverage
+# ─────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─────────────────────────────────────────────────────────────
+# EAS / Expo Application Services (local build artifacts)
+# ─────────────────────────────────────────────────────────────
+.easignore
