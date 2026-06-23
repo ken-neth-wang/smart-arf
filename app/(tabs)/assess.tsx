@@ -114,7 +114,7 @@ function Step1() {
 
       <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
 
-      <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => { const n = v ? Number(v) : null; setPatient({ age: n == null ? null : Math.max(1, Math.min(25, n)) }); }} placeholder="e.g. 10" keyboardType="numeric" />
+      <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => { const n = v ? Number(v) : null; setPatient({ age: n }); }} placeholder="e.g. 10" keyboardType="numeric" />
 
       <SelectField label="Patient Gender" value={patient.gender} options={GENDER_OPTS} onChange={(v) => setPatient({ gender: v as Gender })} />
 
