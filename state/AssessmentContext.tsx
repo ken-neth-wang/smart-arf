@@ -3,7 +3,7 @@
  * smart-arf-app.html. Drives Steps 1–6 and persists a PatientRecord (created on
  * entering Step 4, updated with Level B on entering Step 6).
  */
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
 import { emptyInputs, type AssessmentInputs, type Gender, type PatientRecord, type Setting } from '@/lib/types';
 import {
@@ -56,8 +56,6 @@ interface AssessmentContextValue {
   commitFinal: () => PatientRecord;
   /** Rehydrate state from a saved record to resume/edit (jumps to Step 3). */
   loadRecordForEdit: (record: PatientRecord) => void;
-  /** Whether the user is mid-assessment (HTML inAssessmentFlow: step 1–6 active). */
-  inAssessmentFlow: () => boolean;
   // derived (live)
   scoreA: number;
   scoreB: number;
@@ -189,19 +187,6 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     setStep(3);
   };
 
-  // Mirrors HTML inAssessmentFlow(): any step 1–6 is "active". The guard uses
-  // this + hasProgress (non-default state) to decide whether to prompt.
-  const inAssessmentFlow = useCallback(() => {
-    // step is always 1–6 by type; treat "flow" as active when the user has any
-    // progress (step > 1 OR any clinical input set), matching confirmLeaveAssessment.
-    if (step <= 1) {
-      // step 1 with a blank form is not really "in progress"
-      const hasPatientData = Boolean(patient.firstName || patient.lastName || patient.phone1 || patient.mrn);
-      return hasPatientData;
-    }
-    return true;
-  }, [step, patient]);
-
   const value: AssessmentContextValue = {
     patient,
     inputs,
@@ -216,7 +201,6 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     commitLevelA,
     commitFinal,
     loadRecordForEdit,
-    inAssessmentFlow,
     scoreA,
     scoreB,
   };
