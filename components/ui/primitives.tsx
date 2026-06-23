@@ -372,9 +372,9 @@ export function SecondaryButton({ title, onPress }: { title: string; onPress: ()
 }
 const btnStyles = StyleSheet.create({
   primary: { paddingVertical: 15, borderRadius: 11, alignItems: 'center', justifyContent: 'center', minHeight: TAP },
-  primaryText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  primaryText: { color: '#fff', fontSize: 16, fontWeight: '800', textAlign: 'center' },
   secondary: { paddingVertical: 15, borderRadius: 11, alignItems: 'center', justifyContent: 'center', minHeight: TAP, backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: Colors.border, marginTop: 10 },
-  secondaryText: { color: Colors.textSecondary, fontSize: 16, fontWeight: '800' },
+  secondaryText: { color: Colors.textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' },
 });
 
 /* ---------------- Alert ---------------- */
