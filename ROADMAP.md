@@ -20,15 +20,26 @@
 
 ## Phase 2 — Ship
 
-**Goal:** Installable app on a real device, from the App Store and Google Play.
+**Goal:** The app is installable/shareable — first on web, then on mobile.
 
-- **EAS Build** (Expo's cloud build) → standalone `.apk`/`.aab` (Android) and `.ipa` (iOS). No eject required — Expo SDK 54 stays managed.
-- **Accounts:** Apple Developer ($99/yr) + Google Play Developer ($25 once). Both take days to approve.
-- **`expo-updates`** → push fixes over-the-air without re-reviewing the app. Bug fixes go out instantly; new screens/features still go through store review.
-- **App metadata:** name, icon, screenshots, privacy URL, support contact. The stores require these.
-- **Internal TestFlight (iOS) + internal testing track (Android)** → distribute to your pilot clinicians before public launch.
+Deploy targets are **independent**; each can ship when ready.
 
-**Done when:** a clinician installs it from a store link, on their own phone, with no help from you.
+### 2a — Web ✅ *infra done; pending first deploy*
+- **GitHub Actions workflow** (`.github/workflows/deploy-web.yml`) builds `expo export -p web` and pushes `dist/` to a `gh-pages` branch.
+- **Trigger:** push a `v*` tag (e.g. `git tag v0.1 && git push origin v0.1`), or run manually from the Actions tab.
+- **`app.json` `baseUrl: "/smart-arf/"`** is set so assets resolve at the subpath.
+- **Live URL:** `https://ken-neth-wang.github.io/smart-arf/`
+- **Still pending (one-time):** GitHub Settings → Pages → Source = `gh-pages` branch. Then tag `v0.1`.
+- **Limitation:** GitHub Pages is always public — no privacy option. Don't tag until you want it visible. (Custom domain ~$10/yr later if you want a cleaner URL.)
+
+### 2b — Mobile (Android first, iOS later)
+- **`eas.json`** is configured with `preview` (installable `.apk`, no store), `production` (store-ready), and `development` profiles.
+- **Android APK — no account, no cost:** `npx eas build -p android --profile preview` → shareable download link. Teammates install directly.
+- **Google Play — $25 once:** internal-testing track, no review, up to 100 testers. Needs a Google service-account key.
+- **iOS — $99/yr:** TestFlight + App Store. Unavoidable fee for any iOS install. **Likely skip** — ship web + Android first; iOS only if a pilot demands it.
+- **`expo-updates`** → push OTA fixes (bug-fix-class changes) without re-reviewing the app.
+
+**Done when:** a clinician opens the web URL or installs the Android build on their own phone, with no help from you.
 
 ---
 
@@ -49,7 +60,8 @@ This is what's currently deferred but specified in the HTML. It's plumbing, not 
 *Why first:* you can't ethically store real MRNs + phones on a phone that has no lock and no backup.
 
 ### 3b — Connect & aggregate (the long-term value)
-- **Server sync** so a referral code actually reaches the receiving clinic. (HTML specifies the API: `/api/sync`, `/api/lookup/:code`, `/api/followup`.)
+- **Backend: Supabase (chosen).** Postgres + auto-generated REST (mirrors the HTML's `/api/sync`, `/api/lookup/:code`, `/api/followup`), native row-level security (non-negotiable for health data), no hard daily caps, self-hostable if a regulator later demands data residency. Firebase now supports Postgres too (SQL Connect), but lacks native RLS — Supabase stays the pick for clinical data.
+- **Frontend hosting stays where it is** (GitHub Pages / Netlify). Supabase is the *data layer*, not a host — the two are independent and don't require migration.
 - **Cross-device sync** so one patient's history follows them between clinics.
 - **Outcome tracking** — you already capture follow-up visits; surface trends per patient.
 - **Population dashboards** — ARF is a population disease; clinic/district-level data is the public-health payoff.
