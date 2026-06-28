@@ -1,0 +1,52 @@
+# Deploy the web build to GitHub Pages.
+#
+# Triggers automatically when you push a tag like `v0.3` or `v1.0.0`, and is
+# also runnable manually from the Actions tab ("Run workflow").
+#
+# Result: live at https://ken-neth-wang.github.io/smart-arf/
+#
+# One-time setup (do this once in the GitHub repo settings):
+#   Settings → Pages → Source: "Deploy from a branch" → Branch: "gh-pages" / root
+#
+# Notes:
+#   - Requires `expo.web.baseUrl: "/smart-arf/"` in app.json (already set),
+#     because the site is served from a subpath, not the domain root.
+#   - EAS / native app-store builds are handled separately (eas.json + the
+#     `eas build` / `eas submit` commands). GitHub Pages is web-only.
+
+name: Deploy Web
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: # manual "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write # needed to push the gh-pages branch
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export web build
+        run: npx expo export -p web
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          # .nojekyll disables Jekyll so _expo/ asset folders aren't dropped
+          enable_jekyll: false
+          force_orphan: true # keep gh-pages as a clean artifact-only branch
