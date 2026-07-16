@@ -40,6 +40,14 @@ jobs:
         run: npm ci
 
       - name: Export web build
+        env:
+          # Supabase creds come from GitHub Secrets (Settings → Secrets and
+          # variables → Actions). The anon key is public by design (RLS is the
+          # real boundary) — see supabase/schema.sql for the current QA policies.
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          # The deployed build always targets Supabase (local-only is for dev).
+          EXPO_PUBLIC_DATA_BACKEND: supabase
         run: npx expo export -p web
 
       - name: Deploy to GitHub Pages
