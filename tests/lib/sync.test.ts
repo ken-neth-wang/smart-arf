@@ -60,6 +60,7 @@ function mkEncounter(over: Partial<Encounter> = {}): Encounter {
     breakdown: [{ label: 'Heart Murmur', points: 5 }],
     actions: ['ARF is likely — act promptly'],
     includesLevelB: true,
+    facilityType: null,
     confirmedDx: '',
     finalDx: '',
     bpgStatus: '',
@@ -229,6 +230,14 @@ describe('encounterToRow / rowToEncounter', () => {
     });
     expect(rowToEncounter(encounterToRow(original))).toEqual(original);
   });
+
+  it('round-trips facilityType (primary, secondary, null)', () => {
+    for (const ft of ['primary', 'secondary', null] as const) {
+      const original = mkEncounter({ facilityType: ft });
+      const back = rowToEncounter(encounterToRow(original));
+      expect(back.facilityType).toBe(ft);
+    }
+  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -251,6 +260,7 @@ describe('field-name regression guards', () => {
     const expected = [
       'id', 'patient_id', 'type', 'date', 'inputs', 'score', 'level',
       'result_label', 'range', 'breakdown', 'actions', 'includes_level_b',
+      'facility_type',
       'confirmed_dx', 'final_dx', 'bpg_status', 'echo_findings',
       'complications', 'notes', 'referred_to', 'referred_to_clinic_id', 'created_at', 'updated_at',
     ].sort();

@@ -54,16 +54,13 @@ export default function RecordScreen() {
   const { patient, encounters } = history;
   const name = fullName(patient.firstName, patient.lastName);
   const age = ageFromDateOfBirth(patient.dateOfBirth);
-  const meta = [
-    patient.referralCode ? `Code: ${patient.referralCode}` : '',
-    patient.mrn ? `MRN: ${patient.mrn}` : '',
-    age ? `Age: ${age}y` : '',
+  const line2 = [
     patient.gender,
-    patient.setting,
-  ].filter(Boolean);
-  if (patient.phone1) meta.push(`📞 ${patient.phone1}`);
-  if (patient.phone2) meta.push(`📞 (alt) ${patient.phone2}`);
-  const metaLine = meta.join(' · ');
+    age ? `Age: ${age}y` : '',
+    patient.mrn ? `MRN: ${patient.mrn}` : '',
+    patient.phone1 ? `📞 ${patient.phone1}` : '',
+    patient.phone2 ? `📞 (alt) ${patient.phone2}` : '',
+  ].filter(Boolean).join(' · ');
 
   const score = initialEncounter?.score ?? null;
   const level = initialEncounter?.level ?? null;
@@ -100,7 +97,10 @@ export default function RecordScreen() {
       <Card>
         <StepBadge>Patient Record</StepBadge>
         <CardTitle>{name}{patient.isTest ? '  (test)' : ''}</CardTitle>
-        <CardSubtitle>{metaLine}</CardSubtitle>
+        <CardSubtitle>{line2}</CardSubtitle>
+        {patient.referralCode ? (
+          <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.primary, marginTop: 2 }}>Referral Code: {patient.referralCode}</Text>
+        ) : null}
         <Text style={styles.dateSync}>Registered {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : '—'}</Text>
 
         {score != null && initialEncounter ? (
@@ -168,6 +168,7 @@ export default function RecordScreen() {
           onPress={() => { loadRecordForEdit(patient, initialEncounter); router.navigate('/(tabs)/assess'); }}
         />
       ) : null}
+      <SecondaryButton title="💊 View BPG Protocol" onPress={() => router.push('/(tabs)/bpg')} />
       <SecondaryButton title={patient.isTest ? 'Remove test entry' : 'Remove patient'} onPress={handleRemove} />
 
       <Modal visible={delOpen} transparent animationType="fade" onRequestClose={() => setDelOpen(false)}>

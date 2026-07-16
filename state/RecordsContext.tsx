@@ -172,6 +172,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         date: fields.visitDate,
         inputs: null, score: null, level: null, resultLabel: null, range: null, breakdown: null, actions: null,
         includesLevelB: false,
+        facilityType: null,
         confirmedDx: fields.confirmedDx,
         finalDx: fields.finalDx,
         bpgStatus: fields.bpgStatus,

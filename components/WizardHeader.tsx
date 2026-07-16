@@ -12,7 +12,7 @@ import { ageFromDateOfBirth } from '@/lib/types';
 import { maskMRN, maskPhone } from '@/lib/format';
 
 export function WizardHeader() {
-  const { patient, step, scoreA } = useAssessment();
+  const { patient, step, scoreA, referralCode } = useAssessment();
   const top = useSafeAreaInsets().top;
   const age = ageFromDateOfBirth(patient.dateOfBirth);
 
@@ -22,9 +22,9 @@ export function WizardHeader() {
 
   const name = `${patient.firstName} ${patient.lastName}`.trim();
   const meta = [
-    patient.mrn ? `MRN: ${maskMRN(patient.mrn)}` : '',
-    age ? `${age}y` : '',
     patient.gender,
+    age ? `${age}y` : '',
+    patient.mrn ? `MRN: ${maskMRN(patient.mrn)}` : '',
     patient.phone1 ? `📞 ${maskPhone(patient.phone1)}` : '',
   ]
     .filter(Boolean)
@@ -46,7 +46,12 @@ export function WizardHeader() {
       {showBanner ? (
         <View style={styles.banner}>
           <Text style={styles.bannerName}>{name}</Text>
-          <Text style={styles.bannerMeta}>{meta}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.bannerMeta}>{meta}</Text>
+            {referralCode ? (
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700', marginTop: 2 }}>Referral Code: {referralCode}</Text>
+            ) : null}
+          </View>
         </View>
       ) : null}
       {showTally ? (

@@ -37,7 +37,7 @@ import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
 import { getActions, getInterp, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
-import type { EchoValue, Gender, Setting } from '@/lib/types';
+import type { EchoValue, FacilityType, Gender, Setting } from '@/lib/types';
 
 const GENDER_OPTS = [
   { label: 'Male', value: 'male' },
@@ -296,6 +296,12 @@ function Step4() {
 }
 
 /* ============== STEP 5 — Level B ============== */
+const FACILITY_OPTS = [
+  { label: '— Not specified —', value: '' },
+  { label: 'Primary', value: 'primary' },
+  { label: 'Secondary', value: 'secondary' },
+];
+
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
   const choreaPositive = inputs.chorea === true;
@@ -319,6 +325,13 @@ function Step5() {
         <StepBadge>Step 5 — Level B: Jones Criteria</StepBadge>
         <CardTitle>Enhanced Findings</CardTitle>
         <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
+
+        <SelectField
+          label="Facility type of today's assessment"
+          value={inputs.facilityType ?? ''}
+          options={FACILITY_OPTS}
+          onChange={(v) => setInputs({ facilityType: v === '' ? null : (v as FacilityType) })}
+        />
 
         <CategoryBlock title="Blood Tests" titleSuffix="(max +8)" points={(inputs.wbc || inputs.aso || inputs.esr ? 3 : 0) + (inputs.antidnase ? 5 : 0)} active={!inputs.naBlood && ((inputs.wbc || inputs.aso || inputs.esr) || inputs.antidnase)}>
           <NAToggle active={inputs.naBlood} onToggle={() => setNA('naBlood', !inputs.naBlood)} label="Not Available — blood tests were not done" />

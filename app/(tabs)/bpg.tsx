@@ -11,7 +11,7 @@ const STEPS: { title: string; desc: string }[] = [
   { title: 'Verify indication & allergy history', desc: 'Confirm ARF suspicion. Ask about penicillin allergy — never administer if history of severe reaction.' },
   { title: 'Prepare BPG injection', desc: 'Reconstitute according to weight-based dosing (≤27 kg: 600,000 IU; >27 kg: 1.2 million IU). [Photo to be added]' },
   { title: 'Administer deep IM injection', desc: 'Inject into upper outer quadrant of gluteus or vastus lateralis (children). Use Z-track technique. [Photo to be added]' },
-  { title: 'Observe patient for 30 minutes', desc: 'Monitor for anaphylaxis or other reactions before discharge.' },
+  { title: 'Observe patient for 15 minutes', desc: 'Monitor for anaphylaxis or other reactions before discharge.' },
   { title: 'Schedule follow-up dose', desc: 'Repeat every 3–4 weeks. Provide patient with referral code & written schedule.' },
 ];
 

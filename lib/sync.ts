@@ -12,6 +12,7 @@ import type {
   BreakdownRow,
   Encounter,
   EncounterType,
+  FacilityType,
   Patient,
   TierLevel,
   Clinic,
@@ -58,6 +59,7 @@ export interface EncounterRow {
   breakdown: BreakdownRow[] | null;
   actions: string[] | null;
   includes_level_b: boolean;
+  facility_type: FacilityType | null;
   confirmed_dx: Encounter['confirmedDx'];
   final_dx: string;
   bpg_status: Encounter['bpgStatus'];
@@ -140,6 +142,7 @@ export function rowToEncounter(e: EncounterRow): Encounter {
     breakdown: e.breakdown,
     actions: e.actions,
     includesLevelB: e.includes_level_b,
+    facilityType: e.facility_type,
     confirmedDx: e.confirmed_dx,
     finalDx: e.final_dx,
     bpgStatus: e.bpg_status,
@@ -167,6 +170,7 @@ export function encounterToRow(e: Encounter): EncounterRow {
     breakdown: e.breakdown,
     actions: e.actions,
     includes_level_b: e.includesLevelB,
+    facility_type: e.facilityType,
     confirmed_dx: e.confirmedDx,
     final_dx: e.finalDx,
     bpg_status: e.bpgStatus,

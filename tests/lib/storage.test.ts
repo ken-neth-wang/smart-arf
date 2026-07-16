@@ -62,6 +62,7 @@ function mkEncounter(id: number, patientId: string, over: Partial<Encounter> = {
     breakdown: [],
     actions: [],
     includesLevelB: false,
+    facilityType: null,
     confirmedDx: '',
     finalDx: '',
     bpgStatus: '',

@@ -15,6 +15,7 @@ export type Gender = '' | 'male' | 'female' | 'other';
 export type Setting = '' | 'endemic' | 'nonendemic' | 'unknown';
 export type TierLevel = 'unlikely' | 'possible' | 'likely' | 'urgent' | 'chorea' | 'incomplete' | 'confirmed';
 export type EchoValue = 'suggestive' | null;
+export type FacilityType = 'primary' | 'secondary';
 
 /** Raw clinical inputs — same shape as the HTML `S` object's clinical fields. */
 export interface AssessmentInputs {
@@ -41,6 +42,7 @@ export interface AssessmentInputs {
   antidnase: boolean;
   pr: boolean;
   echo: EchoValue;
+  facilityType: FacilityType | null;
 }
 
 export function emptyInputs(): AssessmentInputs {
@@ -67,6 +69,7 @@ export function emptyInputs(): AssessmentInputs {
     antidnase: false,
     pr: false,
     echo: null,
+    facilityType: null,
   };
 }
 
@@ -167,6 +170,7 @@ export interface Encounter {
   breakdown: BreakdownRow[] | null;
   actions: string[] | null;
   includesLevelB: boolean;
+  facilityType: FacilityType | null;
 
   // ─── Outcome block ───────────────────────────────────────────────
   confirmedDx: ConfirmedDx; // '' if not assessed

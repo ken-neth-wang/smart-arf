@@ -141,6 +141,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       breakdown,
       actions: getActions(scoreA, scoreB),
       includesLevelB: withLevelB,
+      facilityType: inputs.facilityType,
       confirmedDx: '',
       finalDx: '',
       bpgStatus: '',
@@ -197,7 +198,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       setting: p.setting,
       isTest: p.isTest,
     });
-    setInputsState({ ...emptyInputs(), ...(e.inputs ?? emptyInputs()) });
+    setInputsState({ ...emptyInputs(), ...(e.inputs ?? emptyInputs()), facilityType: e.facilityType ?? null });
     setActivePatientId(p.id);
     setActiveEncounterId(e.id);
     setReferralCode(p.referralCode);

@@ -7,6 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
+import { useRouter } from 'expo-router';
 import { Colors, tierColor } from '@/constants/theme';
 import type { BreakdownRow, TierLevel } from '@/lib/types';
 
@@ -186,6 +187,7 @@ const bdStyles = StyleSheet.create({
  *   step6 (L1731): "Receiving clinic can look up this code to view the full assessment and add follow-up."
  */
 export function PatientCodeCard({ code, step = 4 }: { code: string; step?: 4 | 6 }) {
+  const router = useRouter();
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
@@ -226,6 +228,9 @@ export function PatientCodeCard({ code, step = 4 }: { code: string; step?: 4 | 6
           <Text style={codeStyles.copy}>🖨️ Print Slip</Text>
         </Pressable>
       </View>
+      <Pressable onPress={() => router.push('/(tabs)/bpg')} style={({ pressed }) => [codeStyles.bpgBtn, pressed && { opacity: 0.85 }]}>
+        <Text style={codeStyles.bpgText}>💊 View BPG Protocol</Text>
+      </Pressable>
       <Text style={codeStyles.hint}>{hint}</Text>
     </View>
   );
@@ -237,6 +242,8 @@ const codeStyles = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
   btn: { backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
   copy: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
+  bpgBtn: { backgroundColor: Colors.primary, borderRadius: 9, paddingVertical: 11, paddingHorizontal: 16, alignItems: 'center', marginTop: 10 },
+  bpgText: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
   hint: { fontSize: 12.5, color: Colors.textSecondary, lineHeight: 18, marginTop: 10, textAlign: 'center' },
 });
 
