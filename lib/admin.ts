@@ -65,6 +65,15 @@ export async function removeAllowedEmailCloud(email: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Create a clinic (admin only via RLS). name required; type is free text. */
+export async function createClinicCloud(name: string, type: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await getSupabase()
+    .from('clinics')
+    .insert({ name: name.trim(), type: type || '' });
+  if (error) throw error;
+}
+
 // ── Pending approvals ────────────────────────────────────────────
 /** A profile awaiting admin approval — profile + the signup email. */
 export interface PendingProfile {

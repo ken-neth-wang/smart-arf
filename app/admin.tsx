@@ -24,6 +24,7 @@ import type { Role } from '@/lib/permissions';
 import {
   addAllowedEmailCloud,
   approveUserCloud,
+  createClinicCloud,
   deactivateUserCloud,
   loadActiveUsersCloud,
   loadAllowedEmailsCloud,
@@ -40,10 +41,15 @@ const ROLE_OPTS: SelectOption[] = [
   { label: 'Admin', value: 'admin' },
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CLINIC_TYPE_OPTS: SelectOption[] = [
+  { label: 'Primary', value: 'primary' },
+  { label: 'Secondary', value: 'secondary' },
+  { label: 'Tertiary', value: 'tertiary' },
+];
 
 export default function AdminScreen() {
   const { user } = useAuth();
-  const { clinics } = useRecords();
+  const { clinics, refresh: refreshRecords } = useRecords();
   const router = useRouter();
 
   const [allowed, setAllowed] = useState<AllowedEmail[]>([]);
@@ -62,6 +68,10 @@ export default function AdminScreen() {
   const [approveUserId, setApproveUserId] = useState('');
   const [approveClinicId, setApproveClinicId] = useState('');
   const [approveRole, setApproveRole] = useState<Role>('health_worker');
+
+  // create-clinic form
+  const [newClinicName, setNewClinicName] = useState('');
+  const [clinicType, setClinicType] = useState('primary');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -158,6 +168,23 @@ export default function AdminScreen() {
     }
   };
 
+  const onCreateClinic = async () => {
+    if (busyAction) return;
+    if (!newClinicName.trim()) return setError('Enter a clinic name.');
+    setBusyAction('create-clinic');
+    setError(null);
+    try {
+      await createClinicCloud(newClinicName, clinicType);
+      setNewClinicName('');
+      setClinicType('primary');
+      await refreshRecords();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   if (!isAdmin(user)) {
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
@@ -184,6 +211,32 @@ export default function AdminScreen() {
           <Alert variant="warning">{error}</Alert>
         </View>
       ) : null}
+
+      {/* ── Clinics ── */}
+      <Card>
+        <StepBadge>Clinics</StepBadge>
+        <CardTitle>Facilities</CardTitle>
+        <Text style={styles.line}>
+          Create a clinic so it's available in pickers and for user/patient assignment.
+        </Text>
+        <View style={styles.form}>
+          <TextField label="Clinic name" value={newClinicName} onChangeText={setNewClinicName} placeholder="e.g. City Hospital" />
+          <SelectField label="Type" value={clinicType} options={CLINIC_TYPE_OPTS} onChange={setClinicType} />
+          <PrimaryButton title={busyAction === 'create-clinic' ? 'Creating…' : 'Create Clinic'} disabled={!newClinicName.trim() || !!busyAction} onPress={onCreateClinic} />
+        </View>
+        {clinics.length === 0 ? (
+          <Text style={styles.muted}>No clinics yet.</Text>
+        ) : (
+          clinics.map((c) => (
+            <View key={c.id} style={styles.entry}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.entryEmail}>{c.name}</Text>
+                <Text style={styles.entrySub}>{c.type || '—'}</Text>
+              </View>
+            </View>
+          ))
+        )}
+      </Card>
 
       {/* ── Allowlist ── */}
       <Card>

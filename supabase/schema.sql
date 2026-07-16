@@ -15,6 +15,7 @@ drop table if exists public.patients cascade;
 drop table if exists public.clinic_memberships cascade;
 drop table if exists public.profiles cascade;
 drop table if exists public.clinics cascade;
+drop table if exists public.allowed_emails cascade;
 drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_user();
 drop function if exists public.set_audit_fields();
@@ -291,10 +292,13 @@ drop policy if exists "allowlist_admin_all" on public.allowed_emails;
 create policy "allowlist_admin_all" on public.allowed_emails
   for all using (public.is_admin()) with check (public.is_admin());
 
--- clinics: any approved user can read the clinic list (to render names/pickers).
+-- clinics: any approved user can read the clinic list; admins can create one.
 drop policy if exists "clinics_approved_read" on public.clinics;
 create policy "clinics_approved_read" on public.clinics
   for select using (public.is_approved());
+drop policy if exists "clinics_admin_insert" on public.clinics;
+create policy "clinics_admin_insert" on public.clinics
+  for insert with check (public.is_admin());
 
 -- patients: full-history scoping. No DELETE policy → hard-delete denied.
 drop policy if exists "patients_select" on public.patients;
