@@ -342,13 +342,12 @@ function Step5() {
         <CategoryBlock title="Echocardiogram" points={inputs.echo === 'suggestive' ? 5 : 0} active={!inputs.naEcho && inputs.echo === 'suggestive'}>
           <NAToggle active={inputs.naEcho} onToggle={() => setNA('naEcho', !inputs.naEcho)} label="Not Available — echo was not performed" />
           <View pointerEvents={inputs.naEcho ? 'none' : 'auto'} style={{ opacity: inputs.naEcho ? 0.4 : 1 }}>
-            <RadioList
-              options={[
-                { id: 'suggestive', name: 'Suggestive of RHD', desc: 'Mitral or aortic regurgitation, or subclinical RHD features', points: '+5' },
-                { id: 'not-suggestive', name: 'Not suggestive', desc: 'Normal study or no RHD features', points: '+0' },
-              ]}
-              selectedId={inputs.echo ?? ''}
-              onSelect={(id) => setInputs({ echo: id as EchoValue })}
+            <CheckboxRow
+              label="Suggestive of RHD"
+              sub="Mitral or aortic regurgitation, or subclinical RHD features"
+              checked={inputs.echo === 'suggestive'}
+              onToggle={() => setInputs({ echo: inputs.echo === 'suggestive' ? null : 'suggestive' })}
+              pointsBadge="+5"
             />
           </View>
         </CategoryBlock>

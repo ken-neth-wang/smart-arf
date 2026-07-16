@@ -145,7 +145,6 @@ export function buildFullBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
   if (!s.naBlood && s.antidnase) rows.push({ label: 'Anti-DNase B positive', points: 5 });
   if (!s.naEcg && s.pr) rows.push({ label: 'Prolonged PR interval', points: 3 });
   if (!s.naEcho && s.echo === 'suggestive') rows.push({ label: 'Echocardiogram — Suggestive', points: 5 });
-  if (!s.naEcho && s.echo === 'not-suggestive') rows.push({ label: 'Echocardiogram — Not suggestive', points: 0 });
   return rows;
 }
 
@@ -225,8 +224,6 @@ export function finalDisplayBreakdown(s: AssessmentInputs, scoreA: number, score
       rows.push({ label: 'Echocardiogram', points: null, kind: 'na' });
     } else if (s.echo === 'suggestive') {
       rows.push({ label: 'Echocardiogram — Suggestive', points: 5 });
-    } else if (s.echo === 'not-suggestive') {
-      rows.push({ label: 'Echocardiogram — Not suggestive', points: 0 });
     }
   }
 

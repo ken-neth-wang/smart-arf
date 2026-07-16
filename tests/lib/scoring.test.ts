@@ -97,8 +97,6 @@ describe('bloodInflammScore', () => {
 describe('echoScore', () => {
   it("echo === 'suggestive' → 5", () =>
     expect(echoScore(buildInputs({ echo: 'suggestive' }))).toBe(5));
-  it("echo === 'not-suggestive' → 0", () =>
-    expect(echoScore(buildInputs({ echo: 'not-suggestive' }))).toBe(0));
   it('echo === null → 0', () => expect(echoScore(buildInputs({ echo: null }))).toBe(0));
 });
 
@@ -430,13 +428,6 @@ describe('buildFullBreakdownArray', () => {
       label: 'Echocardiogram — Suggestive',
       points: 5,
     }));
-
-  it("echo 'not-suggestive' → row IS present with points 0 (not omitted)", () => {
-    expect(buildFullBreakdownArray(buildInputs({ echo: 'not-suggestive' }))).toContainEqual({
-      label: 'Echocardiogram — Not suggestive',
-      points: 0,
-    });
-  });
 
   describe('NA (Not Available) suppression', () => {
     it('naBlood hides both inflammation markers and Anti-DNase B', () => {
