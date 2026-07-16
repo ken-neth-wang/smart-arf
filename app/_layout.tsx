@@ -49,6 +49,9 @@ function RootLayoutNav() {
       router.replace('/login');
     } else if (user && user.profile.approved && inAuthRoute) {
       router.replace('/');
+    } else if (user && !user.profile.approved && !inAuthRoute) {
+      // logged in but not approved → send to /login (shows the pending screen)
+      router.replace('/login');
     }
   }, [user, loading, segments, router]);
 

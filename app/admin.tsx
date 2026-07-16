@@ -89,6 +89,7 @@ export default function AdminScreen() {
   const clinicName = (id: string) => clinics.find((c) => c.id === id)?.name ?? '—';
   const clinicOptions = clinics.map((c) => ({ label: c.name, value: c.id }));
   const clinicPlaceholder = clinicOptions.length ? 'Select…' : 'Loading clinics…';
+  const others = active.filter((u) => u.id !== user?.profile.id);
 
   const onAdd = async () => {
     if (busyAction) return;
@@ -204,7 +205,7 @@ export default function AdminScreen() {
           />
           <SelectField label="Clinic" value={clinicId} options={clinicOptions} placeholder={clinicPlaceholder} onChange={setClinicId} />
           <SelectField label="Role" value={role} options={ROLE_OPTS} onChange={(v) => setRole(v as Role)} />
-          <PrimaryButton title={busyAction === 'add' ? 'Adding…' : 'Add to Allowlist'} onPress={onAdd} />
+          <PrimaryButton title={busyAction === 'add' ? 'Adding…' : 'Add to Allowlist'} disabled={!email || !clinicId || !!busyAction} onPress={onAdd} />
         </View>
 
         {allowed.length === 0 ? (
@@ -265,26 +266,25 @@ export default function AdminScreen() {
         <Text style={styles.line}>
           Approved users with clinic access. Deactivate to revoke access — reversible (they return to Pending).
         </Text>
-        {active.filter((u) => u.id !== user?.profile.id).length === 0 ? (
+        {others.length === 0 ? (
           <Text style={styles.muted}>No other active users.</Text>
         ) : (
-          active
-            .filter((u) => u.id !== user?.profile.id)
-            .map((u) => (
-              <View key={u.id} style={styles.entry}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.entryEmail}>{u.email || u.displayName || 'Unknown'}</Text>
-                  <Text style={styles.entrySub}>
-                    {u.memberships.map((m) => `${clinicName(m.clinicId)} · ${m.role}`).join(', ') || 'no clinic'}
-                  </Text>
-                </View>
-                <PrimaryButton
-                  title={busyAction === `deactivate:${u.id}` ? '…' : 'Deactivate'}
-                  color={Colors.danger}
-                  onPress={() => onDeactivate(u.id)}
-                />
+          others.map((u) => (
+            <View key={u.id} style={styles.entry}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.entryEmail}>{u.email || u.displayName || 'Unknown'}</Text>
+                <Text style={styles.entrySub}>
+                  {u.memberships.map((m) => `${clinicName(m.clinicId)} · ${m.role}`).join(', ') || 'no clinic'}
+                </Text>
               </View>
-            ))
+              <PrimaryButton
+                title={busyAction === `deactivate:${u.id}` ? '…' : 'Deactivate'}
+                color={Colors.danger}
+                disabled={!!busyAction}
+                onPress={() => onDeactivate(u.id)}
+              />
+            </View>
+          ))
         )}
       </Card>
     </ScrollView>

@@ -12,6 +12,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Clinic, Encounter, Patient, PatientSummary, PatientWithHistory } from '@/lib/types';
 import { loadData, saveData } from '@/lib/storage';
 import { loadDataCloud, loadClinicsCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
+import { useAuth } from '@/state/AuthContext';
 
 /** 'local' (AsyncStorage, default) or 'supabase' (cloud, QA opt-in). */
 const DATA_BACKEND = (process.env.EXPO_PUBLIC_DATA_BACKEND ?? 'local') as 'local' | 'supabase';
@@ -45,6 +46,11 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Auth identity — the load effect keys off this so records re-fetch once the
+  // session resolves. null in local mode (no auth).
+  const { user } = useAuth();
+  const authId = user?.profile.id ?? null;
 
   // Mirror state into refs so sequential async mutations see the latest snapshot.
   const patientsRef = useRef<Patient[]>([]);
@@ -81,12 +87,24 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [syncRefs]);
 
+  // Load on mount (local) or when the auth identity is established/changes.
+  // Race fix: in cloud mode the provider can mount before the session resolves
+  // (fresh login), so the first load sees no auth → RLS returns nothing. This
+  // re-runs once `authId` is known, so clinics/patients populate correctly.
   useEffect(() => {
+    if (USE_CLOUD && !authId) {
+      setLoading(false); // logged out / pre-auth → nothing to load yet
+      return;
+    }
+    let active = true;
     (async () => {
       await refresh();
-      setLoading(false);
+      if (active) setLoading(false);
     })();
-  }, [refresh]);
+    return () => {
+      active = false;
+    };
+  }, [authId, refresh]);
 
   /** Persist the full snapshot to LOCAL storage (cloud uses targeted saves). */
   const persistLocal = useCallback(async (p: Patient[], e: Encounter[]) => {
