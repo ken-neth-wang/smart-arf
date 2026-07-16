@@ -1,13 +1,14 @@
 /**
- * PatientCard — list item for `.patient-card` in smart-arf-app.html (landing
- * history + records list). Shows a tier-colored initials dot, name, meta, and
- * the result line. Source of truth: smart-arf-app.html.
+ * PatientCard — list item for the records / home lists. Shows a tier-colored
+ * initials dot, name, meta, and the result line from the patient's most recent
+ * initial assessment encounter.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, tierColor } from '@/constants/theme';
-import type { PatientRecord } from '@/lib/types';
+import type { PatientSummary } from '@/state/RecordsContext';
+import { ageFromDateOfBirth } from '@/lib/types';
 import { fullName, initials, maskMRN } from '@/lib/format';
 
 const dotBg: Record<string, string> = {
@@ -19,30 +20,42 @@ const dotBg: Record<string, string> = {
   incomplete: Colors.gray,
 };
 
-export function PatientCard({ record, onPress }: { record: PatientRecord; onPress: () => void }) {
-  const dot = dotBg[record.level] ?? Colors.gray;
-  const name = fullName(record.firstName, record.lastName);
+export function PatientCard({ summary, onPress }: { summary: PatientSummary; onPress: () => void }) {
+  const { patient, latestInitial, followupCount } = summary;
+  const level = latestInitial?.level ?? null;
+  const dot = (level && dotBg[level]) ?? Colors.gray;
+  const name = fullName(patient.firstName, patient.lastName);
+  const age = ageFromDateOfBirth(patient.dateOfBirth);
+
   const meta = [
-    record.patientCode,
-    record.mrn ? `MRN: ${maskMRN(record.mrn)}` : '',
-    record.age ? `${record.age}y` : '',
-    record.gender,
-    record.date,
+    patient.referralCode,
+    patient.mrn ? `MRN ${maskMRN(patient.mrn)}` : '',
+    age ? `${age}y` : '',
+    patient.gender,
+    latestInitial?.date,
+    followupCount ? `${followupCount} follow-up${followupCount > 1 ? 's' : ''}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
 
+  const score = latestInitial?.score;
+  const resultLabel = latestInitial?.resultLabel;
+
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && { borderColor: Colors.primary }]} onPress={onPress}>
       <View style={[styles.dot, { backgroundColor: dot }]}>
-        <Text style={styles.dotText}>{initials(record.firstName, record.lastName)}</Text>
+        <Text style={styles.dotText}>{initials(patient.firstName, patient.lastName)}</Text>
       </View>
       <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>{name}{record.isTest ? '  (test)' : ''}</Text>
+        <Text style={styles.name} numberOfLines={1}>{name}{patient.isTest ? '  (test)' : ''}</Text>
         <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
-        <Text style={[styles.result, { color: tierColor[record.level] ?? Colors.gray }]}>
-          Score: {record.score} · {record.resultLabel}
-        </Text>
+        {score != null && resultLabel ? (
+          <Text style={[styles.result, { color: (level && tierColor[level]) ?? Colors.gray }]}>
+            Score {score} · {resultLabel}
+          </Text>
+        ) : (
+          <Text style={[styles.result, { color: Colors.gray }]}>No assessment yet</Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={18} color={Colors.border} />
     </Pressable>

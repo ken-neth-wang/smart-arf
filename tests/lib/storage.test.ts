@@ -14,46 +14,63 @@ jest.mock('@react-native-async-storage/async-storage', () => {
         store.delete(k);
         return Promise.resolve();
       }),
-      // exposed so tests can poke the backing store / reset between cases
       __store: store,
     },
   };
 });
 
 import AsyncStorageMock from '@react-native-async-storage/async-storage';
-import { emptyInputs, type PatientRecord } from '@/lib/types';
-import { loadRecords, saveRecords } from '@/lib/storage';
+import type { Encounter, Patient } from '@/lib/types';
+import { emptyInputs } from '@/lib/types';
+import { loadData, saveData } from '@/lib/storage';
 
 const store = (AsyncStorageMock as unknown as { __store: Map<string, string> }).__store;
 const getItem = AsyncStorageMock.getItem as jest.Mock;
 const setItem = AsyncStorageMock.setItem as jest.Mock;
 
-/** Minimal valid PatientRecord for storage tests (storage treats it as opaque JSON). */
-function mkRecord(id: number, over: Partial<PatientRecord> = {}): PatientRecord {
+function mkPatient(id: number, over: Partial<Patient> = {}): Patient {
   return {
-    id: String(id),
-    patientCode: `ARF-${id.toString().padStart(4, '0')}-AAAA`,
-    date: '22 Jun 2026, 14:30',
+    id: `pat-${id}`,
+    referralCode: `ARF-${id.toString().padStart(4, '0')}-AAAA`,
     firstName: 'Test',
     lastName: String(id),
     mrn: 'MRN' + id,
     phone1: '',
     phone2: '',
-    age: id,
+    dateOfBirth: '2015-01-01',
     gender: '',
     setting: '',
     isTest: false,
     inactive: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function mkEncounter(id: number, patientId: string, over: Partial<Encounter> = {}): Encounter {
+  return {
+    id: `enc-${id}`,
+    patientId,
+    type: 'initial',
+    date: '01 Jan 2026, 10:00',
+    inputs: emptyInputs(),
     score: id,
     level: 'unlikely',
     resultLabel: 'ARF Unlikely',
     range: 'Score 0–5',
     breakdown: [],
     actions: [],
-    referredTo: '',
-    followups: [],
-    inputs: emptyInputs(),
     includesLevelB: false,
+    confirmedDx: '',
+    finalDx: '',
+    bpgStatus: '',
+    echoFindings: '',
+    complications: '',
+    notes: '',
+    referredTo: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,
   };
 }
@@ -64,121 +81,106 @@ beforeEach(() => {
   setItem.mockClear();
 });
 
-/* ------------------------------------------------------------------ *
- * loadRecords
- * ------------------------------------------------------------------ */
-describe('loadRecords', () => {
-  it('returns [] when nothing is stored', async () => {
-    expect(await loadRecords()).toEqual([]);
-    expect(getItem).toHaveBeenCalledTimes(1);
+describe('loadData', () => {
+  it('returns empty patients+encounters when nothing is stored', async () => {
+    const data = await loadData();
+    expect(data).toEqual({ patients: [], encounters: [] });
   });
 
-  it('returns the stored array', async () => {
-    store.set('smartarf_records_v1', JSON.stringify([mkRecord(1), mkRecord(2)]));
-    const out = await loadRecords();
-    expect(out).toHaveLength(2);
-    expect(out[0].id).toBe('1');
-    expect(out[1].patientCode).toBe('ARF-0002-AAAA');
+  it('returns the stored patients + encounters', async () => {
+    const p = [mkPatient(1), mkPatient(2)];
+    const e = [mkEncounter(1, 'pat-1')];
+    store.set('smartarf_data_v1', JSON.stringify({ patients: p, encounters: e }));
+    const data = await loadData();
+    expect(data.patients).toHaveLength(2);
+    expect(data.encounters).toHaveLength(1);
+    expect(data.encounters[0].patientId).toBe('pat-1');
   });
 
   it('round-trips through save → load with full fidelity', async () => {
-    const original = [mkRecord(1, { score: 14, level: 'likely', includesLevelB: true })];
-    await saveRecords(original);
-    const loaded = await loadRecords();
-    expect(loaded).toEqual(original);
-    expect(loaded[0].inputs).toEqual(emptyInputs()); // nested object preserved
+    const patients = [mkPatient(1, { score: 0 } as never)];
+    const encounters = [mkEncounter(1, 'pat-1', { score: 14, level: 'likely', includesLevelB: true })];
+    await saveData({ patients, encounters });
+    const loaded = await loadData();
+    expect(loaded.encounters).toEqual(encounters);
+    expect(loaded.encounters[0].inputs).toEqual(emptyInputs());
   });
 
-  it('returns [] when stored JSON is not an array (object)', async () => {
-    store.set('smartarf_records_v1', JSON.stringify({ not: 'an array' }));
-    expect(await loadRecords()).toEqual([]);
+  it('returns empty when stored JSON is malformed (never throws)', async () => {
+    store.set('smartarf_data_v1', '{ broken !!!');
+    const data = await loadData();
+    expect(data).toEqual({ patients: [], encounters: [] });
   });
 
-  it('returns [] when stored JSON is a primitive', async () => {
-    store.set('smartarf_records_v1', JSON.stringify(42));
-    expect(await loadRecords()).toEqual([]);
+  it('returns empty when stored value is not an object', async () => {
+    store.set('smartarf_data_v1', JSON.stringify([1, 2, 3]));
+    const data = await loadData();
+    expect(data.patients).toEqual([]);
+    expect(data.encounters).toEqual([]);
   });
 
-  it('returns [] on malformed JSON (never throws)', async () => {
-    store.set('smartarf_records_v1', '{ broken json !!!');
-    expect(await loadRecords()).toEqual([]);
-  });
-
-  it('returns [] when the stored value is the literal string "null"', async () => {
-    store.set('smartarf_records_v1', 'null');
-    expect(await loadRecords()).toEqual([]);
+  it('coerces a missing encounters array to []', async () => {
+    store.set('smartarf_data_v1', JSON.stringify({ patients: [mkPatient(1)] }));
+    const data = await loadData();
+    expect(data.patients).toHaveLength(1);
+    expect(data.encounters).toEqual([]);
   });
 });
 
-/* ------------------------------------------------------------------ *
- * saveRecords
- * ------------------------------------------------------------------ */
-describe('saveRecords', () => {
-  it('writes to the documented key "smartarf_records_v1"', async () => {
-    await saveRecords([mkRecord(1)]);
-    expect(setItem).toHaveBeenCalledWith('smartarf_records_v1', expect.any(String));
+describe('saveData', () => {
+  it('writes to the versioned key "smartarf_data_v1"', async () => {
+    await saveData({ patients: [mkPatient(1)], encounters: [] });
+    expect(setItem).toHaveBeenCalledWith('smartarf_data_v1', expect.any(String));
   });
 
-  it('serializes the records as JSON', async () => {
-    const rec = mkRecord(1);
-    await saveRecords([rec]);
+  it('serializes patients + encounters as JSON', async () => {
+    const p = [mkPatient(1)];
+    const e = [mkEncounter(1, 'pat-1')];
+    await saveData({ patients: p, encounters: e });
     const [, value] = setItem.mock.calls[0];
-    expect(JSON.parse(value)).toEqual([rec]);
+    expect(JSON.parse(value)).toEqual({ patients: p, encounters: e });
   });
 
-  it('stores all records when at or below the 200 cap', async () => {
-    const at = Array.from({ length: 200 }, (_, i) => mkRecord(i));
-    await saveRecords(at);
-    const loaded = await loadRecords();
-    expect(loaded).toHaveLength(200);
+  it('HARD CAPS patients at 200 and cascades encounters', async () => {
+    const patients = Array.from({ length: 250 }, (_, i) => mkPatient(i));
+    // encounters attached to some dropped patients (ids 200..249)
+    const encounters = Array.from({ length: 10 }, (_, i) => mkEncounter(i, `pat-${220 + i}`));
+    await saveData({ patients, encounters });
+    const loaded = await loadData();
+    expect(loaded.patients).toHaveLength(200);
+    // encounters whose patient was dropped are removed too
+    expect(loaded.encounters).toHaveLength(0);
   });
 
-  it('HARD CAPS at 200 records (mirrors HTML: arr.length = 200)', async () => {
-    const over = Array.from({ length: 250 }, (_, i) => mkRecord(i));
-    await saveRecords(over);
-    const loaded = await loadRecords();
-    expect(loaded).toHaveLength(200);
-    // exactly 200, not 201
-    expect(loaded).toHaveLength(200);
+  it('cap keeps the FIRST 200 patients', async () => {
+    const patients = Array.from({ length: 203 }, (_, i) => mkPatient(i));
+    await saveData({ patients, encounters: [] });
+    const loaded = await loadData();
+    expect(loaded.patients[0].id).toBe('pat-0');
+    expect(loaded.patients[199].id).toBe('pat-199');
+    expect(loaded.patients.find((p) => p.id === 'pat-202')).toBeUndefined();
   });
 
-  it('cap keeps the FIRST 200 (callers prepend newest, so oldest tail drops)', async () => {
-    const over = Array.from({ length: 203 }, (_, i) => mkRecord(i));
-    await saveRecords(over);
-    const loaded = await loadRecords();
-    expect(loaded[0].id).toBe('0'); // first kept
-    expect(loaded[199].id).toBe('199'); // last kept
-    // ids 200, 201, 202 were dropped
-    expect(loaded.find((r) => r.id === '200')).toBeUndefined();
-    expect(loaded.find((r) => r.id === '202')).toBeUndefined();
+  it('does NOT mutate the input arrays when capping', async () => {
+    const input = Array.from({ length: 250 }, (_, i) => mkPatient(i));
+    await saveData({ patients: input, encounters: [] });
+    expect(input).toHaveLength(250);
   });
 
-  it('does NOT mutate the input array when capping', async () => {
-    const input = Array.from({ length: 250 }, (_, i) => mkRecord(i));
-    await saveRecords(input);
-    expect(input).toHaveLength(250); // caller's array untouched
-  });
-
-  it('stores an empty array cleanly', async () => {
-    await saveRecords([]);
-    expect(await loadRecords()).toEqual([]);
+  it('stores empty cleanly', async () => {
+    await saveData({ patients: [], encounters: [] });
+    const loaded = await loadData();
+    expect(loaded).toEqual({ patients: [], encounters: [] });
   });
 });
 
-/* ------------------------------------------------------------------ *
- * Cross-cutting
- * ------------------------------------------------------------------ */
-describe('storage key namespacing', () => {
-  it('uses a versioned key so a future schema bump will not collide', () => {
-    expect(setItem).not.toHaveBeenCalled();
-  });
-  it('read and write share the same key', async () => {
-    await saveRecords([mkRecord(1)]);
-    await loadRecords();
+describe('storage key', () => {
+  it('read and write share the same versioned key', async () => {
+    await saveData({ patients: [mkPatient(1)], encounters: [] });
+    await loadData();
     const writeKey = setItem.mock.calls[0][0];
-    const readKey = getItem.mock.calls[0][0];
-    expect(writeKey).toBe('smartarf_records_v1');
-    expect(readKey).toBe('smartarf_records_v1');
-    expect(writeKey).toBe(readKey);
+    const readKey = getItem.mock.calls[getItem.mock.calls.length - 1][0];
+    expect(writeKey).toBe('smartarf_data_v1');
+    expect(readKey).toBe('smartarf_data_v1');
   });
 });

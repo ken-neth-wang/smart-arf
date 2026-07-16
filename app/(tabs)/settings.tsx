@@ -10,7 +10,7 @@ import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
 
 export default function SettingsScreen() {
-  const { activeRecords, records, clearAll } = useRecords();
+  const { activePatients, patients, clearAll } = useRecords();
   const [busy, setBusy] = useState(false);
 
   const doErase = async () => {
@@ -60,12 +60,12 @@ export default function SettingsScreen() {
         <StepBadge>Local Data</StepBadge>
         <CardTitle>Records on this device</CardTitle>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Active assessments</Text>
-          <Text style={styles.rowVal}>{activeRecords.length}</Text>
+          <Text style={styles.rowLabel}>Active patients</Text>
+          <Text style={styles.rowVal}>{activePatients.length}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Total (incl. removed)</Text>
-          <Text style={styles.rowVal}>{records.length}</Text>
+          <Text style={styles.rowVal}>{patients.length}</Text>
         </View>
         <View style={{ marginTop: 10 }}>
           <PrimaryButton title={busy ? 'Erasing…' : 'Erase All Local Records'} color={Colors.danger} onPress={confirmClear} />

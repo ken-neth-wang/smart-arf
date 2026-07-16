@@ -15,7 +15,7 @@ import { PatientCard } from '@/components/PatientCard';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { activeRecords } = useRecords();
+  const { patientSummaries } = useRecords();
   const { reset } = useAssessment();
   const top = useSafeAreaInsets().top;
 
@@ -51,14 +51,14 @@ export default function HomeScreen() {
 
         <Text style={styles.heading}>Recent Assessments</Text>
 
-        {activeRecords.length === 0 ? (
+        {patientSummaries.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📋</Text>
             <Text style={styles.emptyText}>No assessments yet. Tap “New Patient Assessment” to begin.</Text>
           </View>
         ) : (
-          activeRecords.map((r) => (
-            <PatientCard key={r.id} record={r} onPress={() => router.push({ pathname: '/record', params: { id: r.id } })} />
+          patientSummaries.map((s) => (
+            <PatientCard key={s.patient.id} summary={s} onPress={() => router.push({ pathname: '/record', params: { id: s.patient.id } })} />
           ))
         )}
       </View>

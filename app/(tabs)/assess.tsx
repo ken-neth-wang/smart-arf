@@ -86,7 +86,6 @@ function Step1() {
   const next = () => {
     if (!patient.firstName.trim() || !patient.lastName.trim()) return setErr('First and last name are required.');
     if (!patient.phone1.trim()) return setErr('Primary phone is required.');
-    if (!patient.age || patient.age < 1) return setErr('Patient age is required.');
     setErr('');
     goStep(2);
   };
@@ -114,7 +113,7 @@ function Step1() {
 
       <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
 
-      <TextField label="Patient Age (years)" required value={patient.age == null ? '' : String(patient.age)} onChangeText={(v) => { const n = v ? Number(v) : null; setPatient({ age: n }); }} placeholder="e.g. 10" keyboardType="numeric" />
+      <TextField label="Date of Birth (YYYY-MM-DD)" value={patient.dateOfBirth ?? ''} onChangeText={(v) => setPatient({ dateOfBirth: v || null })} placeholder="e.g. 2015-06-15" />
 
       <SelectField label="Patient Gender" value={patient.gender} options={GENDER_OPTS} onChange={(v) => setPatient({ gender: v as Gender })} />
 
@@ -238,10 +237,10 @@ function Step3() {
 
         <PrimaryButton
           title="View Result & Recommendations"
-          onPress={() => {
-            // Mirrors goToResult() → renderLevelAResult(): persist the record
-            // (creates patient code) then show the Level A result.
-            commitLevelA();
+          onPress={async () => {
+            // Mirrors goToResult() → renderLevelAResult(): persist the patient
+            // + initial encounter (generates referral code) then show the result.
+            await commitLevelA();
             goStep(4);
           }}
         />
@@ -253,7 +252,7 @@ function Step3() {
 
 /* ============== STEP 4 — Level A Result ============== */
 function Step4() {
-  const { patient, inputs, scoreA, patientCode, activeRecordId, goStep, reset } = useAssessment();
+  const { patient, inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
   const records = useRecords();
   const router = useRouter();
   const interp = getInterp(scoreA);
@@ -262,9 +261,9 @@ function Step4() {
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
-    const existing = activeRecordId ? records.getById(activeRecordId) : undefined;
+    const existing = activeEncounterId ? records.encounters.find((e) => e.id === activeEncounterId) : undefined;
     setReferredTo(existing?.referredTo ?? '');
-  }, [activeRecordId, records]);
+  }, [activeEncounterId, records]);
 
   const rangeLine = `${patient.firstName} ${patient.lastName}${patient.mrn ? ' · MRN: ' + patient.mrn : ''}\nLevel A Score: ${scoreA} / 23  (${interp.range})`;
 
@@ -273,14 +272,14 @@ function Step4() {
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
       <ResultCard level={interp.level} score={scoreA} label={interp.label} rangeLine={rangeLine} actions={getActions(scoreA)} />
 
-      {patientCode ? <PatientCodeCard code={patientCode} step={4} /> : null}
+      {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
       <Card>
         <StepBadge>Referral</StepBadge>
         <CardTitle>Refer Patient (optional)</CardTitle>
         <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
         <TextField label="Referred To" value={referredTo} onChangeText={setReferredTo} placeholder="e.g. Khartoum Pediatric Hospital" />
-        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeRecordId) { records.setReferral(activeRecordId, referredTo); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
+        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeEncounterId) { records.setReferral(activeEncounterId, referredTo); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
       </Card>
 
       <ScoreBreakdown title="Level A Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />
@@ -357,7 +356,7 @@ function Step5() {
 
         <LiveScoreCard score={total} label="" subtitle="Combined Score (Level A + B)" />
 
-        <PrimaryButton title="View Final Result" onPress={() => { commitFinal(); goStep(6); }} />
+        <PrimaryButton title="View Final Result" onPress={async () => { await commitFinal(); goStep(6); }} />
         <SecondaryButton title="Back" onPress={() => goStep(4)} />
       </Card>
     </>
@@ -366,7 +365,7 @@ function Step5() {
 
 /* ============== STEP 6 — Final Result ============== */
 function Step6() {
-  const { patient, inputs, scoreA, scoreB, patientCode, reset } = useAssessment();
+  const { patient, inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
   const router = useRouter();
   const total = scoreA + scoreB;
   const interp = getInterp(total);
@@ -377,7 +376,7 @@ function Step6() {
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
       <ResultCard level={interp.level} score={total} label={interp.label} rangeLine={rangeLine} actions={getActions(total)} />
-      {patientCode ? <PatientCodeCard code={patientCode} step={6} /> : null}
+      {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       <Text style={styles.disclaimer}>⚕️ SMART-ARF is a clinical decision-support tool. All findings must be interpreted by a qualified healthcare provider. This tool does not replace clinical judgment or the Jones Criteria.</Text>

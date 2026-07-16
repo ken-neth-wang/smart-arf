@@ -1,6 +1,6 @@
 /**
- * Records — mirrors `#recordsScreen` in smart-arf-app.html: searchable list of
- * all assessments on this device. Source of truth: smart-arf-app.html.
+ * Records — searchable list of patients. Each card reflects the patient's
+ * latest initial assessment. Source of truth: smart-arf-app.html.
  */
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -13,25 +13,23 @@ import { Colors } from '@/constants/theme';
 
 export default function RecordsScreen() {
   const router = useRouter();
-  const { activeRecords } = useRecords();
+  const { patientSummaries } = useRecords();
   const [q, setQ] = useState('');
 
   const query = q.trim().toLowerCase();
-  // Mirrors HTML renderRecordsList (L2158): hay = firstName, lastName, mrn,
-  // patientCode, resultLabel.
   const filtered = query
-    ? activeRecords.filter((r) => {
-        const hay = `${r.firstName} ${r.lastName} ${r.mrn} ${r.patientCode} ${r.resultLabel}`.toLowerCase();
+    ? patientSummaries.filter((s) => {
+        const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
         return hay.includes(query);
       })
-    : activeRecords;
+    : patientSummaries;
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 40, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
       <Card>
         <StepBadge>Patient Records</StepBadge>
-        <CardTitle>All Assessments</CardTitle>
-        <CardSubtitle>Search and review every assessment saved on this device.</CardSubtitle>
+        <CardTitle>All Patients</CardTitle>
+        <CardSubtitle>Search and review every patient saved on this device.</CardSubtitle>
 
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={16} color={Colors.gray} />
@@ -47,11 +45,11 @@ export default function RecordsScreen() {
         {filtered.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>{query ? '🔍' : '📋'}</Text>
-            <Text style={styles.emptyText}>{query ? `No records match "${q.trim()}"` : 'No records yet.'}</Text>
+            <Text style={styles.emptyText}>{query ? `No patients match "${q.trim()}"` : 'No patients yet.'}</Text>
           </View>
         ) : (
-          filtered.map((r) => (
-            <PatientCard key={r.id} record={r} onPress={() => router.push({ pathname: '/record', params: { id: r.id } })} />
+          filtered.map((s) => (
+            <PatientCard key={s.patient.id} summary={s} onPress={() => router.push({ pathname: '/record', params: { id: s.patient.id } })} />
           ))
         )}
       </Card>

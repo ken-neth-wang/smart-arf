@@ -5,11 +5,11 @@
  */
 import React, { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, SelectField, StepBadge, TextField, type SelectOption } from '@/components/ui/primitives';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
-import type { BpgStatus, ConfirmedDx, FollowUp } from '@/lib/types';
+import type { BpgStatus, ConfirmedDx } from '@/lib/types';
 
 const DX_OPTS: SelectOption[] = [
   { label: 'ARF Confirmed', value: 'arf' },
@@ -29,9 +29,9 @@ function todayISO(): string {
 }
 
 export default function FollowupScreen() {
-  const { code, name } = useLocalSearchParams<{ code: string; name: string }>();
+  const { id, code, name } = useLocalSearchParams<{ id: string; code: string; name: string }>();
   const router = useRouter();
-  const { addFollowup, getByCode } = useRecords();
+  const { addFollowup } = useRecords();
 
   const [visitDate, setVisitDate] = useState(todayISO());
   const [confirmedDx, setConfirmedDx] = useState<ConfirmedDx>('');
@@ -44,8 +44,8 @@ export default function FollowupScreen() {
 
   const submit = async () => {
     if (!visitDate) return setErr('Visit date is required.');
-    const followup: FollowUp = {
-      id: 'fu-' + Date.now(),
+    if (!id) return setErr('Missing patient.');
+    await addFollowup(id, {
       visitDate,
       confirmedDx,
       finalDx,
@@ -53,16 +53,13 @@ export default function FollowupScreen() {
       echoFindings,
       complications,
       notes,
-      createdAt: new Date().toISOString(),
-    };
-    await addFollowup(code, followup);
-    const rec = getByCode(code);
-    if (rec) router.replace({ pathname: '/record', params: { id: rec.id } });
-    else router.back();
+    });
+    router.replace({ pathname: '/record', params: { id } });
   };
 
   return (
-    <Card style={styles.wrap}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <Card style={styles.wrap}>
       <StepBadge>Follow-Up Visit</StepBadge>
       <CardTitle>Record Follow-Up</CardTitle>
       <CardSubtitle>
@@ -87,7 +84,8 @@ export default function FollowupScreen() {
 
       <PrimaryButton title="Submit Follow-Up" onPress={submit} />
       <SecondaryButton title="Cancel" onPress={() => router.back()} />
-    </Card>
+      </Card>
+    </ScrollView>
   );
 }
 

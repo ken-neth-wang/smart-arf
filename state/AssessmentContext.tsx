@@ -1,14 +1,18 @@
 /**
- * AssessmentContext — the in-memory wizard state, mirroring the `S` object in
- * smart-arf-app.html. Drives Steps 1–6 and persists a PatientRecord (created on
- * entering Step 4, updated with Level B on entering Step 6).
+ * AssessmentContext — the in-memory wizard state. Drives Steps 1–6.
+ *
+ * Patient-anchored model: on commit, it upserts a Patient (reusing an existing
+ * one by MRN when possible) and upserts an 'initial' Encounter that carries the
+ * Jones-criteria scoring block. Follow-up encounters are created separately via
+ * RecordsContext.addFollowup().
  */
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
-import { emptyInputs, type AssessmentInputs, type Gender, type PatientRecord, type Setting } from '@/lib/types';
+import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
+import { emptyInputs } from '@/lib/types';
 import {
-  buildFullBreakdownArray,
   buildBreakdownArray,
+  buildFullBreakdownArray,
   calcLevelA,
   calcLevelB,
   generatePatientCode,
@@ -23,14 +27,14 @@ export interface PatientFields {
   mrn: string;
   phone1: string;
   phone2: string;
-  age: number | null;
+  dateOfBirth: string | null; // ISO YYYY-MM-DD; null = unknown
   gender: Gender;
   setting: Setting;
   isTest: boolean;
 }
 
 function emptyPatient(): PatientFields {
-  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', age: null, gender: '', setting: '', isTest: false };
+  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, gender: '', setting: '', isTest: false };
 }
 
 export type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -39,24 +43,20 @@ interface AssessmentContextValue {
   patient: PatientFields;
   inputs: AssessmentInputs;
   step: Step;
-  activeRecordId: string | null;
-  patientCode: string | null;
-  // patient setters
+  activePatientId: string | null;
+  activeEncounterId: string | null;
+  referralCode: string | null;
   setPatient: (patch: Partial<PatientFields>) => void;
-  // clinical input setters
   setInputs: (patch: Partial<AssessmentInputs>) => void;
-  // entry criteria helpers
   setEntry: (field: 'fever' | 'chorea' | 'altCause', value: boolean) => void;
-  // wizard control
   reset: () => void;
   goStep: (n: Step) => void;
-  /** Commit Level A → create/update record. Called when advancing Step 3 → 4. */
-  commitLevelA: () => PatientRecord;
-  /** Commit Level A + B → update record with combined score. Called Step 5 → 6. */
-  commitFinal: () => PatientRecord;
-  /** Rehydrate state from a saved record to resume/edit (jumps to Step 3). */
-  loadRecordForEdit: (record: PatientRecord) => void;
-  // derived (live)
+  /** Commit Level A → upsert patient + create/update initial encounter. */
+  commitLevelA: () => Promise<{ patientId: string; encounterId: string }>;
+  /** Commit Level A + B → update encounter with combined score. */
+  commitFinal: () => Promise<{ patientId: string; encounterId: string }>;
+  /** Rehydrate state from a saved patient + encounter to resume/edit (jumps to Step 3). */
+  loadRecordForEdit: (patient: Patient, encounter: Encounter) => void;
   scoreA: number;
   scoreB: number;
 }
@@ -68,8 +68,9 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const [patient, setPatientState] = useState<PatientFields>(emptyPatient);
   const [inputs, setInputsState] = useState<AssessmentInputs>(emptyInputs);
   const [step, setStep] = useState<Step>(1);
-  const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
-  const [patientCode, setPatientCode] = useState<string | null>(null);
+  const [activePatientId, setActivePatientId] = useState<string | null>(null);
+  const [activeEncounterId, setActiveEncounterId] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
 
   const setPatient = (patch: Partial<PatientFields>) => setPatientState((p) => ({ ...p, ...patch }));
   const setInputs = (patch: Partial<AssessmentInputs>) => setInputsState((i) => ({ ...i, ...patch }));
@@ -80,8 +81,9 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     setPatientState(emptyPatient());
     setInputsState(emptyInputs());
     setStep(1);
-    setActiveRecordId(null);
-    setPatientCode(null);
+    setActivePatientId(null);
+    setActiveEncounterId(null);
+    setReferralCode(null);
   };
 
   const goStep = (n: Step) => setStep(n);
@@ -89,101 +91,109 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const scoreA = useMemo(() => calcLevelA(inputs), [inputs]);
   const scoreB = useMemo(() => calcLevelB(inputs), [inputs]);
 
-  const commitLevelA = (): PatientRecord => {
-    // Set chorea flag from entry criteria (mirrors evalEntry()).
-    const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
-    setInputsState(inputsFinal);
-    const id = activeRecordId ?? Date.now().toString();
-    const code = patientCode ?? generatePatientCode();
-    const score = calcLevelA(inputsFinal);
-    const interp = getInterp(score);
-    const record: PatientRecord = {
+  /** Build the Patient object from wizard state, reusing existing ids when editing. */
+  const buildPatient = (): Patient => {
+    const id = activePatientId ?? 'pat-' + Date.now();
+    const code = referralCode ?? generatePatientCode();
+    const now = new Date().toISOString();
+    return {
       id,
-      patientCode: code,
-      date: formatRecordDate(),
+      referralCode: code,
       firstName: patient.firstName,
       lastName: patient.lastName,
       mrn: patient.mrn,
       phone1: patient.phone1,
       phone2: patient.phone2,
-      age: patient.age,
+      dateOfBirth: patient.dateOfBirth,
       gender: patient.gender,
       setting: patient.setting,
       isTest: patient.isTest,
       inactive: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  /** Build an 'initial' encounter from the scoring state. */
+  const buildEncounter = (patientId: string, withLevelB: boolean): Encounter => {
+    const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
+    const score = withLevelB ? calcLevelA(inputsFinal) + calcLevelB(inputsFinal) : calcLevelA(inputsFinal);
+    const interp = getInterp(score);
+    const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
+    const now = new Date().toISOString();
+    return {
+      id: activeEncounterId ?? 'enc-' + Date.now(),
+      patientId,
+      type: 'initial',
+      date: formatRecordDate(),
+      inputs: { ...inputsFinal },
       score,
       level: interp.level,
       resultLabel: interp.label,
       range: interp.range,
-      breakdown: buildBreakdownArray(inputsFinal),
+      breakdown,
       actions: getActions(score),
+      includesLevelB: withLevelB,
+      confirmedDx: '',
+      finalDx: '',
+      bpgStatus: '',
+      echoFindings: '',
+      complications: '',
+      notes: '',
       referredTo: '',
-      followups: [],
-      inputs: { ...inputsFinal },
-      includesLevelB: false,
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
-    setActiveRecordId(id);
-    setPatientCode(code);
-    void records.upsert(record);
-    return record;
   };
 
-  const commitFinal = (): PatientRecord => {
-    const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
-    const id = activeRecordId ?? Date.now().toString();
-    const code = patientCode ?? generatePatientCode();
-    const total = calcLevelA(inputsFinal) + calcLevelB(inputsFinal);
-    const interp = getInterp(total);
-    // Preserve existing followups/referral when updating.
-    const existing = records.getById(id);
-    const record: PatientRecord = {
-      id,
-      patientCode: code,
-      date: existing?.date ?? formatRecordDate(),
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      mrn: patient.mrn,
-      phone1: patient.phone1,
-      phone2: patient.phone2,
-      age: patient.age,
-      gender: patient.gender,
-      setting: patient.setting,
-      isTest: patient.isTest,
-      inactive: false,
-      score: total,
-      level: interp.level,
-      resultLabel: interp.label,
-      range: interp.range,
-      breakdown: buildFullBreakdownArray(inputsFinal),
-      actions: getActions(total),
-      referredTo: existing?.referredTo ?? '',
-      followups: existing?.followups ?? [],
-      inputs: { ...inputsFinal },
-      includesLevelB: true,
-      updatedAt: new Date().toISOString(),
-    };
-    setActiveRecordId(id);
-    setPatientCode(code);
-    void records.upsert(record);
-    return record;
+  const commit = async (withLevelB: boolean): Promise<{ patientId: string; encounterId: string }> => {
+    // Upsert the patient (RecordsContext dedups by MRN at the data layer when
+    // the UI lookup is not used).
+    const savedPatient = await records.upsertPatient(buildPatient());
+    // Preserve the patient's stable id/code + createdAt after dedup.
+    const encounter = buildEncounter(savedPatient.id, withLevelB);
+    // Preserve date + referral on edit (don't overwrite a prior encounter's date).
+    if (activeEncounterId) {
+      const existing = records.getEncountersForPatient(savedPatient.id).find((e) => e.id === activeEncounterId);
+      if (existing) {
+        encounter.id = existing.id;
+        encounter.date = existing.date;
+        encounter.referredTo = existing.referredTo;
+        encounter.confirmedDx = existing.confirmedDx;
+        encounter.finalDx = existing.finalDx;
+        encounter.bpgStatus = existing.bpgStatus;
+        encounter.echoFindings = existing.echoFindings;
+        encounter.complications = existing.complications;
+        encounter.notes = existing.notes;
+        encounter.createdAt = existing.createdAt;
+      }
+    }
+    await records.upsertEncounter(encounter);
+    setActivePatientId(savedPatient.id);
+    setActiveEncounterId(encounter.id);
+    setReferralCode(savedPatient.referralCode);
+    return { patientId: savedPatient.id, encounterId: encounter.id };
   };
 
-  const loadRecordForEdit = (record: PatientRecord) => {
+  const commitLevelA = () => commit(false);
+  const commitFinal = () => commit(true);
+
+  const loadRecordForEdit = (p: Patient, e: Encounter) => {
     setPatientState({
-      firstName: record.firstName,
-      lastName: record.lastName,
-      mrn: record.mrn,
-      phone1: record.phone1,
-      phone2: record.phone2,
-      age: record.age,
-      gender: record.gender,
-      setting: record.setting,
-      isTest: record.isTest,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      mrn: p.mrn,
+      phone1: p.phone1,
+      phone2: p.phone2,
+      dateOfBirth: p.dateOfBirth,
+      gender: p.gender,
+      setting: p.setting,
+      isTest: p.isTest,
     });
-    setInputsState({ ...emptyInputs(), ...record.inputs });
-    setActiveRecordId(record.id);
-    setPatientCode(record.patientCode);
+    setInputsState({ ...emptyInputs(), ...(e.inputs ?? emptyInputs()) });
+    setActivePatientId(p.id);
+    setActiveEncounterId(e.id);
+    setReferralCode(p.referralCode);
     setStep(3);
   };
 
@@ -191,8 +201,9 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     patient,
     inputs,
     step,
-    activeRecordId,
-    patientCode,
+    activePatientId,
+    activeEncounterId,
+    referralCode,
     setPatient,
     setInputs,
     setEntry,
@@ -213,3 +224,5 @@ export function useAssessment(): AssessmentContextValue {
   if (!ctx) throw new Error('useAssessment must be used within AssessmentProvider');
   return ctx;
 }
+
+export { ageFromDateOfBirth };

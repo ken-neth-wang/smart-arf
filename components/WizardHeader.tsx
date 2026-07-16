@@ -8,11 +8,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAssessment } from '@/state/AssessmentContext';
 import { Colors } from '@/constants/theme';
+import { ageFromDateOfBirth } from '@/lib/types';
 import { maskMRN, maskPhone } from '@/lib/format';
 
 export function WizardHeader() {
   const { patient, step, scoreA } = useAssessment();
   const top = useSafeAreaInsets().top;
+  const age = ageFromDateOfBirth(patient.dateOfBirth);
 
   const fill = step >= 6 ? 100 : ((step - 1) / 4) * 100;
   const label = step >= 6 ? 'Complete' : `Step ${step} of 5`;
@@ -21,7 +23,7 @@ export function WizardHeader() {
   const name = `${patient.firstName} ${patient.lastName}`.trim();
   const meta = [
     patient.mrn ? `MRN: ${maskMRN(patient.mrn)}` : '',
-    patient.age ? `${patient.age}y` : '',
+    age ? `${age}y` : '',
     patient.gender,
     patient.phone1 ? `📞 ${maskPhone(patient.phone1)}` : '',
   ]

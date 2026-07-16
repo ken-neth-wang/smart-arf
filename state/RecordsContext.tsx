@@ -1,37 +1,85 @@
 /**
- * RecordsContext — loads/saves PatientRecord[] to AsyncStorage and exposes
- * CRUD helpers used across the app. Mirrors the localStorage history operations
- * in smart-arf-app.html (loadHistory / saveHistory / saveRecord / softDeleteLocal).
+ * RecordsContext — loads/saves Patient + Encounter[] (patient-anchored model)
+ * and exposes CRUD helpers used across the app. Mirrors the persistence model
+ * in lib/storage.ts (local) / lib/sync.ts (cloud), swappable via env var.
+ *
+ * Implementation note: state is mirrored into refs (patientsRef / encountersRef)
+ * so that sequential async mutations within one flow (e.g. commit patient THEN
+ * commit encounter) always build on the latest snapshot. Without the refs, a
+ * stale closure would overwrite the just-added patient with the pre-call array.
  */
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import type { FollowUp, PatientRecord } from '@/lib/types';
-import { loadRecords, saveRecords } from '@/lib/storage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { Encounter, Patient, PatientWithHistory } from '@/lib/types';
+import { loadData, saveData } from '@/lib/storage';
+import { loadDataCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
+
+/** 'local' (AsyncStorage, default) or 'supabase' (cloud, QA opt-in). */
+const DATA_BACKEND = (process.env.EXPO_PUBLIC_DATA_BACKEND ?? 'local') as 'local' | 'supabase';
+const USE_CLOUD = DATA_BACKEND === 'supabase';
+
+export interface PatientSummary {
+  patient: Patient;
+  latestInitial?: Encounter;
+  encounterCount: number;
+  followupCount: number;
+}
 
 interface RecordsContextValue {
-  records: PatientRecord[];
+  patients: Patient[];
+  encounters: Encounter[];
   loading: boolean;
   refresh: () => Promise<void>;
-  upsert: (record: PatientRecord) => Promise<void>;
-  softDelete: (id: string, reason: PatientRecord['deleteReason'], notes?: string) => Promise<void>;
-  addFollowup: (patientCode: string, followup: FollowUp) => Promise<void>;
-  setReferral: (id: string, referredTo: string) => Promise<void>;
+  upsertPatient: (patient: Patient) => Promise<Patient>;
+  upsertEncounter: (encounter: Encounter) => Promise<void>;
+  addFollowup: (patientId: string, fields: import('@/lib/types').FollowUpFields) => Promise<void>;
+  softDelete: (patientId: string, reason: Patient['deleteReason'], notes?: string) => Promise<void>;
+  setReferral: (encounterId: string, referredTo: string) => Promise<void>;
   clearAll: () => Promise<void>;
-  /** Active (non-inactive) records, newest first — for lists. */
-  activeRecords: PatientRecord[];
-  getById: (id: string) => PatientRecord | undefined;
-  getByCode: (code: string) => PatientRecord | undefined;
+  activePatients: Patient[];
+  patientSummaries: PatientSummary[];
+  getPatientById: (id: string) => Patient | undefined;
+  getPatientByMRN: (mrn: string) => Patient | undefined;
+  getPatientByCode: (code: string) => Patient | undefined;
+  getPatientWithHistory: (id: string) => PatientWithHistory | undefined;
+  getEncountersForPatient: (patientId: string) => Encounter[];
 }
 
 const RecordsContext = createContext<RecordsContextValue | null>(null);
 
 export function RecordsProvider({ children }: { children: React.ReactNode }) {
-  const [records, setRecords] = useState<PatientRecord[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    const list = await loadRecords();
-    setRecords(list);
+  // Mirror state into refs so sequential async mutations see the latest snapshot.
+  const patientsRef = useRef<Patient[]>([]);
+  const encountersRef = useRef<Encounter[]>([]);
+
+  const syncRefs = useCallback((p: Patient[], e: Encounter[]) => {
+    patientsRef.current = p;
+    encountersRef.current = e;
   }, []);
+
+  useEffect(() => {
+    patientsRef.current = patients;
+  }, [patients]);
+  useEffect(() => {
+    encountersRef.current = encounters;
+  }, [encounters]);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = USE_CLOUD ? await loadDataCloud() : await loadData();
+      syncRefs(data.patients, data.encounters);
+      setPatients(data.patients);
+      setEncounters(data.encounters);
+    } catch (err) {
+      console.error('[records] load failed, falling back to empty:', err);
+      syncRefs([], []);
+      setPatients([]);
+      setEncounters([]);
+    }
+  }, [syncRefs]);
 
   useEffect(() => {
     (async () => {
@@ -40,75 +88,178 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refresh]);
 
-  const persist = useCallback(async (next: PatientRecord[]) => {
-    setRecords(next);
-    await saveRecords(next);
+  /** Persist the full snapshot to LOCAL storage (cloud uses targeted saves). */
+  const persistLocal = useCallback(async (p: Patient[], e: Encounter[]) => {
+    await saveData({ patients: p, encounters: e });
   }, []);
 
-  const upsert = useCallback(
-    async (record: PatientRecord) => {
-      const next = [...records];
-      const idx = next.findIndex((r) => r.id === record.id);
-      if (idx >= 0) next[idx] = record;
-      else next.unshift(record);
-      await persist(next);
+  const upsertPatient = useCallback(async (patient: Patient): Promise<Patient> => {
+    const prev = patientsRef.current;
+    let resolved = patient;
+    let next: Patient[];
+    const idx = prev.findIndex((p) => p.id === patient.id);
+    if (idx >= 0) {
+      resolved = { ...prev[idx], ...patient, referralCode: prev[idx].referralCode, createdAt: prev[idx].createdAt };
+      next = prev.map((p) => (p.id === resolved.id ? resolved : p));
+    } else if (patient.mrn) {
+      // MRN dedup at the data layer (UI lookup deferred — docs/data-model.md #8).
+      const existing = prev.find((p) => p.mrn === patient.mrn && !p.inactive);
+      if (existing) {
+        resolved = { ...existing, ...patient, id: existing.id, referralCode: existing.referralCode, createdAt: existing.createdAt };
+        next = prev.map((p) => (p.id === resolved.id ? resolved : p));
+      } else {
+        next = [patient, ...prev];
+      }
+    } else {
+      next = [patient, ...prev];
+    }
+    syncRefs(next, encountersRef.current);
+    setPatients(next);
+    if (USE_CLOUD) {
+      try {
+        await savePatientCloud(resolved);
+      } catch (err) {
+        console.error('[records] cloud patient save failed:', err);
+      }
+    } else {
+      await persistLocal(next, encountersRef.current);
+    }
+    return { ...resolved };
+  }, [persistLocal, syncRefs]);
+
+  const upsertEncounter = useCallback(async (encounter: Encounter) => {
+    const prev = encountersRef.current;
+    const idx = prev.findIndex((e) => e.id === encounter.id);
+    const next = idx >= 0 ? prev.map((e) => (e.id === encounter.id ? { ...e, ...encounter } : e)) : [encounter, ...prev];
+    syncRefs(patientsRef.current, next);
+    setEncounters(next);
+    if (USE_CLOUD) {
+      try {
+        await saveEncounterCloud(encounter);
+      } catch (err) {
+        console.error('[records] cloud encounter save failed:', err);
+      }
+    } else {
+      await persistLocal(patientsRef.current, next);
+    }
+  }, [persistLocal, syncRefs]);
+
+  const addFollowup = useCallback(
+    async (patientId: string, fields: import('@/lib/types').FollowUpFields) => {
+      const now = new Date().toISOString();
+      const encounter: Encounter = {
+        id: 'enc-' + Date.now(),
+        patientId,
+        type: 'followup',
+        date: fields.visitDate,
+        inputs: null, score: null, level: null, resultLabel: null, range: null, breakdown: null, actions: null,
+        includesLevelB: false,
+        confirmedDx: fields.confirmedDx,
+        finalDx: fields.finalDx,
+        bpgStatus: fields.bpgStatus,
+        echoFindings: fields.echoFindings,
+        complications: fields.complications,
+        notes: fields.notes,
+        referredTo: '',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await upsertEncounter(encounter);
     },
-    [records, persist],
+    [upsertEncounter],
   );
 
   const softDelete = useCallback(
-    async (id: string, reason: PatientRecord['deleteReason'], notes?: string) => {
-      const next = records.map((r) =>
-        r.id === id
-          ? { ...r, inactive: true, deleteReason: reason, deleteNotes: notes, deletedAt: new Date().toISOString(), deletedBy: 'local' }
-          : r,
+    async (patientId: string, reason: Patient['deleteReason'], notes?: string) => {
+      const ts = new Date().toISOString();
+      const prev = patientsRef.current;
+      const next = prev.map((p) =>
+        p.id === patientId
+          ? { ...p, inactive: true, deletedAt: ts, deletedBy: 'local', deleteReason: reason, deleteNotes: notes, updatedAt: ts }
+          : p,
       );
-      await persist(next);
+      syncRefs(next, encountersRef.current);
+      setPatients(next);
+      if (USE_CLOUD) {
+        const target = next.find((p) => p.id === patientId);
+        if (target) {
+          try { await savePatientCloud(target); } catch (err) { console.error('[records] cloud soft-delete failed:', err); }
+        }
+      } else {
+        await persistLocal(next, encountersRef.current);
+      }
     },
-    [records, persist],
-  );
-
-  const addFollowup = useCallback(
-    async (patientCode: string, followup: FollowUp) => {
-      const next = records.map((r) =>
-        r.patientCode === patientCode ? { ...r, followups: [...r.followups, followup] } : r,
-      );
-      await persist(next);
-    },
-    [records, persist],
+    [persistLocal, syncRefs],
   );
 
   const setReferral = useCallback(
-    async (id: string, referredTo: string) => {
-      const next = records.map((r) => (r.id === id ? { ...r, referredTo } : r));
-      await persist(next);
+    async (encounterId: string, referredTo: string) => {
+      const prev = encountersRef.current;
+      const ts = new Date().toISOString();
+      const next = prev.map((e) => (e.id === encounterId ? { ...e, referredTo, updatedAt: ts } : e));
+      syncRefs(patientsRef.current, next);
+      setEncounters(next);
+      if (USE_CLOUD) {
+        const target = next.find((e) => e.id === encounterId);
+        if (target) {
+          try { await saveEncounterCloud(target); } catch (err) { console.error('[records] cloud referral save failed:', err); }
+        }
+      } else {
+        await persistLocal(patientsRef.current, next);
+      }
     },
-    [records, persist],
+    [persistLocal, syncRefs],
   );
 
   const clearAll = useCallback(async () => {
-    await persist([]);
-  }, [persist]);
+    syncRefs([], []);
+    setPatients([]);
+    setEncounters([]);
+    if (!USE_CLOUD) await saveData({ patients: [], encounters: [] });
+    // Cloud clear is intentionally a no-op here (records persist server-side);
+    // use softDelete per-patient or the Supabase SQL Editor to wipe.
+  }, [syncRefs]);
 
-  const activeRecords = records.filter((r) => !r.inactive);
-  const getById = useCallback((id: string) => records.find((r) => r.id === id), [records]);
-  const getByCode = useCallback(
-    (code: string) => records.find((r) => r.patientCode.toUpperCase() === code.toUpperCase()),
-    [records],
+  const activePatients = useMemo(() => patients.filter((p) => !p.inactive), [patients]);
+
+  const patientSummaries = useMemo<PatientSummary[]>(() => {
+    return activePatients.map((patient) => {
+      const encs = encounters.filter((e) => e.patientId === patient.id);
+      const initials = encs.filter((e) => e.type === 'initial');
+      const followups = encs.filter((e) => e.type === 'followup');
+      const latestInitial = initials.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      return { patient, latestInitial, encounterCount: encs.length, followupCount: followups.length };
+    });
+  }, [activePatients, encounters]);
+
+  const getPatientById = useCallback((id: string) => patients.find((p) => p.id === id), [patients]);
+  const getPatientByMRN = useCallback(
+    (mrn: string) => (mrn ? patients.find((p) => p.mrn === mrn && !p.inactive) : undefined),
+    [patients],
+  );
+  const getPatientByCode = useCallback(
+    (code: string) => patients.find((p) => p.referralCode.toUpperCase() === code.toUpperCase()),
+    [patients],
+  );
+  const getEncountersForPatient = useCallback(
+    (patientId: string) =>
+      encounters.filter((e) => e.patientId === patientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [encounters],
+  );
+  const getPatientWithHistory = useCallback(
+    (id: string): PatientWithHistory | undefined => {
+      const patient = patients.find((p) => p.id === id);
+      if (!patient) return undefined;
+      return { patient, encounters: getEncountersForPatient(id) };
+    },
+    [patients, getEncountersForPatient],
   );
 
   const value: RecordsContextValue = {
-    records,
-    loading,
-    refresh,
-    upsert,
-    softDelete,
-    addFollowup,
-    setReferral,
-    clearAll,
-    activeRecords,
-    getById,
-    getByCode,
+    patients, encounters, loading, refresh,
+    upsertPatient, upsertEncounter, addFollowup, softDelete, setReferral, clearAll,
+    activePatients, patientSummaries,
+    getPatientById, getPatientByMRN, getPatientByCode, getPatientWithHistory, getEncountersForPatient,
   };
 
   return <RecordsContext.Provider value={value}>{children}</RecordsContext.Provider>;

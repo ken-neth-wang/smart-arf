@@ -1,7 +1,14 @@
 /**
- * Type definitions for SMART-ARF.
- * Field names mirror the data model in smart-arf-app.html (the `S` object,
- * PatientRecord, FollowUp). smart-arf-app.html is the source of truth.
+ * Type definitions for SMART-ARF (patient-anchored model).
+ *
+ * Two core entities:
+ *   - Patient   : one real human, stable across visits (the anchor)
+ *   - Encounter : any clinical visit (initial assessment OR follow-up)
+ *
+ * The clinical vocabulary (AssessmentInputs, BreakdownRow, TierLevel, etc.) is
+ * unchanged from the original port. smart-arf-app.html remains the source of
+ * truth for scoring values; the patient/encounter split is a clean data-model
+ * layer that the HTML's fused `PatientRecord` only approximated.
  */
 
 export type Gender = '' | 'male' | 'female' | 'other';
@@ -74,53 +81,125 @@ export type DeleteReason =
 export type ConfirmedDx = '' | 'arf' | 'not-arf' | 'uncertain';
 export type BpgStatus = '' | 'started' | 'continued' | 'stopped' | 'not-given';
 
-export interface FollowUp {
-  id: string;
-  visitDate: string; // YYYY-MM-DD
-  confirmedDx: ConfirmedDx;
-  finalDx: string;
-  bpgStatus: BpgStatus;
-  echoFindings: string;
-  complications: string;
-  notes: string;
-  createdAt: string; // ISO
-}
-
 export interface BreakdownRow {
   label: string;
   points: number | null;
   kind?: 'item' | 'sub' | 'subtotal' | 'total' | 'na' | 'empty';
 }
 
-/** A saved patient assessment record. Mirrors the object saved in HTML saveRecord(). */
-export interface PatientRecord {
+/* ─────────────────────────────────────────────────────────────────── *
+ * Patient — the stable anchor
+ * ─────────────────────────────────────────────────────────────────── */
+
+/** The stable patient identity. Created once, reused across all visits. */
+export interface Patient {
   id: string;
-  patientCode: string;
-  date: string; // "DD Mon YYYY, HH:MM"
+  referralCode: string; // ARF-XXXX-XXXX — STABLE, unique per human
   firstName: string;
   lastName: string;
-  mrn: string;
+  mrn: string; // unique within deployment (single-country scope); '' if unknown
   phone1: string;
   phone2: string;
-  age: number | null;
+  dateOfBirth: string | null; // ISO date (YYYY-MM-DD); null = age unknown
   gender: Gender;
-  setting: Setting;
+  setting: Setting; // endemic/non-endemic — a patient attribute
   isTest: boolean;
+  // soft-delete (patient-level: removes the whole person + their encounters)
   inactive: boolean;
-  score: number;
-  level: TierLevel;
-  resultLabel: string;
-  range: string;
-  breakdown: BreakdownRow[];
-  actions: string[]; // plain text
-  referredTo: string;
-  followups: FollowUp[];
-  inputs: AssessmentInputs;
-  includesLevelB: boolean;
-  updatedAt?: string;
-  // soft-delete metadata (field names mirror HTML softDeleteLocal L2580–2586)
-  deletedBy?: string;
   deletedAt?: string;
+  deletedBy?: string;
   deleteReason?: DeleteReason;
   deleteNotes?: string;
+  createdAt: string; // ISO — when first registered
+  updatedAt: string; // ISO
 }
+
+/** Helper: compute display age from DOB (display-only, never stored as age). */
+export function ageFromDateOfBirth(dob: string | null, now: Date = new Date()): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 ? age : null;
+}
+
+/* ─────────────────────────────────────────────────────────────────── *
+ * Encounter — any clinical visit
+ * ─────────────────────────────────────────────────────────────────── */
+
+export type EncounterType = 'initial' | 'followup';
+
+/**
+ * Any clinical visit. An 'initial' encounter is a full Jones assessment; a
+ * 'followup' is a return visit that MAY include a re-score. The `type` labels
+ * the clinician's intent; the nullable blocks below carry what was actually done.
+ *
+ *   Scoring block (inputs/score/level/...) → null when this encounter did not
+ *   include a Jones assessment (pure followup with no re-score).
+ *
+ *   Outcome block (confirmedDx/bpgStatus/...) → empty string when not assessed.
+ */
+export interface Encounter {
+  id: string;
+  patientId: string; // FK → Patient.id
+  type: EncounterType;
+
+  // When this encounter happened
+  date: string; // "DD Mon YYYY, HH:MM" (initial) / YYYY-MM-DD (followup)
+
+  // ─── Scoring block ───────────────────────────────────────────────
+  inputs: AssessmentInputs | null;
+  score: number | null;
+  level: TierLevel | null;
+  resultLabel: string | null;
+  range: string | null;
+  breakdown: BreakdownRow[] | null;
+  actions: string[] | null;
+  includesLevelB: boolean;
+
+  // ─── Outcome block ───────────────────────────────────────────────
+  confirmedDx: ConfirmedDx; // '' if not assessed
+  finalDx: string;
+  bpgStatus: BpgStatus;
+  echoFindings: string;
+  complications: string;
+  notes: string;
+
+  // ─── Referral (outcome of any encounter) ─────────────────────────
+  referredTo: string;
+
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
+/** Convenience: a patient + their encounter timeline (newest first). */
+export interface PatientWithHistory {
+  patient: Patient;
+  encounters: Encounter[];
+}
+
+/** The lighter fields a follow-up form collects (outcome block). */
+export interface FollowUpFields {
+  visitDate: string;
+  confirmedDx: ConfirmedDx;
+  finalDx: string;
+  bpgStatus: BpgStatus;
+  echoFindings: string;
+  complications: string;
+  notes: string;
+}
+
+export interface PatientSummary {
+  patient: Patient;
+  latestInitial?: Encounter; // newest 'initial' encounter, if any
+  encounterCount: number;
+  followupCount: number;
+}
+
+/* ─────────────────────────────────────────────────────────────────── *
+ * Legacy compat — re-export the old fused shape ONLY for scoring.ts
+ * internals and migration of in-flight wizard state. New code should use
+ * Patient + Encounter directly.
+ * ─────────────────────────────────────────────────────────────────── */
