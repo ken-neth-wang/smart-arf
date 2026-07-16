@@ -36,6 +36,11 @@ export function getSupabase(): SupabaseClient {
   if (!isSupabaseConfigured) {
     throw new Error('Supabase is not configured — set EXPO_PUBLIC_SUPABASE_URL and anon key.');
   }
-  _client = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
+  _client = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+    auth: {
+      persistSession: true, // keep the session across reloads. Web: localStorage (auto-detected). Native: add an AsyncStorage storage adapter in Phase 2b.
+      autoRefreshToken: true,
+    },
+  });
   return _client;
 }

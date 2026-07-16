@@ -9,31 +9,25 @@
  * stale closure would overwrite the just-added patient with the pre-call array.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { Encounter, Patient, PatientWithHistory } from '@/lib/types';
+import type { Clinic, Encounter, Patient, PatientSummary, PatientWithHistory } from '@/lib/types';
 import { loadData, saveData } from '@/lib/storage';
-import { loadDataCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
+import { loadDataCloud, loadClinicsCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
 
 /** 'local' (AsyncStorage, default) or 'supabase' (cloud, QA opt-in). */
 const DATA_BACKEND = (process.env.EXPO_PUBLIC_DATA_BACKEND ?? 'local') as 'local' | 'supabase';
 const USE_CLOUD = DATA_BACKEND === 'supabase';
 
-export interface PatientSummary {
-  patient: Patient;
-  latestInitial?: Encounter;
-  encounterCount: number;
-  followupCount: number;
-}
-
 interface RecordsContextValue {
   patients: Patient[];
   encounters: Encounter[];
+  clinics: Clinic[];
   loading: boolean;
   refresh: () => Promise<void>;
   upsertPatient: (patient: Patient) => Promise<Patient>;
   upsertEncounter: (encounter: Encounter) => Promise<void>;
   addFollowup: (patientId: string, fields: import('@/lib/types').FollowUpFields) => Promise<void>;
   softDelete: (patientId: string, reason: Patient['deleteReason'], notes?: string) => Promise<void>;
-  setReferral: (encounterId: string, referredTo: string) => Promise<void>;
+  setReferral: (encounterId: string, referredTo: string, referredToClinicId: string | null) => Promise<void>;
   clearAll: () => Promise<void>;
   activePatients: Patient[];
   patientSummaries: PatientSummary[];
@@ -48,6 +42,7 @@ const RecordsContext = createContext<RecordsContextValue | null>(null);
 
 export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,15 +64,20 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const data = USE_CLOUD ? await loadDataCloud() : await loadData();
+      const [data, clinicList] = await Promise.all([
+        USE_CLOUD ? loadDataCloud() : loadData(),
+        USE_CLOUD ? loadClinicsCloud() : Promise.resolve([]),
+      ]);
       syncRefs(data.patients, data.encounters);
       setPatients(data.patients);
       setEncounters(data.encounters);
+      setClinics(clinicList);
     } catch (err) {
       console.error('[records] load failed, falling back to empty:', err);
       syncRefs([], []);
       setPatients([]);
       setEncounters([]);
+      setClinics([]);
     }
   }, [syncRefs]);
 
@@ -193,10 +193,10 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setReferral = useCallback(
-    async (encounterId: string, referredTo: string) => {
+    async (encounterId: string, referredTo: string, referredToClinicId: string | null) => {
       const prev = encountersRef.current;
       const ts = new Date().toISOString();
-      const next = prev.map((e) => (e.id === encounterId ? { ...e, referredTo, updatedAt: ts } : e));
+      const next = prev.map((e) => (e.id === encounterId ? { ...e, referredTo, referredToClinicId, updatedAt: ts } : e));
       syncRefs(patientsRef.current, next);
       setEncounters(next);
       if (USE_CLOUD) {
@@ -256,7 +256,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value: RecordsContextValue = {
-    patients, encounters, loading, refresh,
+    patients, encounters, clinics, loading, refresh,
     upsertPatient, upsertEncounter, addFollowup, softDelete, setReferral, clearAll,
     activePatients, patientSummaries,
     getPatientById, getPatientByMRN, getPatientByCode, getPatientWithHistory, getEncountersForPatient,

@@ -104,6 +104,9 @@ export interface Patient {
   gender: Gender;
   setting: Setting; // endemic/non-endemic — a patient attribute
   isTest: boolean;
+  // clinic ownership — which clinic owns this record (RLS scopes on this).
+  // null in local mode or for legacy data.
+  clinicId?: string | null;
   // soft-delete (patient-level: removes the whole person + their encounters)
   inactive: boolean;
   deletedAt?: string;
@@ -141,6 +144,12 @@ export type EncounterType = 'initial' | 'followup';
  *
  *   Outcome block (confirmedDx/bpgStatus/...) → empty string when not assessed.
  */
+export interface Clinic {
+  id: string;
+  name: string;
+  type: string; // 'primary' | 'secondary' | 'tertiary' (free text)
+}
+
 export interface Encounter {
   id: string;
   patientId: string; // FK → Patient.id
@@ -169,6 +178,9 @@ export interface Encounter {
 
   // ─── Referral (outcome of any encounter) ─────────────────────────
   referredTo: string;
+  // FK → the clinic this patient is referred TO. Drives the "referrals in"
+  // RLS (Clinic B sees patients referred to it). null = no clinic referral.
+  referredToClinicId?: string | null;
 
   createdAt: string; // ISO
   updatedAt: string; // ISO

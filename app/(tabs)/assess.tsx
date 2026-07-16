@@ -257,12 +257,14 @@ function Step4() {
   const router = useRouter();
   const interp = getInterp(scoreA);
   const choreaPositive = inputs.chorea === true;
-  const [referredTo, setReferredTo] = useState('');
+  const [referredToClinicId, setReferredToClinicId] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
+  const clinics = records.clinics;
+  const clinicOptions = [{ label: '(no referral)', value: '' }, ...clinics.map((c) => ({ label: c.name, value: c.id }))];
 
   useEffect(() => {
     const existing = activeEncounterId ? records.encounters.find((e) => e.id === activeEncounterId) : undefined;
-    setReferredTo(existing?.referredTo ?? '');
+    setReferredToClinicId(existing?.referredToClinicId ?? '');
   }, [activeEncounterId, records]);
 
   const rangeLine = `${patient.firstName} ${patient.lastName}${patient.mrn ? ' · MRN: ' + patient.mrn : ''}\nLevel A Score: ${scoreA} / 23  (${interp.range})`;
@@ -278,8 +280,8 @@ function Step4() {
         <StepBadge>Referral</StepBadge>
         <CardTitle>Refer Patient (optional)</CardTitle>
         <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
-        <TextField label="Referred To" value={referredTo} onChangeText={setReferredTo} placeholder="e.g. Khartoum Pediatric Hospital" />
-        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeEncounterId) { records.setReferral(activeEncounterId, referredTo); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
+        <SelectField label="Referred To (clinic)" value={referredToClinicId} options={clinicOptions} onChange={setReferredToClinicId} />
+        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeEncounterId) { const c = clinics.find((x) => x.id === referredToClinicId); records.setReferral(activeEncounterId, c?.name ?? '', referredToClinicId || null); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
       </Card>
 
       <ScoreBreakdown title="Level A Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />

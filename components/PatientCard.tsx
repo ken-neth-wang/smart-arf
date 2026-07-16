@@ -7,8 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, tierColor } from '@/constants/theme';
-import type { PatientSummary } from '@/state/RecordsContext';
-import { ageFromDateOfBirth } from '@/lib/types';
+import { ageFromDateOfBirth, type PatientSummary } from '@/lib/types';
 import { fullName, initials, maskMRN } from '@/lib/format';
 
 const dotBg: Record<string, string> = {

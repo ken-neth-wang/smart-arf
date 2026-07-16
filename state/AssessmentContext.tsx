@@ -8,6 +8,7 @@
  */
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
+import { useAuth } from './AuthContext';
 import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
 import { emptyInputs } from '@/lib/types';
 import {
@@ -65,6 +66,7 @@ const AssessmentContext = createContext<AssessmentContextValue | null>(null);
 
 export function AssessmentProvider({ children }: { children: React.ReactNode }) {
   const records = useRecords();
+  const { user } = useAuth();
   const [patient, setPatientState] = useState<PatientFields>(emptyPatient);
   const [inputs, setInputsState] = useState<AssessmentInputs>(emptyInputs);
   const [step, setStep] = useState<Step>(1);
@@ -108,6 +110,9 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       gender: patient.gender,
       setting: patient.setting,
       isTest: patient.isTest,
+      // Assign the patient to the current user's clinic so RLS can see it.
+      // (For users with >1 clinic, takes the first — a picker is deferred.)
+      clinicId: user?.memberships[0]?.clinicId ?? null,
       inactive: false,
       createdAt: now,
       updatedAt: now,

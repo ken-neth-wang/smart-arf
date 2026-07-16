@@ -14,7 +14,9 @@ import type {
   EncounterType,
   Patient,
   TierLevel,
+  Clinic,
 } from './types';
+import type { ClinicMembership, UserProfile } from './permissions';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 // ─────────────────────────────────────────────────────────────
@@ -34,6 +36,7 @@ export interface PatientRow {
   setting: Patient['setting'];
   is_test: boolean;
   inactive: boolean;
+  clinic_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -62,6 +65,7 @@ export interface EncounterRow {
   complications: string;
   notes: string;
   referred_to: string;
+  referred_to_clinic_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +88,7 @@ export function rowToPatient(p: PatientRow): Patient {
     setting: p.setting,
     isTest: p.is_test,
     inactive: p.inactive,
+    clinicId: p.clinic_id ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     deletedAt: p.deleted_at ?? undefined,
@@ -107,6 +112,7 @@ export function patientToRow(p: Patient): PatientRow {
     setting: p.setting,
     is_test: p.isTest,
     inactive: p.inactive,
+    clinic_id: p.clinicId ?? null,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
     deleted_at: p.deletedAt ?? null,
@@ -141,6 +147,7 @@ export function rowToEncounter(e: EncounterRow): Encounter {
     complications: e.complications,
     notes: e.notes,
     referredTo: e.referred_to,
+    referredToClinicId: e.referred_to_clinic_id ?? null,
     createdAt: e.created_at,
     updatedAt: e.updated_at,
   };
@@ -167,6 +174,7 @@ export function encounterToRow(e: Encounter): EncounterRow {
     complications: e.complications,
     notes: e.notes,
     referred_to: e.referredTo,
+    referred_to_clinic_id: e.referredToClinicId ?? null,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
   };
@@ -210,28 +218,75 @@ export async function saveEncounterCloud(encounter: Encounter): Promise<void> {
   if (error) throw error;
 }
 
-/** Hard-delete a patient + (via cascade) their encounters. */
-export async function deletePatientCloud(id: string): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const { error } = await getSupabase().from('patients').delete().eq('id', id);
-  if (error) throw error;
+// ─────────────────────────────────────────────────────────────
+// Profile + membership mappers (auth)
+// ─────────────────────────────────────────────────────────────
+
+export interface ProfileRow {
+  id: string;
+  display_name: string;
+  approved: boolean;
+  created_at: string;
 }
 
-/** Hard-delete a single encounter. */
-export async function deleteEncounterCloud(id: string): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const { error } = await getSupabase().from('encounters').delete().eq('id', id);
-  if (error) throw error;
+export interface MembershipRow {
+  id: string;
+  user_id: string;
+  clinic_id: string;
+  role: 'health_worker' | 'admin';
+  created_at: string;
 }
 
-/** Look up a single patient by referral code. Mirrors the HTML /api/lookup/:code. */
-export async function lookupByCodeCloud(code: string): Promise<Patient | null> {
+export function rowToProfile(r: ProfileRow): UserProfile {
+  return { id: r.id, displayName: r.display_name, approved: r.approved };
+}
+
+export function rowToMembership(r: MembershipRow): ClinicMembership {
+  return { userId: r.user_id, clinicId: r.clinic_id, role: r.role };
+}
+
+/** Load a user's profile (returns null if not found / cloud disabled). */
+export async function loadProfileCloud(userId: string): Promise<UserProfile | null> {
   if (!isSupabaseConfigured) return null;
   const { data, error } = await getSupabase()
-    .from('patients')
+    .from('profiles')
     .select('*')
-    .eq('referral_code', code.toUpperCase().replace(/\s+/g, ''))
+    .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
-  return data ? rowToPatient(data as PatientRow) : null;
+  return data ? rowToProfile(data as ProfileRow) : null;
+}
+
+/** Load a user's clinic memberships. */
+export async function loadMembershipsCloud(userId: string): Promise<ClinicMembership[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await getSupabase()
+    .from('clinic_memberships')
+    .select('*')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return ((data as MembershipRow[]) ?? []).map(rowToMembership);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Clinic mapper + loader (for the referral picker)
+// ─────────────────────────────────────────────────────────────
+
+export interface ClinicRow {
+  id: string;
+  name: string;
+  type: string;
+  created_at: string;
+}
+
+export function rowToClinic(r: ClinicRow): Clinic {
+  return { id: r.id, name: r.name, type: r.type };
+}
+
+/** Load all clinics (RLS: any approved user can read). */
+export async function loadClinicsCloud(): Promise<Clinic[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await getSupabase().from('clinics').select('*').order('name');
+  if (error) throw error;
+  return ((data as ClinicRow[]) ?? []).map(rowToClinic);
 }

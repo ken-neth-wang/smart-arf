@@ -5,12 +5,17 @@
  */
 import React, { useState } from 'react';
 import { Alert as RNAlert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Card, CardTitle, PrimaryButton, StepBadge } from '@/components/ui/primitives';
+import { useRouter } from 'expo-router';
+import { Card, CardTitle, PrimaryButton, SecondaryButton, StepBadge } from '@/components/ui/primitives';
 import { useRecords } from '@/state/RecordsContext';
+import { useAuth } from '@/state/AuthContext';
+import { isAdmin } from '@/lib/permissions';
 import { Colors } from '@/constants/theme';
 
 export default function SettingsScreen() {
-  const { activePatients, patients, clearAll } = useRecords();
+  const { activePatients, patients, clinics, clearAll } = useRecords();
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   const doErase = async () => {
@@ -44,6 +49,35 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 40, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+      {user ? (
+        <Card>
+          <StepBadge>Account</StepBadge>
+          <CardTitle>{user.profile.displayName || 'Signed in'}</CardTitle>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Role</Text>
+            <Text style={styles.rowVal}>{user.memberships[0]?.role ?? '—'}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Clinic</Text>
+            <Text style={styles.rowVal}>{clinics.find((c) => c.id === user.memberships[0]?.clinicId)?.name ?? '—'}</Text>
+          </View>
+          <View style={{ marginTop: 10 }}>
+            <SecondaryButton title="Sign Out" onPress={signOut} />
+          </View>
+        </Card>
+      ) : null}
+
+      {user && isAdmin(user) ? (
+        <Card>
+          <StepBadge>Administration</StepBadge>
+          <CardTitle>User Management</CardTitle>
+          <Text style={styles.line}>Pre-approve emails and approve pending sign-ups.</Text>
+          <View style={{ marginTop: 10 }}>
+            <SecondaryButton title="Admin Console →" onPress={() => router.push('/admin')} />
+          </View>
+        </Card>
+      ) : null}
+
       <Card>
         <StepBadge>About</StepBadge>
         <CardTitle>SMART-ARF</CardTitle>

@@ -86,8 +86,9 @@ interface TextFieldProps {
   required?: boolean;
   hint?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  secureTextEntry?: boolean;
 }
-export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize }: TextFieldProps) {
+export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize, secureTextEntry }: TextFieldProps) {
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <FieldLabel required={required}>{label}</FieldLabel> : null}
@@ -99,6 +100,7 @@ export function TextField({ value, onChangeText, placeholder, keyboardType, mult
         keyboardType={keyboardType}
         multiline={multiline}
         autoCapitalize={autoCapitalize}
+        secureTextEntry={secureTextEntry}
         style={[inputStyles.input, style]}
       />
       {hint ? <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: -10, marginBottom: 16 }}>{hint}</Text> : null}
@@ -356,17 +358,52 @@ const naStyles = StyleSheet.create({
 });
 
 /* ---------------- Buttons ---------------- */
-export function PrimaryButton({ title, onPress, color = Colors.primary }: { title: string; onPress: () => void; color?: string }) {
+export function PrimaryButton({
+  title,
+  onPress,
+  color = Colors.primary,
+  disabled = false,
+}: {
+  title: string;
+  onPress: () => void;
+  color?: string;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable style={({ pressed }) => [btnStyles.primary, { backgroundColor: color }, pressed && { opacity: 0.9 }]} onPress={onPress}>
+    <Pressable
+      disabled={disabled}
+      style={({ pressed }) => [
+        btnStyles.primary,
+        { backgroundColor: disabled ? Colors.gray : color },
+        pressed && !disabled && { opacity: 0.9 },
+        disabled && { opacity: 0.5 },
+      ]}
+      onPress={onPress}
+    >
       <Text style={btnStyles.primaryText}>{title}</Text>
     </Pressable>
   );
 }
-export function SecondaryButton({ title, onPress }: { title: string; onPress: () => void }) {
+export function SecondaryButton({
+  title,
+  onPress,
+  disabled = false,
+}: {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable style={({ pressed }) => [btnStyles.secondary, pressed && { backgroundColor: Colors.border }]} onPress={onPress}>
-      <Text style={btnStyles.secondaryText}>{title}</Text>
+    <Pressable
+      disabled={disabled}
+      style={({ pressed }) => [
+        btnStyles.secondary,
+        pressed && !disabled && { backgroundColor: Colors.border },
+        disabled && { opacity: 0.5 },
+      ]}
+      onPress={onPress}
+    >
+      <Text style={[btnStyles.secondaryText, disabled && { color: Colors.gray }]}>{title}</Text>
     </Pressable>
   );
 }

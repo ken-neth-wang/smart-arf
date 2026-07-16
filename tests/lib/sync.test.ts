@@ -9,10 +9,16 @@ import { emptyInputs, type Encounter, type Patient } from '@/lib/types';
 import {
   encounterToRow,
   patientToRow,
+  rowToClinic,
   rowToEncounter,
+  rowToMembership,
   rowToPatient,
+  rowToProfile,
+  type ClinicRow,
   type EncounterRow,
+  type MembershipRow,
   type PatientRow,
+  type ProfileRow,
 } from '@/lib/sync';
 
 /* ------------------------------------------------------------------ *
@@ -33,6 +39,7 @@ function mkPatient(over: Partial<Patient> = {}): Patient {
     setting: 'endemic',
     isTest: false,
     inactive: false,
+    clinicId: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-07-01T10:00:00.000Z',
     ...over,
@@ -60,6 +67,7 @@ function mkEncounter(over: Partial<Encounter> = {}): Encounter {
     complications: '',
     notes: '',
     referredTo: 'Khartoum Pediatric Hospital',
+    referredToClinicId: null,
     createdAt: '2026-06-22T14:30:00.000Z',
     updatedAt: '2026-06-22T14:30:00.000Z',
     ...over,
@@ -127,6 +135,7 @@ describe('rowToPatient (PatientRow → Patient)', () => {
       setting: 'endemic',
       is_test: false,
       inactive: false,
+      clinic_id: null,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-07-01T10:00:00.000Z',
       deleted_at: null,
@@ -231,6 +240,7 @@ describe('field-name regression guards', () => {
     const expected = [
       'id', 'referral_code', 'first_name', 'last_name', 'mrn', 'phone1', 'phone2',
       'date_of_birth', 'gender', 'setting', 'is_test', 'inactive',
+      'clinic_id',
       'created_at', 'updated_at', 'deleted_at', 'deleted_by', 'delete_reason', 'delete_notes',
     ].sort();
     expect(keys).toEqual(expected);
@@ -242,7 +252,7 @@ describe('field-name regression guards', () => {
       'id', 'patient_id', 'type', 'date', 'inputs', 'score', 'level',
       'result_label', 'range', 'breakdown', 'actions', 'includes_level_b',
       'confirmed_dx', 'final_dx', 'bpg_status', 'echo_findings',
-      'complications', 'notes', 'referred_to', 'created_at', 'updated_at',
+      'complications', 'notes', 'referred_to', 'referred_to_clinic_id', 'created_at', 'updated_at',
     ].sort();
     expect(keys).toEqual(expected);
   });
@@ -259,5 +269,51 @@ describe('field-name regression guards', () => {
     expect(back.resultLabel).toBe('CUSTOM');
     expect(back.referredTo).toBe('CUSTOM REF');
     expect(back.confirmedDx).toBe('arf');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Auth mappers — profile, membership, clinic
+ * ------------------------------------------------------------------ */
+describe('rowToProfile', () => {
+  it('maps snake_case → camelCase', () => {
+    const row: ProfileRow = { id: 'u1', display_name: 'Dr. Amina', approved: true, created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToProfile(row)).toEqual({ id: 'u1', displayName: 'Dr. Amina', approved: true });
+  });
+  it('preserves approved=false (pending gate)', () => {
+    const row: ProfileRow = { id: 'u2', display_name: 'New', approved: false, created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToProfile(row).approved).toBe(false);
+  });
+});
+
+describe('rowToMembership', () => {
+  it('maps a health_worker membership', () => {
+    const row: MembershipRow = { id: 'm1', user_id: 'u1', clinic_id: 'c1', role: 'health_worker', created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToMembership(row)).toEqual({ userId: 'u1', clinicId: 'c1', role: 'health_worker' });
+  });
+  it('maps an admin membership', () => {
+    const row: MembershipRow = { id: 'm2', user_id: 'u1', clinic_id: 'c2', role: 'admin', created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToMembership(row)).toEqual({ userId: 'u1', clinicId: 'c2', role: 'admin' });
+  });
+});
+
+describe('rowToClinic', () => {
+  it('maps a clinic row', () => {
+    const row: ClinicRow = { id: 'c1', name: 'Test Clinic', type: 'primary', created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToClinic(row)).toEqual({ id: 'c1', name: 'Test Clinic', type: 'primary' });
+  });
+});
+
+describe('encounter referral clinic id round-trip', () => {
+  it('referredToClinicId survives patientToRow-free encounter round-trip', () => {
+    // Verifies the new referral FK flows through the encounter mapper.
+    const e = mkEncounter({ referredTo: 'City Hospital', referredToClinicId: 'clinic-b' });
+    const back = rowToEncounter(encounterToRow(e));
+    expect(back.referredToClinicId).toBe('clinic-b');
+    expect(back.referredTo).toBe('City Hospital');
+  });
+  it('null referredToClinicId round-trips (no referral)', () => {
+    const e = mkEncounter({ referredTo: '', referredToClinicId: null });
+    expect(rowToEncounter(encounterToRow(e)).referredToClinicId).toBeNull();
   });
 });
