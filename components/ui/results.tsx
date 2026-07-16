@@ -45,33 +45,45 @@ const tierBg: Record<string, string> = {
   possible: Colors.warningBg,
   likely: Colors.dangerBg,
   urgent: Colors.urgentBg,
+  confirmed: Colors.urgentBg,
 };
 const tierBorder: Record<string, string> = {
   unlikely: Colors.success,
   possible: Colors.warning,
   likely: Colors.danger,
   urgent: Colors.urgent,
+  confirmed: Colors.urgent,
 };
 
 export function ResultCard({
   level,
-  score,
+  scoreA,
+  scoreB,
   label,
-  rangeLine,
   actions,
 }: {
   level: TierLevel;
-  score: number;
+  scoreA: number;
+  scoreB?: number;
   label: string;
-  rangeLine: React.ReactNode;
   actions: string[];
 }) {
   const color = tierColor[level] ?? Colors.gray;
   return (
     <View style={[resultStyles.card, { backgroundColor: tierBg[level] ?? Colors.grayLight, borderColor: tierBorder[level] ?? Colors.border }]}>
-      <Text style={[resultStyles.score, { color }]}>{score}</Text>
+      <View style={resultStyles.scoreRow}>
+        <View style={resultStyles.scoreCol}>
+          <Text style={[resultStyles.score, { color }]}>{scoreA}</Text>
+          <Text style={[resultStyles.scoreCaption, { color }]}>Level A</Text>
+        </View>
+        {scoreB !== undefined ? (
+          <View style={resultStyles.scoreCol}>
+            <Text style={[resultStyles.score, { color }]}>{scoreB}</Text>
+            <Text style={[resultStyles.scoreCaption, { color }]}>Level B</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[resultStyles.label, { color }]}>{label}</Text>
-      <Text style={[resultStyles.range, { color }]}>{rangeLine}</Text>
 
       <View style={resultStyles.actionBox}>
         <Text style={resultStyles.actionHeading}>Recommended Actions</Text>
@@ -87,9 +99,11 @@ export function ResultCard({
 }
 const resultStyles = StyleSheet.create({
   card: { borderRadius: 14, padding: 22, marginBottom: 14, borderWidth: 2, alignItems: 'center' },
-  score: { fontSize: 52, fontWeight: '900', lineHeight: 56, marginBottom: 5 },
-  label: { fontSize: 18, fontWeight: '800', marginBottom: 3 },
-  range: { fontSize: 12.5, marginBottom: 16, textAlign: 'center', lineHeight: 18 },
+  scoreRow: { flexDirection: 'row', justifyContent: 'center', gap: 32, marginBottom: 8 },
+  scoreCol: { alignItems: 'center' },
+  score: { fontSize: 48, fontWeight: '900', lineHeight: 52 },
+  scoreCaption: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
+  label: { fontSize: 18, fontWeight: '800', marginBottom: 16, textAlign: 'center' },
   actionBox: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 10, padding: 14, alignSelf: 'stretch' },
   actionHeading: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, color: Colors.text },
   actionText: { flex: 1, fontSize: 14, color: Colors.text, lineHeight: 19 },

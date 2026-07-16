@@ -122,8 +122,10 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   /** Build an 'initial' encounter from the scoring state. */
   const buildEncounter = (patientId: string, withLevelB: boolean): Encounter => {
     const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
-    const score = withLevelB ? calcLevelA(inputsFinal) + calcLevelB(inputsFinal) : calcLevelA(inputsFinal);
-    const interp = getInterp(score);
+    const scoreA = calcLevelA(inputsFinal);
+    const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
+    const score = scoreA + scoreB;
+    const interp = getInterp(scoreA, scoreB);
     const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
     const now = new Date().toISOString();
     return {
@@ -137,7 +139,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       resultLabel: interp.label,
       range: interp.range,
       breakdown,
-      actions: getActions(score),
+      actions: getActions(scoreA, scoreB),
       includesLevelB: withLevelB,
       confirmedDx: '',
       finalDx: '',

@@ -34,4 +34,5 @@ export const tierColor: Record<string, string> = {
   urgent: Colors.urgent,
   chorea: Colors.urgent,
   incomplete: Colors.gray,
+  confirmed: Colors.urgent,
 };

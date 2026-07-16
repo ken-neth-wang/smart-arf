@@ -130,20 +130,20 @@ describe('calcLevelB', () => {
  * Interpretation tiers
  * ------------------------------------------------------------------ */
 describe('getInterp', () => {
-  const cases: ReadonlyArray<[number, string, string, string]> = [
-    [0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [3, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [5, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [6, 'ARF Possible', 'possible', 'Score 6–9'],
-    [9, 'ARF Possible', 'possible', 'Score 6–9'],
-    [10, 'ARF Likely', 'likely', 'Score 10–14'],
-    [14, 'ARF Likely', 'likely', 'Score 10–14'],
-    [15, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
-    [100, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
+  const cases: ReadonlyArray<[number, number, string, string, string]> = [
+    [0, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
+    [3, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
+    [5, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
+    [0, 6, 'ARF Possible', 'possible', 'Score 6–9'],
+    [3, 6, 'ARF Possible', 'possible', 'Score 6–9'],
+    [4, 6, 'ARF Likely', 'likely', 'Score 10–14'],
+    [8, 6, 'ARF Likely', 'likely', 'Score 10–14'],
+    [9, 6, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
+    [94, 6, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
   ];
 
-  it.each(cases)('score %i → { %s, %s, %s }', (score, label, level, range) => {
-    const r = getInterp(score);
+  it.each(cases)('scoreA %i, scoreB %i → { %s, %s, %s }', (scoreA, scoreB, label, level, range) => {
+    const r = getInterp(scoreA, scoreB);
     expect(r.label).toBe(label);
     expect(r.level).toBe(level);
     expect(r.range).toBe(range);
@@ -151,8 +151,46 @@ describe('getInterp', () => {
 
   it('never returns the "chorea" level — chorea only adds points, no bypass', () => {
     for (let i = 0; i <= 50; i++) {
-      expect(getInterp(i).level).not.toBe('chorea');
+      expect(getInterp(i, 0).level).not.toBe('chorea');
     }
+  });
+});
+
+describe('Level B confirmation rule (scoreB > 6)', () => {
+  it('scoreB > 6 → confirmed positive ARF regardless of scoreA', () => {
+    expect(getInterp(0, 7)).toEqual({
+      label: 'Positive ARF (Level B confirmed)',
+      level: 'confirmed',
+      range: 'Level B > 6',
+    });
+  });
+
+  it('boundary: scoreB = 6 does NOT confirm (falls to combined tiers)', () => {
+    // 0 + 6 = 6 → 'possible' (Score 6–9), NOT confirmed
+    expect(getInterp(0, 6).level).toBe('possible');
+    expect(getInterp(0, 6).level).not.toBe('confirmed');
+  });
+
+  it('boundary: scoreB = 7 DOES confirm', () => {
+    expect(getInterp(0, 7).level).toBe('confirmed');
+  });
+
+  it('precedence: confirmed beats the combined-total tiers', () => {
+    // combined = 7 would normally be 'possible', but scoreB = 7 confirms
+    expect(getInterp(0, 7).level).toBe('confirmed');
+    expect(getInterp(0, 7).label).toBe('Positive ARF (Level B confirmed)');
+  });
+
+  it('max Level B (16) → confirmed', () => {
+    expect(getInterp(0, 16).level).toBe('confirmed');
+  });
+
+  it('getActions returns the confirmed management protocol', () => {
+    const a = getActions(0, 7);
+    expect(a).toEqual(
+      expect.arrayContaining([expect.stringContaining('BPG'), expect.stringContaining('prophylaxis')]),
+    );
+    expect(a[0]).toContain('confirmed');
   });
 });
 
@@ -162,10 +200,10 @@ describe('getInterp', () => {
 describe('chorea effect on the total', () => {
   it('choreaPositive raises a low score into a higher tier (no auto-confirm)', () => {
     // 0 points otherwise → chorea makes it 5 → still 'unlikely'
-    expect(getInterp(calcLevelA(buildInputs({ choreaPositive: true }))).level).toBe('unlikely');
+    expect(getInterp(calcLevelA(buildInputs({ choreaPositive: true })), 0).level).toBe('unlikely');
     // chorea + noad = 8 → 'possible'
     expect(
-      getInterp(calcLevelA(buildInputs({ choreaPositive: true, noad: true }))).level,
+      getInterp(calcLevelA(buildInputs({ choreaPositive: true, noad: true })), 0).level,
     ).toBe('possible');
   });
 });
@@ -175,7 +213,7 @@ describe('chorea effect on the total', () => {
  * ------------------------------------------------------------------ */
 describe('getActions', () => {
   it('score 0–5 → 3 plain-text items', () => {
-    expect(getActions(5)).toEqual([
+    expect(getActions(5, 0)).toEqual([
       'Treat according to clinical diagnosis',
       'Arrange appropriate follow-up',
       'Reassess if fever persists or symptoms change',
@@ -183,7 +221,7 @@ describe('getActions', () => {
   });
 
   it('score 6–9 → 4 items', () => {
-    const a = getActions(9);
+    const a = getActions(3, 6); // sum 9, scoreB 6 → tier 6–9
     expect(a).toHaveLength(4);
     expect(a[0]).toBe('ARF is possible — do not dismiss');
     expect(a[1]).toBe('Start Benzathine Penicillin G (BPG) prophylaxis');
@@ -192,13 +230,14 @@ describe('getActions', () => {
   });
 
   it('score 10–14 → 5 items', () => {
-    const a = getActions(14);
+    const a = getActions(8, 6); // sum 14, scoreB 6 → tier 10–14
     expect(a).toHaveLength(5);
     expect(a[0]).toBe('ARF is likely — act promptly');
   });
 
   it('score ≥15 → 5 plain-text items (HTML stripped)', () => {
-    expect(getActions(15)).toEqual([
+    expect(getActions(9, 6)).toEqual([
+      // sum 15, scoreB 6 → tier ≥15
       'ARF is highly likely — urgent action required',
       'Start Benzathine Penicillin G (BPG) prophylaxis now',
       'Urgent referral to secondary care',
@@ -208,26 +247,26 @@ describe('getActions', () => {
   });
 
   it('boundary scores route to the correct tier', () => {
-    expect(getActions(5)).toHaveLength(3);
-    expect(getActions(6)).toHaveLength(4);
-    expect(getActions(9)).toHaveLength(4);
-    expect(getActions(10)).toHaveLength(5);
-    expect(getActions(14)).toHaveLength(5);
-    expect(getActions(15)).toHaveLength(5);
+    expect(getActions(5, 0)).toHaveLength(3);
+    expect(getActions(0, 6)).toHaveLength(4); // sum 6
+    expect(getActions(3, 6)).toHaveLength(4); // sum 9
+    expect(getActions(4, 6)).toHaveLength(5); // sum 10
+    expect(getActions(8, 6)).toHaveLength(5); // sum 14
+    expect(getActions(9, 6)).toHaveLength(5); // sum 15
   });
 
   it('never contains residual HTML tags', () => {
     for (let i = 0; i <= 20; i++) {
-      for (const line of getActions(i)) {
+      for (const line of getActions(i, 0)) {
         expect(line).not.toMatch(/<\/?[a-z]+>/i);
       }
     }
   });
 
   it('uses an em-dash (—), not a hyphen, in the boundary tiers', () => {
-    expect(getActions(6)[0]).toContain('—');
-    expect(getActions(10)[0]).toContain('—');
-    expect(getActions(15)[0]).toContain('—');
+    expect(getActions(0, 6)[0]).toContain('—'); // sum 6
+    expect(getActions(4, 6)[0]).toContain('—'); // sum 10
+    expect(getActions(9, 6)[0]).toContain('—'); // sum 15
   });
 });
 

@@ -1,8 +1,8 @@
 /**
  * SMART-ARF UI primitives — React Native ports of the CSS component classes in
  * smart-arf-app.html (`.card`, `.step-badge`, `.yn-btn`, `.radio-item`,
- * `.sym-item`, `.na-toggle`, `.btn`, `.alert`, `.cat-block`, etc.).
- * smart-arf-app.html is the source of truth for styling.
+ * `.sym-item`, `.na-toggle`, `.btn`, `.alert`, `.cat-block`, etc.). Originally
+ * ported from the HTML; the app is now the source of truth for styling.
  */
 import React, { useState } from 'react';
 import {
@@ -285,11 +285,7 @@ const radioStyles = StyleSheet.create({
 });
 
 /* ---------------- Checkbox row ---------------- */
-/**
- * pointsBadge: shown verbatim (e.g. "+5", "no score").
- * group: when true the badge renders the literal text "group" with the indigo
- *   group color — mirrors the HTML inflammation markers (L1438–1456).
- */
+/** pointsBadge: shown verbatim (e.g. "+5", "no score"). */
 export function CheckboxRow({
   label,
   sub,
@@ -297,7 +293,6 @@ export function CheckboxRow({
   onToggle,
   pointsBadge,
   muted,
-  group,
 }: {
   label: string;
   sub?: string;
@@ -305,9 +300,7 @@ export function CheckboxRow({
   onToggle: () => void;
   pointsBadge?: string;
   muted?: boolean;
-  group?: boolean;
 }) {
-  const badgeText = group ? 'group' : pointsBadge;
   return (
     <Pressable
       style={[chkStyles.item, checked && chkStyles.itemChecked]}
@@ -320,9 +313,9 @@ export function CheckboxRow({
         <Text style={chkStyles.label}>{label}</Text>
         {sub ? <Text style={chkStyles.sub}>{sub}</Text> : null}
       </View>
-      {badgeText ? (
-        <View style={[chkStyles.pts, muted && { backgroundColor: Colors.gray }, group && { backgroundColor: Colors.groupBadge }]}>
-          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{badgeText}</Text>
+      {pointsBadge ? (
+        <View style={[chkStyles.pts, muted && { backgroundColor: Colors.gray }]}>
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{pointsBadge}</Text>
         </View>
       ) : null}
     </Pressable>

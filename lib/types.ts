@@ -13,7 +13,7 @@
 
 export type Gender = '' | 'male' | 'female' | 'other';
 export type Setting = '' | 'endemic' | 'nonendemic' | 'unknown';
-export type TierLevel = 'unlikely' | 'possible' | 'likely' | 'urgent' | 'chorea' | 'incomplete';
+export type TierLevel = 'unlikely' | 'possible' | 'likely' | 'urgent' | 'chorea' | 'incomplete' | 'confirmed';
 export type EchoValue = 'suggestive' | 'not-suggestive' | null;
 
 /** Raw clinical inputs — same shape as the HTML `S` object's clinical fields. */

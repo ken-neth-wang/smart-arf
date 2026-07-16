@@ -190,7 +190,7 @@ const VAL_JOINT: Record<number, string> = { 0: 'none', 2: 'mono', 3: 'poly', 5: 
 
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA } = useAssessment();
-  const interp = getInterp(scoreA);
+  const interp = getInterp(scoreA, 0);
   const choreaPositive = inputs.chorea === true;
 
   return (
@@ -252,10 +252,10 @@ function Step3() {
 
 /* ============== STEP 4 — Level A Result ============== */
 function Step4() {
-  const { patient, inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
+  const { inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
   const records = useRecords();
   const router = useRouter();
-  const interp = getInterp(scoreA);
+  const interp = getInterp(scoreA, 0);
   const choreaPositive = inputs.chorea === true;
   const [referredToClinicId, setReferredToClinicId] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -267,12 +267,10 @@ function Step4() {
     setReferredToClinicId(existing?.referredToClinicId ?? '');
   }, [activeEncounterId, records]);
 
-  const rangeLine = `${patient.firstName} ${patient.lastName}${patient.mrn ? ' · MRN: ' + patient.mrn : ''}\nLevel A Score: ${scoreA} / 23  (${interp.range})`;
-
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
-      <ResultCard level={interp.level} score={scoreA} label={interp.label} rangeLine={rangeLine} actions={getActions(scoreA)} />
+      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getActions(scoreA, 0)} />
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
@@ -301,7 +299,6 @@ function Step4() {
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
   const choreaPositive = inputs.chorea === true;
-  const total = scoreA + scoreB;
 
   const setNA = (section: 'naBlood' | 'naEcg' | 'naEcho', on: boolean) => {
     if (on) {
@@ -327,9 +324,9 @@ function Step5() {
           <NAToggle active={inputs.naBlood} onToggle={() => setNA('naBlood', !inputs.naBlood)} label="Not Available — blood tests were not done" />
           <View pointerEvents={inputs.naBlood ? 'none' : 'auto'} style={{ opacity: inputs.naBlood ? 0.4 : 1, gap: 7 }}>
             <SectionDivider label="Non-specific inflammation markers (any one or more = +3)" />
-            <CheckboxRow label="Elevated WBC" sub="White blood cell count above normal range for age" checked={inputs.wbc} onToggle={() => setInputs({ wbc: !inputs.wbc })} group />
-            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} group />
-            <CheckboxRow label="Elevated ESR or CRP" sub="Raised inflammatory markers" checked={inputs.esr} onToggle={() => setInputs({ esr: !inputs.esr })} group />
+            <CheckboxRow label="Elevated WBC" sub="White blood cell count above normal range for age" checked={inputs.wbc} onToggle={() => setInputs({ wbc: !inputs.wbc })} pointsBadge="+3" />
+            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} pointsBadge="+3" />
+            <CheckboxRow label="Elevated ESR or CRP" sub="Raised inflammatory markers" checked={inputs.esr} onToggle={() => setInputs({ esr: !inputs.esr })} pointsBadge="+3" />
             <SectionDivider label="Specific Strep antibody" />
             <CheckboxRow label="Anti-DNase B positive" sub="Specific antibody confirming recent Group A Strep infection" checked={inputs.antidnase} onToggle={() => setInputs({ antidnase: !inputs.antidnase })} pointsBadge="+5" />
           </View>
@@ -356,7 +353,14 @@ function Step5() {
           </View>
         </CategoryBlock>
 
-        <LiveScoreCard score={total} label="" subtitle="Combined Score (Level A + B)" />
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <LiveScoreCard score={scoreA} label="" subtitle="Level A" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <LiveScoreCard score={scoreB} label="" subtitle="Level B" />
+          </View>
+        </View>
 
         <PrimaryButton title="View Final Result" onPress={async () => { await commitFinal(); goStep(6); }} />
         <SecondaryButton title="Back" onPress={() => goStep(4)} />
@@ -367,17 +371,15 @@ function Step5() {
 
 /* ============== STEP 6 — Final Result ============== */
 function Step6() {
-  const { patient, inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
+  const { inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
   const router = useRouter();
-  const total = scoreA + scoreB;
-  const interp = getInterp(total);
+  const interp = getInterp(scoreA, scoreB);
   const choreaPositive = inputs.chorea === true;
-  const rangeLine = `${patient.firstName} ${patient.lastName}${patient.mrn ? ' · MRN: ' + patient.mrn : ''}\nLevel A: ${scoreA} + Level B: ${scoreB} = Total: ${total}  (${interp.range})`;
 
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
-      <ResultCard level={interp.level} score={total} label={interp.label} rangeLine={rangeLine} actions={getActions(total)} />
+      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB)} />
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />

@@ -79,3 +79,6 @@ coverage/
 # EAS / Expo Application Services (local build artifacts)
 # ─────────────────────────────────────────────────────────────
 .easignore
+
+# Stray subagent scratch artifact (not source)
+research.md

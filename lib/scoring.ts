@@ -1,11 +1,7 @@
 /**
- * ARF scoring algorithm — EXACT port of smart-arf-app.html scoring functions:
- * carditisScore, skinScore, calcLevelA, bloodInflammScore, echoScore,
- * calcLevelB, getInterp, getActions, buildBreakdownArray, buildFullBreakdownArray,
- * generatePatientCode.
- *
- * smart-arf-app.html is the source of truth. Do not change thresholds or point
- * values without updating the HTML first.
+ * ARF scoring algorithm. Originally ported from smart-arf-app.html; the app is
+ * now the source of truth and evolves per clinical-team review (e.g. the
+ * Level-B > 6 confirmation rule was added deliberately, diverging from the HTML).
  */
 import type { AssessmentInputs, BreakdownRow, TierLevel } from './types';
 
@@ -48,14 +44,29 @@ export interface Interp {
   range: string;
 }
 
-export function getInterp(score: number): Interp {
+export function getInterp(scoreA: number, scoreB: number): Interp {
+  // Level B > 6 independently confirms ARF (clinical-team note); takes precedence
+  // over the combined-total tiers below.
+  if (scoreB > 6) return { label: 'Positive ARF (Level B confirmed)', level: 'confirmed', range: 'Level B > 6' };
+  const score = scoreA + scoreB;
   if (score <= 5) return { label: 'ARF Unlikely', level: 'unlikely', range: 'Score 0–5' };
   if (score <= 9) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–9' };
   if (score <= 14) return { label: 'ARF Likely', level: 'likely', range: 'Score 10–14' };
   return { label: 'ARF Highly Likely', level: 'urgent', range: 'Score ≥15' };
 }
 
-export function getActions(score: number): string[] {
+export function getActions(scoreA: number, scoreB: number): string[] {
+  // Level B > 6 confirms ARF — initiate the full management protocol.
+  if (scoreB > 6) {
+    return [
+      'Positive ARF confirmed (Level B > 6) — initiate management protocol',
+      'Start Benzathine Penicillin G (BPG) prophylaxis',
+      'Refer to secondary care for full evaluation',
+      'Initiate long-term secondary prophylaxis plan',
+      'Educate patient and family about RHD',
+    ];
+  }
+  const score = scoreA + scoreB;
   if (score <= 5) {
     return [
       'Treat according to clinical diagnosis',
@@ -145,8 +156,8 @@ export function buildFullBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
  * detail): the live display OMITS the chorea row, labels carditis
  * "Murmur / Carditis Signs", and the severity sub-row only ever lists
  * "Murmur" / "Chest pain" (the HTML refs S.dyspnea/S.exercise/S.palp which are
- * never in state, so SOB/Edema/walking do not appear here — a known HTML
- * quirk reproduced faithfully since the HTML is the source of truth).
+ * never in state, so SOB/Edema/walking do not appear here — a quirk carried
+ * over from the original HTML port).
  */
 function liveLevelARows(s: AssessmentInputs): BreakdownRow[] {
   const rows: BreakdownRow[] = [];
