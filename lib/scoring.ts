@@ -109,7 +109,7 @@ const jointLabel: Record<number, string | null> = {
 
 /**
  * Level A breakdown saved to the record (mirrors buildBreakdownArray in HTML).
- * Uses the correct severity keys (sob/edema/chestpain/walking).
+ * Uses the correct severity keys (sob/edema).
  */
 export function buildBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
   const rows: BreakdownRow[] = [];
@@ -122,8 +122,6 @@ export function buildBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
     const sev: string[] = [];
     if (s.sob) sev.push('SOB');
     if (s.edema) sev.push('Edema');
-    if (s.chestpain) sev.push('Chest pain');
-    if (s.walking) sev.push("Can't walk normal distances");
     if (sev.length) rows.push({ label: '↳ Severity: ' + sev.join(', '), points: null, kind: 'sub' });
   }
   if (s.em) rows.push({ label: 'Erythema Marginatum', points: 5 });
@@ -153,10 +151,9 @@ export function buildFullBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
  * renderBreakdown() / showFinalResult() inline code (L3213 / L3261). NOTE: these
  * are DIFFERENT from buildBreakdownArray (the saved breakdown shown in record
  * detail): the live display OMITS the chorea row, labels carditis
- * "Murmur / Carditis Signs", and the severity sub-row only ever lists
- * "Murmur" / "Chest pain" (the HTML refs S.dyspnea/S.exercise/S.palp which are
- * never in state, so SOB/Edema/walking do not appear here — a quirk carried
- * over from the original HTML port).
+ * "Murmur / Carditis Signs" with a "↳ Murmur" sub-row (the HTML refs
+ * S.dyspnea/S.exercise/S.palp which are never in state, so SOB/Edema do not
+ * appear here — a quirk carried over from the original HTML port).
  */
 function liveLevelARows(s: AssessmentInputs): BreakdownRow[] {
   const rows: BreakdownRow[] = [];
@@ -165,7 +162,6 @@ function liveLevelARows(s: AssessmentInputs): BreakdownRow[] {
     rows.push({ label: 'Murmur / Carditis Signs', points: 5 });
     const syms: string[] = [];
     if (s.murmur) syms.push('Murmur');
-    if (s.chestpain) syms.push('Chest pain');
     rows.push({ label: '↳ ' + syms.join(', '), points: null, kind: 'sub' });
   }
   if (s.em) rows.push({ label: 'Erythema Marginatum', points: 5 });

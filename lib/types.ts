@@ -28,8 +28,6 @@ export interface AssessmentInputs {
   murmur: boolean;
   sob: boolean;
   edema: boolean;
-  chestpain: boolean;
-  walking: boolean;
   em: boolean;
   sn: boolean;
   noad: boolean;
@@ -55,8 +53,6 @@ export function emptyInputs(): AssessmentInputs {
     murmur: false,
     sob: false,
     edema: false,
-    chestpain: false,
-    walking: false,
     em: false,
     sn: false,
     noad: false,

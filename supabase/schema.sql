@@ -119,6 +119,7 @@ create table public.encounters (
   breakdown             jsonb,
   actions               jsonb,
   includes_level_b      boolean not null default false,
+  facility_type         text,                     -- 'primary' | 'secondary' | null (assessment-level, record-only)
   -- outcome block
   confirmed_dx          text not null default '',
   final_dx              text not null default '',

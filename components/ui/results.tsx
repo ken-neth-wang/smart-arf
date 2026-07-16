@@ -5,8 +5,6 @@
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import * as Print from 'expo-print';
 import { useRouter } from 'expo-router';
 import { Colors, tierColor } from '@/constants/theme';
 import type { BreakdownRow, TierLevel } from '@/lib/types';
@@ -188,31 +186,6 @@ const bdStyles = StyleSheet.create({
  */
 export function PatientCodeCard({ code, step = 4 }: { code: string; step?: 4 | 6 }) {
   const router = useRouter();
-  const [copied, setCopied] = React.useState(false);
-  const copy = async () => {
-    try {
-      await Clipboard.setStringAsync(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-  // Mirrors HTML L1379 window.print() — prints a referral slip. expo-print
-  // works in Expo Go on native; on web it falls back to no-op.
-  const print = async () => {
-    try {
-      await Print.printAsync({
-        html: `<div style="font-family:sans-serif;text-align:center;padding:24px">
-          <h2 style="color:#1a5fa8;margin:0 0 4px">SMART-ARF Referral Code</h2>
-          <div style="font-size:32px;letter-spacing:3px;font-weight:900;color:#1a5fa8;margin:16px 0">${code}</div>
-          <p style="color:#4b5563;font-size:13px">Give this code to the receiving clinic for continuity of care.</p>
-        </div>`,
-      });
-    } catch {
-      /* print unavailable */
-    }
-  };
   const hint = step === 6
     ? 'Receiving clinic can look up this code to view the full assessment and add follow-up.'
     : "Write this code on the patient's referral slip. The receiving clinic can use it to view this assessment and add follow-up.";
@@ -220,14 +193,6 @@ export function PatientCodeCard({ code, step = 4 }: { code: string; step?: 4 | 6
     <View style={codeStyles.wrap}>
       <Text style={codeStyles.label}>Patient Referral Code</Text>
       <Text style={codeStyles.code}>{code}</Text>
-      <View style={codeStyles.btnRow}>
-        <Pressable onPress={copy} style={({ pressed }) => [codeStyles.btn, pressed && { opacity: 0.6 }]}>
-          <Text style={codeStyles.copy}>{copied ? '✓ Copied' : '📋 Copy'}</Text>
-        </Pressable>
-        <Pressable onPress={print} style={({ pressed }) => [codeStyles.btn, pressed && { opacity: 0.6 }]}>
-          <Text style={codeStyles.copy}>🖨️ Print Slip</Text>
-        </Pressable>
-      </View>
       <Pressable onPress={() => router.push('/(tabs)/bpg')} style={({ pressed }) => [codeStyles.bpgBtn, pressed && { opacity: 0.85 }]}>
         <Text style={codeStyles.bpgText}>💊 View BPG Protocol</Text>
       </Pressable>
@@ -239,9 +204,6 @@ const codeStyles = StyleSheet.create({
   wrap: { backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.primary, borderStyle: 'dashed', borderRadius: 14, padding: 20, alignItems: 'center', marginBottom: 14 },
   label: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2, color: Colors.textSecondary, marginBottom: 8 },
   code: { fontFamily: 'Courier', fontSize: 27, fontWeight: '900', letterSpacing: 2, color: Colors.primary, marginBottom: 8 },
-  btnRow: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
-  btn: { backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
-  copy: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
   bpgBtn: { backgroundColor: Colors.primary, borderRadius: 9, paddingVertical: 11, paddingHorizontal: 16, alignItems: 'center', marginTop: 10 },
   bpgText: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
   hint: { fontSize: 12.5, color: Colors.textSecondary, lineHeight: 18, marginTop: 10, textAlign: 'center' },

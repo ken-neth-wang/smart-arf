@@ -11,8 +11,6 @@ describe('emptyInputs', () => {
       murmur: false,
       sob: false,
       edema: false,
-      chestpain: false,
-      walking: false,
       em: false,
       sn: false,
       noad: false,
@@ -29,7 +27,7 @@ describe('emptyInputs', () => {
   });
 
   it('has exactly 23 fields', () => {
-    expect(Object.keys(emptyInputs())).toHaveLength(23);
+    expect(Object.keys(emptyInputs())).toHaveLength(21);
   });
 
   it('returns a fresh object on each call (no shared reference)', () => {

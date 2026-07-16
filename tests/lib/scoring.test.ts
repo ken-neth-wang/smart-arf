@@ -25,9 +25,9 @@ describe('carditisScore', () => {
   it('murmur === false → 0', () => {
     expect(carditisScore(buildInputs({ murmur: false }))).toBe(0);
   });
-  it('severity sub-flags (sob/edema/chestpain/walking) add NO points', () => {
+  it('severity sub-flags (sob/edema) add NO points', () => {
     expect(
-      carditisScore(buildInputs({ murmur: true, sob: true, edema: true, chestpain: true, walking: true })),
+      carditisScore(buildInputs({ murmur: true, sob: true, edema: true })),
     ).toBe(5);
   });
 });
@@ -337,14 +337,14 @@ describe('buildBreakdownArray', () => {
 
   it('murmur → "Heart Murmur" +5 and a severity sub-row', () => {
     const rows = buildBreakdownArray(
-      buildInputs({ murmur: true, sob: true, edema: true, chestpain: true, walking: true }),
+      buildInputs({ murmur: true, sob: true, edema: true }),
     );
     expect(rows).toContainEqual({ label: 'Heart Murmur', points: 5 });
     const sev = rows.find((r) => r.label.startsWith('↳ Severity:'));
     expect(sev).toBeDefined();
     expect(sev?.points).toBeNull(); // severity sub-row is null, NOT 0
     expect(sev?.kind).toBe('sub');
-    expect(sev?.label).toBe("↳ Severity: SOB, Edema, Chest pain, Can't walk normal distances");
+    expect(sev?.label).toBe('↳ Severity: SOB, Edema');
   });
 
   it('murmur with no severity flags → no sub-row', () => {

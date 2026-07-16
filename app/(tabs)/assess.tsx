@@ -211,8 +211,13 @@ function Step3() {
             <SeverityHeader label="Severity descriptors (documentation only, no score)" />
             <CheckboxRow label="Shortness of breath" sub="At rest or on exertion" checked={inputs.sob} onToggle={() => setInputs({ sob: !inputs.sob })} pointsBadge="no score" muted />
             <CheckboxRow label="Edema" sub="Swelling of feet, legs, or face" checked={inputs.edema} onToggle={() => setInputs({ edema: !inputs.edema })} pointsBadge="no score" muted />
-            <CheckboxRow label="Chest discomfort or chest pain" sub="Any chest pain reported by patient" checked={inputs.chestpain} onToggle={() => setInputs({ chestpain: !inputs.chestpain })} pointsBadge="no score" muted />
-            <CheckboxRow label="Unable to walk normal distances" sub="Due to pain or fatigue" checked={inputs.walking} onToggle={() => setInputs({ walking: !inputs.walking })} pointsBadge="no score" muted />
+            {(inputs.sob || inputs.edema) && !inputs.murmur ? (
+              <View style={{ backgroundColor: Colors.warningBg, borderWidth: 1.5, borderColor: Colors.warning, borderRadius: 10, padding: 12 }}>
+                <Text style={{ color: Colors.warning, fontSize: 13.5, fontWeight: '700', lineHeight: 19 }}>
+                  ⚠ Shortness of breath and edema usually accompany a heart murmur. Please re-auscultate to confirm whether a murmur is present.
+                </Text>
+              </View>
+            ) : null}
           </View>
         </CategoryBlock>
 
