@@ -29,6 +29,7 @@ interface RecordsContextValue {
   addFollowup: (patientId: string, fields: import('@/lib/types').FollowUpFields) => Promise<void>;
   softDelete: (patientId: string, reason: Patient['deleteReason'], notes?: string) => Promise<void>;
   softDeleteEncounter: (encounterId: string, reason: Encounter['deleteReason'], notes?: string) => Promise<void>;
+  restoreEncounter: (encounterId: string) => Promise<void>;
   setReferral: (encounterId: string, referredTo: string, referredToClinicId: string | null) => Promise<void>;
   clearAll: () => Promise<void>;
   activePatients: Patient[];
@@ -238,6 +239,40 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     [persistLocal, syncRefs],
   );
 
+  // Restore a soft-deleted visit: flip inactive back to false + clear the audit
+  // fields. Mirrors softDeleteEncounter (save-first, then update local state).
+  const restoreEncounter = useCallback(
+    async (encounterId: string) => {
+      const ts = new Date().toISOString();
+      const prev = encountersRef.current;
+      const target = prev.find((e) => e.id === encounterId);
+      if (!target) return;
+      const updated: Encounter = {
+        ...target,
+        inactive: false,
+        deletedAt: undefined,
+        deletedBy: undefined,
+        deleteReason: undefined,
+        deleteNotes: undefined,
+        updatedAt: ts,
+      };
+      if (USE_CLOUD) {
+        try {
+          await saveEncounterCloud(updated);
+        } catch (err) {
+          console.error('[records] cloud encounter restore failed:', err);
+          if (typeof window !== 'undefined') window.alert('Could not restore visit (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          return;
+        }
+      }
+      const next = prev.map((e) => (e.id === encounterId ? updated : e));
+      syncRefs(patientsRef.current, next);
+      setEncounters(next);
+      if (!USE_CLOUD) await persistLocal(patientsRef.current, next);
+    },
+    [persistLocal, syncRefs],
+  );
+
   const setReferral = useCallback(
     async (encounterId: string, referredTo: string, referredToClinicId: string | null) => {
       const prev = encountersRef.current;
@@ -305,7 +340,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
 
   const value: RecordsContextValue = {
     patients, encounters, clinics, loading, refresh,
-    upsertPatient, upsertEncounter, addFollowup, softDelete, softDeleteEncounter, setReferral, clearAll,
+    upsertPatient, upsertEncounter, addFollowup, softDelete, softDeleteEncounter, restoreEncounter, setReferral, clearAll,
     activePatients, patientSummaries,
     getPatientById, getPatientByMRN, getPatientByCode, getPatientWithHistory, getEncountersForPatient,
   };

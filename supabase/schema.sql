@@ -129,6 +129,12 @@ create table public.encounters (
   notes                 text not null default '',
   referred_to           text not null default '',
   referred_to_clinic_id uuid references public.clinics(id),
+  -- soft-delete (per-visit remove; patient + other encounters stay visible)
+  inactive              boolean not null default false,
+  deleted_at            timestamptz,
+  deleted_by            text,
+  delete_reason         text,
+  delete_notes          text,
   created_by            uuid references auth.users(id) default auth.uid(),
   updated_by            uuid references auth.users(id),
   created_at            timestamptz not null default now(),
@@ -139,6 +145,7 @@ create index encounters_patient_id_idx            on public.encounters (patient_
 create index encounters_type_idx                  on public.encounters (type);
 create index encounters_referred_to_clinic_id_idx on public.encounters (referred_to_clinic_id);
 create index encounters_updated_at_idx            on public.encounters (updated_at desc);
+create index encounters_inactive_idx            on public.encounters (inactive);
 
 -- ═══════════════════════════════════════════════════════════════
 -- Trigger: auto-create a profile on signup (approved = false → pending)
@@ -306,7 +313,7 @@ drop policy if exists "patients_select" on public.patients;
 drop policy if exists "patients_insert" on public.patients;
 drop policy if exists "patients_update" on public.patients;
 create policy "patients_select" on public.patients
-  for select using (public.is_approved() and public.patient_visible(id));
+  for select using (public.is_admin() or (public.is_approved() and public.patient_visible(id)));
 create policy "patients_insert" on public.patients
   for insert with check (
     public.is_approved()
@@ -315,9 +322,9 @@ create policy "patients_insert" on public.patients
   );
 create policy "patients_update" on public.patients
   for update using (
-    public.is_approved() and clinic_id in (select public.my_clinics())
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
   ) with check (
-    public.is_approved() and clinic_id in (select public.my_clinics())
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
   );
 
 -- encounters: visible if the patient is visible; editable at your clinic.
@@ -325,7 +332,7 @@ drop policy if exists "encounters_select" on public.encounters;
 drop policy if exists "encounters_insert" on public.encounters;
 drop policy if exists "encounters_update" on public.encounters;
 create policy "encounters_select" on public.encounters
-  for select using (public.is_approved() and public.patient_visible(patient_id));
+  for select using (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)));
 create policy "encounters_insert" on public.encounters
   for insert with check (
     public.is_approved()
@@ -333,5 +340,5 @@ create policy "encounters_insert" on public.encounters
     and created_by = auth.uid()
   );
 create policy "encounters_update" on public.encounters
-  for update using (public.is_approved() and public.patient_visible(patient_id))
-  with check (public.is_approved() and public.patient_visible(patient_id));
+  for update using (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)))
+  with check (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)));

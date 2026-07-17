@@ -49,7 +49,7 @@ const CLINIC_TYPE_OPTS: SelectOption[] = [
 
 export default function AdminScreen() {
   const { user } = useAuth();
-  const { clinics, refresh: refreshRecords } = useRecords();
+  const { clinics, refresh: refreshRecords, encounters, getPatientById, restoreEncounter, loading: recordsLoading } = useRecords();
   const router = useRouter();
 
   const [allowed, setAllowed] = useState<AllowedEmail[]>([]);
@@ -100,6 +100,24 @@ export default function AdminScreen() {
   const clinicOptions = clinics.map((c) => ({ label: c.name, value: c.id }));
   const clinicPlaceholder = clinicOptions.length ? 'Select…' : 'Loading clinics…';
   const others = active.filter((u) => u.id !== user?.profile.id);
+
+  // Soft-deleted visits (admin restore). Patients are restored via SQL.
+  const deletedVisits = encounters
+    .filter((e) => e.inactive)
+    .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
+
+  const onRestore = async (encounterId: string) => {
+    if (busyAction) return;
+    setBusyAction(`restore:${encounterId}`);
+    setError(null);
+    try {
+      await restoreEncounter(encounterId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const onAdd = async () => {
     if (busyAction) return;
@@ -338,6 +356,48 @@ export default function AdminScreen() {
               />
             </View>
           ))
+        )}
+      </Card>
+
+      {/* ── Deleted records (visit restore) ── */}
+      <Card>
+        <StepBadge>Deleted Records</StepBadge>
+        <CardTitle>Removed Visits</CardTitle>
+        <Text style={styles.line}>
+          Visits removed by users are kept here — restore one to return it to the patient's record.
+          (Removed patients are restored via the Supabase SQL Editor.)
+        </Text>
+        {recordsLoading && deletedVisits.length === 0 ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginVertical: 16 }} />
+        ) : deletedVisits.length === 0 ? (
+          <Text style={styles.muted}>No removed visits. 🎉</Text>
+        ) : (
+          deletedVisits.map((e) => {
+            const p = getPatientById(e.patientId);
+            const name = p ? `${p.firstName} ${p.lastName}`.trim() || '(no name)' : 'Unknown patient';
+            return (
+              <View key={e.id} style={styles.entry}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.entryEmail}>
+                    {name}
+                    {p?.inactive ? '  ·  ⚠ patient also deleted' : ''}
+                  </Text>
+                  <Text style={styles.entrySub}>
+                    {e.type === 'initial' ? 'Initial' : 'Follow-up'} · {e.date}
+                    {e.deletedAt ? ` · removed ${new Date(e.deletedAt).toLocaleDateString()}` : ''}
+                  </Text>
+                  {e.deleteReason ? (
+                    <Text style={styles.entrySub}>Reason: {e.deleteReason}</Text>
+                  ) : null}
+                </View>
+                <SecondaryButton
+                  title={busyAction === `restore:${e.id}` ? '…' : 'Restore'}
+                  disabled={!!busyAction}
+                  onPress={() => onRestore(e.id)}
+                />
+              </View>
+            );
+          })
         )}
       </Card>
 
