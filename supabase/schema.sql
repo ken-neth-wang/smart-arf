@@ -1,21 +1,39 @@
 -- SMART-ARF — Supabase schema (patient-anchored + roles/auth)
 --
--- Tables: clinics, profiles, clinic_memberships, patients, encounters
+-- Tables: clinics, profiles, clinic_memberships, allowed_emails, patients,
+--         encounters, photos  (+ private `photos` storage bucket)
 -- RLS: authenticated + clinic-scoped (full-history referral model)
 -- Auth: email/password (Supabase Auth); Google OAuth later.
 --
--- FRESH INSTALL — drops + recreates all public tables. Run in the Supabase
--- SQL editor. Then run bootstrap-admin.sql to create the first admin.
+-- FRESH INSTALL — drops + recreates all public tables + the photos bucket, AND
+-- wipes auth.users (every login account) for a true clean slate. ⚠️ DESTRUCTIVE —
+-- only run this for a full reset (e.g. right before release).
+-- After running: run supabase/seed.sql (stands up a clinic + allowlists an admin
+-- email), then sign up with that email → auto-approved admin.
+-- Run in the Supabase SQL editor.
 
 -- ═══════════════════════════════════════════════════════════════
 -- DROP (clean slate)
 -- ═══════════════════════════════════════════════════════════════
+-- Drop the photos storage policies FIRST: they reference the helper functions
+-- below, so dropping those functions would fail on re-runs without this.
+drop policy if exists "photos_storage_insert" on storage.objects;
+drop policy if exists "photos_storage_read" on storage.objects;
+
+drop table if exists public.photos cascade;
 drop table if exists public.encounters cascade;
 drop table if exists public.patients cascade;
 drop table if exists public.clinic_memberships cascade;
 drop table if exists public.profiles cascade;
 drop table if exists public.clinics cascade;
 drop table if exists public.allowed_emails cascade;
+
+-- Total reset: empty auth.users too. Done AFTER the public tables are dropped
+-- so no FK references (patients/encounters/etc. → auth.users, no cascade) remain.
+-- auth.users itself is Supabase-owned, so we DELETE rows rather than DROP it.
+-- ⚠️ DESTRUCTIVE — wipes every login account.
+delete from auth.users;
+
 drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_user();
 drop function if exists public.set_audit_fields();
@@ -342,3 +360,74 @@ create policy "encounters_insert" on public.encounters
 create policy "encounters_update" on public.encounters
   for update using (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)))
   with check (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)));
+
+-- ═════════════════════════════════════════════════════════════
+-- photos — clinician-uploaded skin photos (AI triage + later review/training)
+-- v0 uses a DUMMY edge function (no Gemini yet).
+-- NOTE: the storage BUCKET is not dropped on reset (so uploaded images aren't
+-- lost accidentally). Orphaned images (no metadata row) can be cleared from
+-- the Storage UI manually if you want a fully clean slate.
+-- ═════════════════════════════════════════════════════════════
+create table if not exists public.photos (
+  id              text primary key,
+  patient_id      text references public.patients(id) on delete set null,
+  encounter_id    text references public.encounters(id) on delete set null,
+  clinic_id       uuid not null references public.clinics(id) on delete cascade,
+  storage_path    text not null,
+  mime_type       text not null default '',
+  finding         text not null default '',
+  arf_suspected   boolean not null default false,
+  confidence      real not null default 0,
+  notes           text not null default '',
+  model           text not null default '',
+  clinician_label text,                              -- ground truth, filled in later → training set
+  inactive        boolean not null default false,    -- soft-delete flag (hidden from the list when true)
+  created_by      uuid references auth.users(id) default auth.uid(),
+  updated_by      uuid references auth.users(id),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists photos_encounter_id_idx on public.photos (encounter_id);
+create index if not exists photos_patient_id_idx   on public.photos (patient_id);
+create index if not exists photos_clinic_id_idx    on public.photos (clinic_id);
+create index if not exists photos_inactive_idx     on public.photos (inactive);
+
+drop trigger if exists photos_set_audit on public.photos;
+create trigger photos_set_audit
+  before update on public.photos
+  for each row execute function public.set_audit_fields();
+
+alter table public.photos enable row level security;
+
+drop policy if exists "photos_select" on public.photos;
+drop policy if exists "photos_insert" on public.photos;
+drop policy if exists "photos_update" on public.photos;
+create policy "photos_select" on public.photos
+  for select using (public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics())));
+create policy "photos_insert" on public.photos
+  for insert with check (
+    public.is_approved()
+    and clinic_id in (select public.my_clinics())
+    and created_by = auth.uid()
+  );
+create policy "photos_update" on public.photos
+  for update using (
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  ) with check (
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  );
+-- No DELETE policy → photos can't be hard-deleted from the app (soft model).
+
+-- Storage bucket (PRIVATE) + policies. v0: image bytes aren't clinic-scoped at
+-- the storage layer (only the metadata row is); paths use unguessable UUIDs.
+insert into storage.buckets (id, name, public)
+values ('photos', 'photos', false)
+on conflict (id) do nothing;
+
+drop policy if exists "photos_storage_insert" on storage.objects;
+drop policy if exists "photos_storage_read" on storage.objects;
+create policy "photos_storage_insert" on storage.objects
+  for insert with check (bucket_id = 'photos' and public.is_approved());
+create policy "photos_storage_read" on storage.objects
+  for select using (bucket_id = 'photos' and (public.is_admin() or public.is_approved()));

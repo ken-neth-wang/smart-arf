@@ -244,6 +244,7 @@ export interface PhotoRecord {
   notes: string;
   model: string;
   clinicianLabel: string | null; // ground truth, filled in later (training set)
+  inactive: boolean; // soft-delete flag (hidden from the list when true)
   createdAt: string;
 }
 

@@ -23,6 +23,7 @@ interface PhotoRow {
   notes: string;
   model: string;
   clinician_label: string | null;
+  inactive: boolean;
   created_at: string;
 }
 
@@ -40,6 +41,7 @@ function rowToPhoto(r: PhotoRow): PhotoRecord {
     notes: r.notes,
     model: r.model,
     clinicianLabel: r.clinician_label,
+    inactive: r.inactive,
     createdAt: r.created_at,
   };
 }
@@ -65,12 +67,31 @@ export async function uploadPhoto(
   return path;
 }
 
-/** Call the (dummy) analyze-photo edge function. */
+/** Call the analyze-photo edge function (Gemini). */
 export async function analyzePhoto(storagePath: string): Promise<PhotoAnalysis> {
   const { data, error } = await getSupabase().functions.invoke('analyze-photo', {
     body: { storagePath },
   });
-  if (error) throw error;
+  if (error) {
+    // The Supabase client surfaces a generic "non-2xx" message; pull the real
+    // reason out of the function's JSON response body so the UI can show it.
+    let detail = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        try {
+          const body = JSON.parse(txt);
+          if (body && typeof body.error === 'string') detail = body.error;
+        } catch {
+          if (txt) detail = txt;
+        }
+      }
+    } catch {
+      /* keep generic */
+    }
+    throw new Error(detail);
+  }
   return data as PhotoAnalysis;
 }
 
@@ -111,9 +132,23 @@ export async function loadPhotosForEncounter(encounterId: string): Promise<Photo
     .from('photos')
     .select('*')
     .eq('encounter_id', encounterId)
+    .eq('inactive', false)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return ((data as PhotoRow[]) ?? []).map(rowToPhoto);
+}
+
+/** Soft-delete a photo (hide it from the list; recoverable via SQL). */
+export async function softDeletePhoto(id: string): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('photos')
+    .update({ inactive: true })
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error('Could not delete photo (not found or no permission).');
+  }
 }
 
 /** Get a short-lived signed URL for displaying a stored photo. */

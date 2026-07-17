@@ -6,7 +6,7 @@
  * the current assessment's encounter (committing the draft first if needed).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   Alert,
   Card,
@@ -23,6 +23,7 @@ import {
   getPhotoUrl,
   loadPhotosForEncounter,
   savePhotoRecord,
+  softDeletePhoto,
   uploadPhoto,
 } from '@/lib/photos';
 import type { PhotoRecord } from '@/lib/types';
@@ -117,6 +118,19 @@ export function PhotoCard() {
     [activeEncounterId, activePatientId, clinicId, commitLevelA, refresh],
   );
 
+  const onDelete = useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        await softDeletePhoto(id);
+        if (activeEncounterId) await refresh(activeEncounterId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [activeEncounterId, refresh],
+  );
+
   return (
     <Card>
       <StepBadge>Optional · AI Skin Photo (trial)</StepBadge>
@@ -153,16 +167,23 @@ export function PhotoCard() {
       {photos.length > 0 ? (
         <View style={styles.list}>
           {photos.map((p) => (
-            <View key={p.id} style={styles.item}>
+            <View key={p.id} style={[styles.item, p.arfSuspected && styles.itemFlagged]}>
               {urls[p.id] ? (
                 <Image source={{ uri: urls[p.id] }} style={styles.thumb} resizeMode="cover" />
               ) : null}
               <View style={{ flex: 1 }}>
                 <Text style={styles.finding}>{p.finding}</Text>
-                <Text style={styles.meta}>
-                  {p.arfSuspected ? '⚠ ARF pattern flagged' : 'No ARF pattern'} · {Math.round(p.confidence * 100)}% conf · {p.model}
+                <Text style={[styles.meta, p.arfSuspected && styles.metaFlagged]}>
+                  {p.arfSuspected ? '⚠ ARF pattern flagged' : 'No ARF pattern'} · {Math.round(p.confidence * 100)}% conf
                 </Text>
               </View>
+              <TouchableOpacity
+                onPress={() => onDelete(p.id)}
+                style={styles.deleteBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.deleteX}>✕</Text>
+              </TouchableOpacity>
             </View>
           ))}
         </View>
@@ -178,8 +199,20 @@ export function PhotoCard() {
 const styles = StyleSheet.create({
   consent: { marginTop: 4, marginBottom: 4 },
   list: { marginTop: 12, gap: 10 },
-  item: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  item: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  itemFlagged: { backgroundColor: Colors.dangerBg, borderColor: Colors.danger },
   thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: Colors.grayLight },
   finding: { fontSize: 13.5, fontWeight: '600', color: Colors.text },
   meta: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
+  metaFlagged: { color: Colors.danger, fontWeight: '600' },
+  deleteBtn: { padding: 4 },
+  deleteX: { color: Colors.danger, fontSize: 16, fontWeight: '700' },
 });
