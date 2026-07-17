@@ -70,6 +70,11 @@ export interface EncounterRow {
   referred_to_clinic_id: string | null;
   created_at: string;
   updated_at: string;
+  inactive: boolean;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  delete_reason: Patient['deleteReason'] | null;
+  delete_notes: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -153,6 +158,11 @@ export function rowToEncounter(e: EncounterRow): Encounter {
     referredToClinicId: e.referred_to_clinic_id ?? null,
     createdAt: e.created_at,
     updatedAt: e.updated_at,
+    inactive: e.inactive,
+    deletedAt: e.deleted_at ?? undefined,
+    deletedBy: e.deleted_by ?? undefined,
+    deleteReason: e.delete_reason ?? undefined,
+    deleteNotes: e.delete_notes ?? undefined,
   };
 }
 
@@ -181,6 +191,11 @@ export function encounterToRow(e: Encounter): EncounterRow {
     referred_to_clinic_id: e.referredToClinicId ?? null,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
+    inactive: e.inactive,
+    deleted_at: e.deletedAt ?? null,
+    deleted_by: e.deletedBy ?? null,
+    delete_reason: e.deleteReason ?? null,
+    delete_notes: e.deleteNotes ?? null,
   };
 }
 
@@ -208,18 +223,20 @@ export async function loadDataCloud(): Promise<CloudData> {
   };
 }
 
-/** Upsert a single patient. */
+/** Upsert a single patient. Throws if RLS denies (0 rows persisted). */
 export async function savePatientCloud(patient: Patient): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await getSupabase().from('patients').upsert(patientToRow(patient));
+  const { data, error } = await getSupabase().from('patients').upsert(patientToRow(patient)).select();
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('Permission denied — record not saved (RLS). Check clinic assignment / schema.');
 }
 
-/** Upsert a single encounter. */
+/** Upsert a single encounter. Throws if RLS denies (0 rows persisted). */
 export async function saveEncounterCloud(encounter: Encounter): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await getSupabase().from('encounters').upsert(encounterToRow(encounter));
+  const { data, error } = await getSupabase().from('encounters').upsert(encounterToRow(encounter)).select();
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('Permission denied — record not saved (RLS). Check clinic assignment / schema.');
 }
 
 // ─────────────────────────────────────────────────────────────

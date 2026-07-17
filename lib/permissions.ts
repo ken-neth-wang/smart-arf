@@ -75,6 +75,7 @@ export function canSeePatient(
   referralTargetClinics: string[],
 ): boolean {
   if (!isApproved(user)) return false;
+  if (isAdmin(user)) return true; // admins can see all clinics
   const mine = clinicsForUser(user);
   if (patient.clinicId && mine.includes(patient.clinicId)) return true;
   return referralTargetClinics.some((c) => mine.includes(c));
@@ -89,6 +90,7 @@ export function canEditPatient(
   patient: { clinicId: string | null | undefined },
 ): boolean {
   if (!isApproved(user)) return false;
+  if (isAdmin(user)) return true; // admins can edit/soft-delete/restore at any clinic
   const mine = clinicsForUser(user);
   return !!patient.clinicId && mine.includes(patient.clinicId);
 }

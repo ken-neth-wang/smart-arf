@@ -132,6 +132,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       id: activeEncounterId ?? 'enc-' + Date.now(),
       patientId,
       type: 'initial',
+      inactive: false,
       date: formatRecordDate(),
       inputs: { ...inputsFinal },
       score,

@@ -51,6 +51,7 @@ function mkEncounter(over: Partial<Encounter> = {}): Encounter {
     id: 'enc-1',
     patientId: 'pat-1',
     type: 'initial',
+    inactive: false,
     date: '22 Jun 2026, 14:30',
     inputs: emptyInputs(),
     score: 14,
@@ -231,6 +232,30 @@ describe('encounterToRow / rowToEncounter', () => {
     expect(rowToEncounter(encounterToRow(original))).toEqual(original);
   });
 
+  it('defaults inactive=false + null audit fields on a fresh encounter', () => {
+    const row = encounterToRow(mkEncounter());
+    expect(row.inactive).toBe(false);
+    expect(row.deleted_at).toBeNull();
+    expect(row.deleted_by).toBeNull();
+    expect(row.delete_reason).toBeNull();
+  });
+
+  it('round-trips soft-delete fields (inactive + audit)', () => {
+    const original = mkEncounter({
+      inactive: true,
+      deletedAt: '2026-08-01T00:00:00.000Z',
+      deletedBy: 'local',
+      deleteReason: 'data-entry-error',
+      deleteNotes: 'wrong date',
+    });
+    const back = rowToEncounter(encounterToRow(original));
+    expect(back.inactive).toBe(true);
+    expect(back.deletedAt).toBe('2026-08-01T00:00:00.000Z');
+    expect(back.deleteReason).toBe('data-entry-error');
+    expect(back.deleteNotes).toBe('wrong date');
+    expect(back).toEqual(original);
+  });
+
   it('round-trips facilityType (primary, secondary, null)', () => {
     for (const ft of ['primary', 'secondary', null] as const) {
       const original = mkEncounter({ facilityType: ft });
@@ -263,6 +288,7 @@ describe('field-name regression guards', () => {
       'facility_type',
       'confirmed_dx', 'final_dx', 'bpg_status', 'echo_findings',
       'complications', 'notes', 'referred_to', 'referred_to_clinic_id', 'created_at', 'updated_at',
+      'inactive', 'deleted_at', 'deleted_by', 'delete_reason', 'delete_notes',
     ].sort();
     expect(keys).toEqual(expected);
   });

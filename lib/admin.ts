@@ -177,3 +177,5 @@ export async function deactivateUserCloud(userId: string): Promise<void> {
     .eq('id', userId);
   if (error) throw error;
 }
+
+

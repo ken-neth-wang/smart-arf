@@ -86,6 +86,10 @@ describe('canSeePatient (full-history referral model)', () => {
   it('does NOT see a patient at an unrelated clinic with no referral', () => {
     expect(canSeePatient(user([hw(CLINIC_A)]), { clinicId: CLINIC_B }, [])).toBe(false);
   });
+  it('admin sees a patient at ANY clinic (super-admin read)', () => {
+    // Admin at Clinic B, patient at unrelated Clinic C, no referral → still visible.
+    expect(canSeePatient(user([admin(CLINIC_B)]), { clinicId: CLINIC_C }, [])).toBe(true);
+  });
   it('does NOT see a patient referred only to a third clinic', () => {
     expect(canSeePatient(user([hw(CLINIC_A)]), { clinicId: CLINIC_B }, [CLINIC_C])).toBe(false);
   });
@@ -108,6 +112,10 @@ describe('canEditPatient (own clinic only)', () => {
   it('cannot edit a referred-in patient (only the originating clinic edits)', () => {
     // Patient at Clinic A, referred to B → B can SEE it but cannot EDIT it.
     expect(canEditPatient(user([hw(CLINIC_B)]), { clinicId: CLINIC_A })).toBe(false);
+  });
+  it('admin can edit at ANY clinic (super-admin)', () => {
+    expect(canEditPatient(user([admin(CLINIC_B)]), { clinicId: CLINIC_A })).toBe(true);
+    expect(canEditPatient(user([admin(CLINIC_B)]), { clinicId: CLINIC_C })).toBe(true);
   });
   it('cannot edit a patient at an unrelated clinic', () => {
     expect(canEditPatient(user([hw(CLINIC_A)]), { clinicId: CLINIC_B })).toBe(false);

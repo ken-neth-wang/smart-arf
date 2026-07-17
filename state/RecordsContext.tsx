@@ -28,6 +28,7 @@ interface RecordsContextValue {
   upsertEncounter: (encounter: Encounter) => Promise<void>;
   addFollowup: (patientId: string, fields: import('@/lib/types').FollowUpFields) => Promise<void>;
   softDelete: (patientId: string, reason: Patient['deleteReason'], notes?: string) => Promise<void>;
+  softDeleteEncounter: (encounterId: string, reason: Encounter['deleteReason'], notes?: string) => Promise<void>;
   setReferral: (encounterId: string, referredTo: string, referredToClinicId: string | null) => Promise<void>;
   clearAll: () => Promise<void>;
   activePatients: Patient[];
@@ -173,6 +174,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         inputs: null, score: null, level: null, resultLabel: null, range: null, breakdown: null, actions: null,
         includesLevelB: false,
         facilityType: null,
+        inactive: false,
         confirmedDx: fields.confirmedDx,
         finalDx: fields.finalDx,
         bpgStatus: fields.bpgStatus,
@@ -192,21 +194,46 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     async (patientId: string, reason: Patient['deleteReason'], notes?: string) => {
       const ts = new Date().toISOString();
       const prev = patientsRef.current;
-      const next = prev.map((p) =>
-        p.id === patientId
-          ? { ...p, inactive: true, deletedAt: ts, deletedBy: 'local', deleteReason: reason, deleteNotes: notes, updatedAt: ts }
-          : p,
-      );
+      const target = prev.find((p) => p.id === patientId);
+      if (!target) return;
+      const updated: Patient = { ...target, inactive: true, deletedAt: ts, deletedBy: 'local', deleteReason: reason, deleteNotes: notes, updatedAt: ts };
+      if (USE_CLOUD) {
+        try {
+          await savePatientCloud(updated);
+        } catch (err) {
+          console.error('[records] cloud soft-delete failed:', err);
+          if (typeof window !== 'undefined') window.alert('Could not remove patient (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          return; // don't hide locally if it didn't persist
+        }
+      }
+      const next = prev.map((p) => (p.id === patientId ? updated : p));
       syncRefs(next, encountersRef.current);
       setPatients(next);
+      if (!USE_CLOUD) await persistLocal(next, encountersRef.current);
+    },
+    [persistLocal, syncRefs],
+  );
+
+  const softDeleteEncounter = useCallback(
+    async (encounterId: string, reason: Encounter['deleteReason'], notes?: string) => {
+      const ts = new Date().toISOString();
+      const prev = encountersRef.current;
+      const target = prev.find((e) => e.id === encounterId);
+      if (!target) return;
+      const updated: Encounter = { ...target, inactive: true, deletedAt: ts, deletedBy: 'local', deleteReason: reason, deleteNotes: notes, updatedAt: ts };
       if (USE_CLOUD) {
-        const target = next.find((p) => p.id === patientId);
-        if (target) {
-          try { await savePatientCloud(target); } catch (err) { console.error('[records] cloud soft-delete failed:', err); }
+        try {
+          await saveEncounterCloud(updated);
+        } catch (err) {
+          console.error('[records] cloud encounter soft-delete failed:', err);
+          if (typeof window !== 'undefined') window.alert('Could not remove visit (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          return;
         }
-      } else {
-        await persistLocal(next, encountersRef.current);
       }
+      const next = prev.map((e) => (e.id === encounterId ? updated : e));
+      syncRefs(patientsRef.current, next);
+      setEncounters(next);
+      if (!USE_CLOUD) await persistLocal(patientsRef.current, next);
     },
     [persistLocal, syncRefs],
   );
@@ -242,13 +269,15 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const activePatients = useMemo(() => patients.filter((p) => !p.inactive), [patients]);
 
   const patientSummaries = useMemo<PatientSummary[]>(() => {
-    return activePatients.map((patient) => {
-      const encs = encounters.filter((e) => e.patientId === patient.id);
-      const initials = encs.filter((e) => e.type === 'initial');
-      const followups = encs.filter((e) => e.type === 'followup');
-      const latestInitial = initials.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-      return { patient, latestInitial, encounterCount: encs.length, followupCount: followups.length };
-    });
+    return activePatients
+      .map((patient) => {
+        const encs = encounters.filter((e) => e.patientId === patient.id && !e.inactive);
+        const initials = encs.filter((e) => e.type === 'initial');
+        const followups = encs.filter((e) => e.type === 'followup');
+        const latestInitial = initials.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        return { patient, latestInitial, encounterCount: encs.length, followupCount: followups.length };
+      })
+      .filter((s) => s.encounterCount > 0);
   }, [activePatients, encounters]);
 
   const getPatientById = useCallback((id: string) => patients.find((p) => p.id === id), [patients]);
@@ -262,7 +291,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   );
   const getEncountersForPatient = useCallback(
     (patientId: string) =>
-      encounters.filter((e) => e.patientId === patientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      encounters.filter((e) => e.patientId === patientId && !e.inactive).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [encounters],
   );
   const getPatientWithHistory = useCallback(
@@ -276,7 +305,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
 
   const value: RecordsContextValue = {
     patients, encounters, clinics, loading, refresh,
-    upsertPatient, upsertEncounter, addFollowup, softDelete, setReferral, clearAll,
+    upsertPatient, upsertEncounter, addFollowup, softDelete, softDeleteEncounter, setReferral, clearAll,
     activePatients, patientSummaries,
     getPatientById, getPatientByMRN, getPatientByCode, getPatientWithHistory, getEncountersForPatient,
   };

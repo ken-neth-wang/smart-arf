@@ -53,6 +53,7 @@ function mkEncounter(id: number, patientId: string, over: Partial<Encounter> = {
     id: `enc-${id}`,
     patientId,
     type: 'initial',
+    inactive: false,
     date: '01 Jan 2026, 10:00',
     inputs: emptyInputs(),
     score: id,

@@ -6,23 +6,30 @@ import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, CardSubtitle, CardTitle, StepBadge } from '@/components/ui/primitives';
+import { Card, CardSubtitle, CardTitle, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
 import { PatientCard } from '@/components/PatientCard';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
 
 export default function RecordsScreen() {
   const router = useRouter();
-  const { patientSummaries } = useRecords();
+  const { patientSummaries, clinics } = useRecords();
   const [q, setQ] = useState('');
+  const [selectedClinic, setSelectedClinic] = useState('');
+
+  const clinicOptions: SelectOption[] = [
+    { label: 'All clinics', value: '' },
+    ...clinics.map((c) => ({ label: c.name, value: c.id })),
+  ];
 
   const query = q.trim().toLowerCase();
-  const filtered = query
-    ? patientSummaries.filter((s) => {
-        const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
-        return hay.includes(query);
-      })
-    : patientSummaries;
+  const filtered = patientSummaries
+    .filter((s) => !selectedClinic || s.patient.clinicId === selectedClinic)
+    .filter((s) => {
+      if (!query) return true;
+      const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
+      return hay.includes(query);
+    });
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 40, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
@@ -30,6 +37,15 @@ export default function RecordsScreen() {
         <StepBadge>Patient Records</StepBadge>
         <CardTitle>All Patients</CardTitle>
         <CardSubtitle>Search and review every patient saved on this device.</CardSubtitle>
+
+        {clinics.length > 0 ? (
+          <SelectField
+            label="Filter by clinic"
+            value={selectedClinic}
+            options={clinicOptions}
+            onChange={setSelectedClinic}
+          />
+        ) : null}
 
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={16} color={Colors.gray} />

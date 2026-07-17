@@ -184,6 +184,12 @@ export interface Encounter {
 
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  // soft-delete (per-visit: hides just this encounter; patient + others stay)
+  inactive: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: DeleteReason;
+  deleteNotes?: string;
 }
 
 /** Convenience: a patient + their encounter timeline (newest first). */

@@ -10,6 +10,8 @@ import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, SelectFi
 import { ScoreBreakdown } from '@/components/ui/results';
 import { useRecords } from '@/state/RecordsContext';
 import { useAssessment } from '@/state/AssessmentContext';
+import { useAuth } from '@/state/AuthContext';
+import { canEditPatient } from '@/lib/permissions';
 import { Colors, tierColor } from '@/constants/theme';
 import { fullName, maskMRN, maskPhone } from '@/lib/format';
 import { ageFromDateOfBirth, type BpgStatus, type ConfirmedDx, type DeleteReason, type Encounter } from '@/lib/types';
@@ -30,12 +32,14 @@ const TYPE_LABEL: Record<Encounter['type'], string> = { initial: 'Assessment', f
 export default function RecordScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { getPatientWithHistory, softDelete } = useRecords();
+  const { getPatientWithHistory, softDelete, softDeleteEncounter } = useRecords();
   const { loadRecordForEdit } = useAssessment();
+  const { user } = useAuth();
   const history = id ? getPatientWithHistory(id) : undefined;
 
   const [delOpen, setDelOpen] = useState(false);
   const [reason, setReason] = useState<string>('');
+  const [encDelId, setEncDelId] = useState<string | null>(null);
 
   const initialEncounter = useMemo(
     () => history?.encounters.find((e) => e.type === 'initial'),
@@ -73,6 +77,13 @@ export default function RecordScreen() {
     await softDelete(patient.id, reason as DeleteReason);
     setDelOpen(false);
     router.back();
+  };
+
+  const confirmEncounterDelete = async () => {
+    if (encDelId) {
+      await softDeleteEncounter(encDelId, reason as DeleteReason);
+    }
+    setEncDelId(null);
   };
 
   const handleRemove = () => {
@@ -152,6 +163,11 @@ export default function RecordScreen() {
                 {e.referredTo ? <Text style={styles.encRow}><Text style={styles.encKey}>Referred to: </Text>{e.referredTo}</Text> : null}
                 {e.notes ? <Text style={styles.encRow}><Text style={styles.encKey}>Notes: </Text>{e.notes}</Text> : null}
               </View>
+              {canEditPatient(user, { clinicId: patient.clinicId ?? null }) ? (
+                <Pressable hitSlop={6} onPress={() => { setReason(''); setEncDelId(e.id); }} style={styles.encRemoveBtn}>
+                  <Text style={styles.encRemoveText}>Remove this visit</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))
         )}
@@ -189,6 +205,25 @@ export default function RecordScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={encDelId !== null} transparent animationType="fade" onRequestClose={() => setEncDelId(null)}>
+        <View style={styles.modalBg}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Remove Visit</Text>
+              <Pressable hitSlop={12} onPress={() => setEncDelId(null)}>
+                <Ionicons name="close" size={22} color="#fff" />
+              </Pressable>
+            </View>
+            <View style={{ padding: 18 }}>
+              <Text style={styles.modalText}>This visit will be removed from view. The patient and their other encounters remain. Retained for audit purposes.</Text>
+              <SelectField label="Reason for removal" value={reason} options={REASON_OPTS} onChange={setReason} />
+              <PrimaryButton title="Remove Visit" color={Colors.danger} onPress={confirmEncounterDelete} />
+              <SecondaryButton title="Cancel" onPress={() => setEncDelId(null)} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -211,6 +246,8 @@ const styles = StyleSheet.create({
   encBody: { gap: 4 },
   encRow: { fontSize: 13, color: Colors.text, lineHeight: 18 },
   encKey: { fontWeight: '700', color: Colors.textSecondary },
+  encRemoveBtn: { alignSelf: 'flex-end', marginTop: 8, paddingVertical: 4, paddingHorizontal: 6 },
+  encRemoveText: { fontSize: 12.5, fontWeight: '700', color: Colors.danger },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalBox: { backgroundColor: Colors.white, borderRadius: 14, overflow: 'hidden' },
   modalHeader: { backgroundColor: Colors.danger, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
