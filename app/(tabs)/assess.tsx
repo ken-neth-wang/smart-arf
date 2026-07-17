@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WizardHeader } from '@/components/WizardHeader';
+import { PhotoCard } from '@/components/PhotoCard';
 import {
   Alert,
   Card,
@@ -382,6 +383,8 @@ function Step5() {
         <PrimaryButton title="View Final Result" onPress={async () => { await commitFinal(); goStep(6); }} />
         <SecondaryButton title="Back" onPress={() => goStep(4)} />
       </Card>
+
+      <PhotoCard />
     </>
   );
 }

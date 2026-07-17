@@ -217,6 +217,37 @@ export interface PatientSummary {
 }
 
 /* ─────────────────────────────────────────────────────────────────── *
+ * Photos — clinician-uploaded skin photos for AI triage + later review.
+ * v0 uses a dummy edge function (no real model yet).
+ * ─────────────────────────────────────────────────────────────────── */
+
+/** Structured result returned by the analyze-photo edge function. */
+export interface PhotoAnalysis {
+  arfSuspected: boolean;
+  confidence: number; // 0–1
+  finding: string;
+  notes: string;
+  model: string;
+}
+
+/** A stored photo + its analysis, anchored to a patient/encounter + clinic. */
+export interface PhotoRecord {
+  id: string;
+  patientId: string | null;
+  encounterId: string | null;
+  clinicId: string;
+  storagePath: string;
+  mimeType: string;
+  finding: string;
+  arfSuspected: boolean;
+  confidence: number;
+  notes: string;
+  model: string;
+  clinicianLabel: string | null; // ground truth, filled in later (training set)
+  createdAt: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────── *
  * Legacy compat — re-export the old fused shape ONLY for scoring.ts
  * internals and migration of in-flight wizard state. New code should use
  * Patient + Encounter directly.
