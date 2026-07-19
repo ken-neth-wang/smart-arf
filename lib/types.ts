@@ -96,7 +96,7 @@ export interface Patient {
   referralCode: string; // ARF-XXXX-XXXX — STABLE, unique per human
   firstName: string;
   lastName: string;
-  mrn: string; // unique within deployment (single-country scope); '' if unknown
+  mrn: string; // unique within each clinic; cross-clinic link via referralCode; '' if unknown
   phone1: string;
   phone2: string;
   dateOfBirth: string | null; // ISO date (YYYY-MM-DD); null = age unknown
@@ -273,6 +273,34 @@ export interface AudioRecord {
   clinicianLabel: string | null; // ground truth (e.g. "murmur"/"normal"), filled in later → training set
   inactive: boolean; // soft-delete flag (hidden from the list when true)
   createdAt: string;
+}
+
+/**
+ * Voice-extracted clinical criteria (Steps 2/3/5). Each field is OPTIONAL:
+ * present only if the clinician stated it; absent = not mentioned (untouched).
+ * Applies via setEntry (Step 2) + setInputs (Step 3/5). Never touches demographics.
+ */
+export interface VoiceAssessment {
+  // Step 2 entry (tri-state)
+  fever?: boolean;
+  chorea?: boolean;
+  altCause?: boolean;
+  // Step 3 Level A
+  joint?: 'none' | 'monoarthralgia' | 'polyarthralgia' | 'migratory';
+  murmur?: boolean;
+  sob?: boolean;
+  edema?: boolean;
+  em?: boolean;
+  sn?: boolean;
+  noad?: boolean;
+  // Step 5 Level B
+  facilityType?: 'primary' | 'secondary';
+  wbc?: boolean;
+  aso?: boolean;
+  esr?: boolean;
+  antidnase?: boolean;
+  pr?: boolean;
+  echo?: 'suggestive';
 }
 
 /* ─────────────────────────────────────────────────────────────────── *
