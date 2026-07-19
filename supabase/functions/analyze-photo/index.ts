@@ -1,19 +1,25 @@
-// analyze-photo — Gemini 2.5 Flash vision call.
+// analyze-photo — vision screening with a model fallback.
 //
 // Flow: fetch the uploaded image from Supabase Storage (service role) → base64
-// → POST to Gemini with an ARF-screening prompt + structured-JSON schema →
-// return { arfSuspected, confidence, finding, notes, model }.
+// → call a vision model with an ARF-screening prompt + JSON output → return
+// { arfSuspected, confidence, finding, notes, model }.
+//
+// Fallback chain (same GEMINI_API_KEY, all free):
+//   1. gemini-3.5-flash  (structured JSON via responseSchema)  — 15 RPM / 1M tok/day
+//   2. gemma-4-31b-it    (JSON mode, no schema)
+// If the primary fails (rate limit, model error, bad/unparseable output), it
+// automatically tries the next. The `model` field reports which one answered.
 //
 // SETUP (one time):
-//   1. Free API key:        https://aistudio.google.com/apikey
-//   2. Set the secret:      supabase secrets set GEMINI_API_KEY=AIza... --project-ref <ref>
-//   3. (re)deploy:          supabase functions deploy analyze-photo --project-ref <ref>
+//   1. Free API key:   https://aistudio.google.com/apikey
+//   2. Set the secret: supabase secrets set GEMINI_API_KEY=AIza... --project-ref <ref>
+//   3. (re)deploy:     supabase functions deploy analyze-photo --project-ref <ref>
 //
 // App invokes via: supabase.functions.invoke('analyze-photo', { body: { storagePath } })
 //
-// NOTE: this is a general vision model, NOT medically validated — outputs are a
-// screening aid only. Real clinical value comes later from a medical model
-// (MedGemma) and/or training on the clinician_label field.
+// NOTE: general vision models, not medically validated — outputs are a screening
+// aid only. Real clinical value comes from a medical model (MedGemma) + training
+// on the clinician_label field.
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,9 +28,12 @@ export const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.5-flash";
-const MODEL_TAG = "gemini-3.5-flash";
 const STORAGE_BUCKET = "photos";
+
+const MODELS = [
+  { name: "gemini-3.5-flash", useSchema: true },
+  { name: "gemma-4-31b-it", useSchema: false },
+];
 
 const PROMPT = `You are a clinical screening assistant. Analyze this skin photo for signs of Acute Rheumatic Fever (ARF).
 ARF-specific skin manifestations to look for:
@@ -36,6 +45,17 @@ Return JSON with:
 - finding: one short sentence describing what is visible.
 - notes: brief clinical impression + any caveat (image quality, need for clinical correlation).
 This is a screening aid only and is NOT a diagnosis.`;
+
+const SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    arfSuspected: { type: "BOOLEAN" },
+    confidence: { type: "NUMBER" },
+    finding: { type: "STRING" },
+    notes: { type: "STRING" },
+  },
+  required: ["arfSuspected", "confidence", "finding", "notes"],
+};
 
 function mimeFromPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -64,6 +84,78 @@ function jsonError(status: number, message: string): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Strip ```json ... ``` fences so we can parse even if a model wrapped the output.
+function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return (fenced ? fenced[1] : text).trim();
+}
+
+interface Parsed {
+  arfSuspected?: boolean;
+  confidence?: number;
+  finding?: string;
+  notes?: string;
+}
+
+interface ModelResult {
+  ok: boolean;
+  parsed?: Parsed;
+  model?: string;
+  error?: string;
+}
+
+/** Try one model; return ok + parsed result, or ok=false with an error reason. */
+async function tryModel(
+  name: string,
+  key: string,
+  contents: object[],
+  useSchema: boolean,
+): Promise<ModelResult> {
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.2,
+    responseMimeType: "application/json",
+  };
+  if (useSchema) generationConfig.responseSchema = SCHEMA;
+
+  let resp: Response;
+  try {
+    resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents, generationConfig }),
+      },
+    );
+  } catch (e) {
+    return { ok: false, error: `${name} fetch failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    return { ok: false, error: `${name} API error (${resp.status}): ${t.slice(0, 300)}` };
+  }
+
+  let data: unknown;
+  try {
+    data = await resp.json();
+  } catch {
+    return { ok: false, error: `${name} returned a non-JSON response` };
+  }
+  const text: string | undefined =
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (data as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) return { ok: false, error: `${name} returned no content` };
+
+  let parsed: Parsed;
+  try {
+    parsed = JSON.parse(extractJson(text));
+  } catch {
+    return { ok: false, error: `${name} output was not valid JSON` };
+  }
+  return { ok: true, parsed, model: name };
 }
 
 Deno.serve(async (req: Request) => {
@@ -95,7 +187,6 @@ Deno.serve(async (req: Request) => {
   }
 
   // 1. Fetch the image bytes from Storage (service role bypasses RLS).
-  //    storagePath is the object key within the `photos` bucket.
   const objectUrl = `${supabaseUrl}/storage/v1/object/${STORAGE_BUCKET}/${storagePath}`;
   const imgResp = await fetch(objectUrl, {
     headers: { authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
@@ -107,70 +198,39 @@ Deno.serve(async (req: Request) => {
   const mimeType = mimeFromPath(storagePath);
   const b64 = toBase64(imgBytes);
 
-  // 2. Call Gemini 2.5 Flash (image + text → structured JSON).
-  const geminiResp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
+  // 2. Try each model in order until one returns a valid result.
+  const contents = [
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: PROMPT },
-              { inline_data: { mime_type: mimeType, data: b64 } },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              arfSuspected: { type: "BOOLEAN" },
-              confidence: { type: "NUMBER" },
-              finding: { type: "STRING" },
-              notes: { type: "STRING" },
-            },
-            required: ["arfSuspected", "confidence", "finding", "notes"],
-          },
-        },
-      }),
+      parts: [
+        { text: PROMPT },
+        { inline_data: { mime_type: mimeType, data: b64 } },
+      ],
     },
-  );
+  ];
 
-  if (!geminiResp.ok) {
-    const errText = await geminiResp.text();
-    return jsonError(502, `Gemini API error (${geminiResp.status}): ${errText.slice(0, 400)}`);
+  let lastError = "no model attempted";
+  let success: ModelResult | null = null;
+  for (const m of MODELS) {
+    const r = await tryModel(m.name, geminiKey, contents, m.useSchema);
+    if (r.ok) {
+      success = r;
+      break;
+    }
+    lastError = r.error ?? "unknown";
+    console.log(`[analyze-photo] ${m.name} failed: ${lastError}`);
   }
 
-  // 3. Parse the structured response.
-  const gemData = await geminiResp.json();
-  const text: string | undefined =
-    gemData?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    return jsonError(502, "Gemini returned no content.");
+  if (!success || !success.parsed || !success.model) {
+    return jsonError(502, `All models failed. Last: ${lastError}`);
   }
 
-  let parsed: {
-    arfSuspected?: boolean;
-    confidence?: number;
-    finding?: string;
-    notes?: string;
-  };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return jsonError(502, "Gemini output was not valid JSON.");
-  }
-
+  const p = success.parsed;
   const result = {
-    arfSuspected: Boolean(parsed.arfSuspected),
-    confidence: clamp(Number(parsed.confidence) || 0, 0, 1),
-    finding: String(parsed.finding ?? "Unable to determine from the image."),
-    notes: String(parsed.notes ?? ""),
-    model: MODEL_TAG,
+    arfSuspected: Boolean(p.arfSuspected),
+    confidence: clamp(Number(p.confidence) || 0, 0, 1),
+    finding: String(p.finding ?? "Unable to determine from the image."),
+    notes: String(p.notes ?? ""),
+    model: success.model,
   };
 
   return new Response(JSON.stringify(result), {
