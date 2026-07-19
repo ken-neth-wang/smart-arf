@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { WizardHeader } from '@/components/WizardHeader';
 import { PhotoCard } from '@/components/PhotoCard';
 import { AudioCard } from '@/components/AudioCard';
+import { VoiceFillCard } from '@/components/VoiceFillCard';
 import {
   Alert,
   Card,
@@ -198,6 +199,7 @@ function Step3() {
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={3} /> : null}
+      <VoiceFillCard />
       <Card>
         <StepBadge>Step 3 — Level A: Clinical Assessment</StepBadge>
         <CardTitle>Signs &amp; Symptoms Checklist</CardTitle>
