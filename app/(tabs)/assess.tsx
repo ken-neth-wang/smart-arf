@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WizardHeader } from '@/components/WizardHeader';
 import { PhotoCard } from '@/components/PhotoCard';
+import { AudioCard } from '@/components/AudioCard';
 import {
   Alert,
   Card,
@@ -385,6 +386,7 @@ function Step5() {
       </Card>
 
       <PhotoCard />
+      <AudioCard />
     </>
   );
 }

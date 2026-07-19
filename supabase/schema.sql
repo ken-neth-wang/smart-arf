@@ -19,7 +19,10 @@
 -- below, so dropping those functions would fail on re-runs without this.
 drop policy if exists "photos_storage_insert" on storage.objects;
 drop policy if exists "photos_storage_read" on storage.objects;
+drop policy if exists "audio_storage_insert" on storage.objects;
+drop policy if exists "audio_storage_read" on storage.objects;
 
+drop table if exists public.audio cascade;
 drop table if exists public.photos cascade;
 drop table if exists public.encounters cascade;
 drop table if exists public.patients cascade;
@@ -431,3 +434,71 @@ create policy "photos_storage_insert" on storage.objects
   for insert with check (bucket_id = 'photos' and public.is_approved());
 create policy "photos_storage_read" on storage.objects
   for select using (bucket_id = 'photos' and (public.is_admin() or public.is_approved()));
+
+-- ═══════════════════════════════════════════════════════════════
+-- audio — auscultation/heartbeat recordings + murmur screening (v0)
+-- Mirror of photos: same clinic-scoped RLS, soft-delete, private bucket.
+-- ═══════════════════════════════════════════════════════════════
+create table if not exists public.audio (
+  id              text primary key,
+  patient_id      text references public.patients(id) on delete set null,
+  encounter_id    text references public.encounters(id) on delete set null,
+  clinic_id       uuid not null references public.clinics(id) on delete cascade,
+  storage_path    text not null,
+  mime_type       text not null default '',
+  finding         text not null default '',
+  murmur_detected boolean not null default false,
+  confidence      real not null default 0,
+  notes           text not null default '',
+  model           text not null default '',
+  clinician_label text,                              -- ground truth, filled in later → training set
+  inactive        boolean not null default false,    -- soft-delete flag (hidden from the list when true)
+  created_by      uuid references auth.users(id) default auth.uid(),
+  updated_by      uuid references auth.users(id),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists audio_encounter_id_idx on public.audio (encounter_id);
+create index if not exists audio_patient_id_idx   on public.audio (patient_id);
+create index if not exists audio_clinic_id_idx    on public.audio (clinic_id);
+create index if not exists audio_inactive_idx     on public.audio (inactive);
+
+drop trigger if exists audio_set_audit on public.audio;
+create trigger audio_set_audit
+  before update on public.audio
+  for each row execute function public.set_audit_fields();
+
+alter table public.audio enable row level security;
+
+drop policy if exists "audio_select" on public.audio;
+drop policy if exists "audio_insert" on public.audio;
+drop policy if exists "audio_update" on public.audio;
+create policy "audio_select" on public.audio
+  for select using (public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics())));
+create policy "audio_insert" on public.audio
+  for insert with check (
+    public.is_approved()
+    and clinic_id in (select public.my_clinics())
+    and created_by = auth.uid()
+  );
+create policy "audio_update" on public.audio
+  for update using (
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  ) with check (
+    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  );
+-- No DELETE policy → audio can't be hard-deleted from the app (soft model).
+
+-- Audio storage bucket (PRIVATE) + policies. v0: audio bytes aren't clinic-scoped at
+-- the storage layer (only the metadata row is); paths use unguessable UUIDs.
+insert into storage.buckets (id, name, public)
+values ('audio', 'audio', false)
+on conflict (id) do nothing;
+
+drop policy if exists "audio_storage_insert" on storage.objects;
+drop policy if exists "audio_storage_read" on storage.objects;
+create policy "audio_storage_insert" on storage.objects
+  for insert with check (bucket_id = 'audio' and public.is_approved());
+create policy "audio_storage_read" on storage.objects
+  for select using (bucket_id = 'audio' and (public.is_admin() or public.is_approved()));

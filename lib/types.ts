@@ -248,6 +248,33 @@ export interface PhotoRecord {
   createdAt: string;
 }
 
+/** Structured result returned by the analyze-audio edge function. */
+export interface AudioAnalysis {
+  murmurDetected: boolean;
+  confidence: number; // 0–1
+  finding: string;
+  notes: string;
+  model: string;
+}
+
+/** A stored auscultation recording + its analysis, anchored to a patient/encounter + clinic. */
+export interface AudioRecord {
+  id: string;
+  patientId: string | null;
+  encounterId: string | null;
+  clinicId: string;
+  storagePath: string;
+  mimeType: string;
+  finding: string;
+  murmurDetected: boolean;
+  confidence: number;
+  notes: string;
+  model: string;
+  clinicianLabel: string | null; // ground truth (e.g. "murmur"/"normal"), filled in later → training set
+  inactive: boolean; // soft-delete flag (hidden from the list when true)
+  createdAt: string;
+}
+
 /* ─────────────────────────────────────────────────────────────────── *
  * Legacy compat — re-export the old fused shape ONLY for scoring.ts
  * internals and migration of in-flight wizard state. New code should use
