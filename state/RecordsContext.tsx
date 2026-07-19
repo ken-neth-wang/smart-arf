@@ -122,8 +122,11 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       resolved = { ...prev[idx], ...patient, referralCode: prev[idx].referralCode, createdAt: prev[idx].createdAt };
       next = prev.map((p) => (p.id === resolved.id ? resolved : p));
     } else if (patient.mrn) {
-      // MRN dedup at the data layer (UI lookup deferred — docs/data-model.md #8).
-      const existing = prev.find((p) => p.mrn === patient.mrn && !p.inactive);
+      // MRN dedup is PER-CLINIC: only reuse an existing patient if the MRN
+      // matches AND it's the same clinic. Cross-clinic link via referralCode.
+      const existing = prev.find(
+        (p) => p.mrn === patient.mrn && (p.clinicId ?? null) === (patient.clinicId ?? null) && !p.inactive,
+      );
       if (existing) {
         resolved = { ...existing, ...patient, id: existing.id, referralCode: existing.referralCode, createdAt: existing.createdAt };
         next = prev.map((p) => (p.id === resolved.id ? resolved : p));

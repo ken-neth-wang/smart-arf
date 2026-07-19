@@ -120,8 +120,12 @@ create table public.patients (
 create index patients_referral_code_idx on public.patients (referral_code);
 create index patients_clinic_id_idx      on public.patients (clinic_id);
 create index patients_inactive_idx       on public.patients (inactive);
--- MRN uniqueness only on non-empty values (single-country scope assumed).
-create unique index patients_mrn_unique on public.patients (mrn) where mrn <> '';
+-- MRN uniqueness is PER-CLINIC (different clinics may reuse their own MRN
+-- numbers for different people). Cross-clinic patient linking happens via
+-- referral_code, NOT MRN. Only enforce on non-empty values. Patients with
+-- clinic_id IS NULL are not uniqueness-enforced (see null-clinic handling).
+drop index if exists patients_mrn_unique;
+create unique index patients_mrn_clinic_unique on public.patients (clinic_id, mrn) where mrn <> '';
 
 -- ═══════════════════════════════════════════════════════════════
 -- encounters — clinical visits (now with referred_to_clinic_id + audited)
