@@ -82,3 +82,11 @@ coverage/
 
 # Stray subagent scratch artifact (not source)
 research.md
+context.md
+
+# ─────────────────────────────────────────────────────────────
+# Local test data / scratch media (never commit)
+# ─────────────────────────────────────────────────────────────
+/*.mp3
+/*.webp
+arf_test.jpg
