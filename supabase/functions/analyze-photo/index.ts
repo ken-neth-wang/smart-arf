@@ -35,6 +35,21 @@ const MODELS = [
   { name: "gemma-4-31b-it", useSchema: false },
 ];
 
+// Clinical skin photos can trip Gemini's safety filters (skin → "sexually
+// explicit" / "dangerous"). Relax to BLOCK_ONLY_HIGH so genuine clinical
+// content passes while severe violations still block. Gemma (open model) has
+// no safety config, so we only send these to Gemini-prefixed models.
+const SAFETY_SETTINGS = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_IMAGE_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_IMAGE_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+];
+
 const PROMPT = `You are a clinical screening assistant. Analyze this skin photo for signs of Acute Rheumatic Fever (ARF).
 ARF-specific skin manifestations to look for:
 - Erythema marginatum: pink/salmon, ring-shaped or arc-shaped rash with a clear or raised center that spreads outward and migrates; usually on the trunk and proximal limbs.
@@ -119,6 +134,10 @@ async function tryModel(
   };
   if (useSchema) generationConfig.responseSchema = SCHEMA;
 
+  // Relax safety for clinical imagery on Gemini models (Gemma has no safety config).
+  const reqBody: Record<string, unknown> = { contents, generationConfig };
+  if (name.startsWith("gemini")) reqBody.safetySettings = SAFETY_SETTINGS;
+
   let resp: Response;
   try {
     resp = await fetch(
@@ -126,7 +145,7 @@ async function tryModel(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, generationConfig }),
+        body: JSON.stringify(reqBody),
       },
     );
   } catch (e) {
@@ -144,15 +163,28 @@ async function tryModel(
   } catch {
     return { ok: false, error: `${name} returned a non-JSON response` };
   }
-  const text: string | undefined =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = data as any;
+  const candidate = d?.candidates?.[0];
+  const text: string | undefined = candidate?.content?.parts?.[0]?.text;
+  if (!text) {
+    // No text usually means a safety/recitation block — surface the reason.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (data as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return { ok: false, error: `${name} returned no content` };
+    const blockReason: string | undefined = d?.promptFeedback?.blockReason;
+    const finishReason: string | undefined = candidate?.finishReason;
+    const why = blockReason
+      ? `blocked (${blockReason})`
+      : finishReason && finishReason !== "STOP"
+        ? `finishReason=${finishReason}`
+        : "returned no content";
+    return { ok: false, error: `${name} ${why}` };
+  }
 
   let parsed: Parsed;
   try {
     parsed = JSON.parse(extractJson(text));
   } catch {
+    console.log(`[analyze-photo] ${name} non-JSON output (first 200 chars):`, text.slice(0, 200));
     return { ok: false, error: `${name} output was not valid JSON` };
   }
   return { ok: true, parsed, model: name };
@@ -197,6 +229,7 @@ Deno.serve(async (req: Request) => {
   const imgBytes = new Uint8Array(await imgResp.arrayBuffer());
   const mimeType = mimeFromPath(storagePath);
   const b64 = toBase64(imgBytes);
+  console.log(`[analyze-photo] storagePath=${storagePath} mime=${mimeType} bytes=${imgBytes.length} (b64=${b64.length})`);
 
   // 2. Try each model in order until one returns a valid result.
   const contents = [
@@ -208,7 +241,7 @@ Deno.serve(async (req: Request) => {
     },
   ];
 
-  let lastError = "no model attempted";
+  const errors: string[] = [];
   let success: ModelResult | null = null;
   for (const m of MODELS) {
     const r = await tryModel(m.name, geminiKey, contents, m.useSchema);
@@ -216,12 +249,13 @@ Deno.serve(async (req: Request) => {
       success = r;
       break;
     }
-    lastError = r.error ?? "unknown";
-    console.log(`[analyze-photo] ${m.name} failed: ${lastError}`);
+    errors.push(`${m.name}: ${r.error ?? "unknown"}`);
+    console.log(`[analyze-photo] ${m.name} failed: ${r.error ?? "unknown"}`);
   }
 
   if (!success || !success.parsed || !success.model) {
-    return jsonError(502, `All models failed. Last: ${lastError}`);
+    // Surface EVERY model's failure (not just the last) so the real cause is visible.
+    return jsonError(502, `All models failed — ${errors.join(" | ")}`);
   }
 
   const p = success.parsed;
