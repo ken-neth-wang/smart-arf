@@ -3,14 +3,14 @@
 # Triggers automatically when you push a tag like `v0.3` or `v1.0.0`, and is
 # also runnable manually from the Actions tab ("Run workflow").
 #
-# Result: live at https://ken-neth-wang.github.io/smart-arf/
+# Result: live at https://smartarf.com/  (custom domain on GitHub Pages)
 #
 # One-time setup (do this once in the GitHub repo settings):
 #   Settings → Pages → Source: "Deploy from a branch" → Branch: "gh-pages" / root
 #
 # Notes:
-#   - Requires `expo.web.baseUrl: "/smart-arf/"` in app.json (already set),
-#     because the site is served from a subpath, not the domain root.
+#   - Requires `expo.web.baseUrl: "/"` in app.json — the custom domain serves
+#     the site from the root, not a subpath.
 #   - EAS / native app-store builds are handled separately (eas.json + the
 #     `eas build` / `eas submit` commands). GitHub Pages is web-only.
 

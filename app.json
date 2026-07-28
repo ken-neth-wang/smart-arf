@@ -43,7 +43,7 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true,
-      "baseUrl": "/smart-arf/"
+      "baseUrl": "/"
     }
   }
 }
