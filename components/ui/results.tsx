@@ -216,7 +216,7 @@ const codeStyles = StyleSheet.create({
  * the HTML shows no interp — only number + label).
  */
 export function LiveScoreCard({ score, label, subtitle }: { score: number; label: string; subtitle?: string }) {
-  const interpColor = score <= 5 ? Colors.success : score <= 9 ? Colors.warning : score <= 14 ? Colors.danger : Colors.urgent;
+  const interpColor = score <= 5 ? Colors.success : score <= 7 ? Colors.warning : Colors.danger;
   return (
     <View style={liveStyles.box}>
       <Text style={liveStyles.label}>{subtitle ?? 'Current Level A Score'}</Text>
