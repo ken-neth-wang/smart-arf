@@ -49,10 +49,10 @@ export function getInterp(scoreA: number, scoreB: number): Interp {
   // over the combined-total tiers below.
   if (scoreB > 6) return { label: 'Positive ARF (Level B confirmed)', level: 'confirmed', range: 'Level B > 6' };
   const score = scoreA + scoreB;
+  // Three tiers (the Highly Likely tier was retired per clinical-team review):
   if (score <= 5) return { label: 'ARF Unlikely', level: 'unlikely', range: 'Score 0–5' };
-  if (score <= 9) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–9' };
-  if (score <= 14) return { label: 'ARF Likely', level: 'likely', range: 'Score 10–14' };
-  return { label: 'ARF Highly Likely', level: 'urgent', range: 'Score ≥15' };
+  if (score <= 7) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
+  return { label: 'ARF Likely', level: 'likely', range: 'Score ≥8' };
 }
 
 export function getActions(scoreA: number, scoreB: number): string[] {
@@ -74,7 +74,7 @@ export function getActions(scoreA: number, scoreB: number): string[] {
       'Reassess if fever persists or symptoms change',
     ];
   }
-  if (score <= 9) {
+  if (score <= 7) {
     return [
       'ARF is possible — do not dismiss',
       'Start Benzathine Penicillin G (BPG) prophylaxis',
@@ -82,21 +82,13 @@ export function getActions(scoreA: number, scoreB: number): string[] {
       'Document findings and initiate prophylaxis plan',
     ];
   }
-  if (score <= 14) {
-    return [
-      'ARF is likely — act promptly',
-      'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
-      'Refer to secondary care for full evaluation',
-      'Initiate long-term secondary prophylaxis plan',
-      'Educate patient and family about RHD',
-    ];
-  }
+  // Score ≥8 — "Likely" (Highly Likely tier retired; same actions for all high scores).
   return [
-    'ARF is highly likely — urgent action required',
-    'Start Benzathine Penicillin G (BPG) prophylaxis now',
-    'Urgent referral to secondary care',
-    'Monitor for cardiac complications',
+    'ARF is likely — act promptly',
+    'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
+    'Refer to secondary care for full evaluation',
     'Initiate long-term secondary prophylaxis plan',
+    'Educate patient and family about RHD',
   ];
 }
 

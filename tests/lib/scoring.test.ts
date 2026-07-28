@@ -130,14 +130,13 @@ describe('calcLevelB', () => {
 describe('getInterp', () => {
   const cases: ReadonlyArray<[number, number, string, string, string]> = [
     [0, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [3, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
     [5, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [0, 6, 'ARF Possible', 'possible', 'Score 6–9'],
-    [3, 6, 'ARF Possible', 'possible', 'Score 6–9'],
-    [4, 6, 'ARF Likely', 'likely', 'Score 10–14'],
-    [8, 6, 'ARF Likely', 'likely', 'Score 10–14'],
-    [9, 6, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
-    [94, 6, 'ARF Highly Likely', 'urgent', 'Score ≥15'],
+    [0, 6, 'ARF Possible', 'possible', 'Score 6–7'],   // sum 6
+    [1, 6, 'ARF Possible', 'possible', 'Score 6–7'],   // sum 7 (top of Possible)
+    [2, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 8 (boundary into Likely)
+    [4, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 10
+    [9, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 15 — formerly Highly Likely, now Likely
+    [94, 6, 'ARF Likely', 'likely', 'Score ≥8'],       // sum 100 — formerly Highly Likely, now Likely
   ];
 
   it.each(cases)('scoreA %i, scoreB %i → { %s, %s, %s }', (scoreA, scoreB, label, level, range) => {
@@ -199,10 +198,10 @@ describe('chorea effect on the total', () => {
   it('choreaPositive raises a low score into a higher tier (no auto-confirm)', () => {
     // 0 points otherwise → chorea makes it 5 → still 'unlikely'
     expect(getInterp(calcLevelA(buildInputs({ choreaPositive: true })), 0).level).toBe('unlikely');
-    // chorea + noad = 8 → 'possible'
+    // chorea + noad = 8 → 'likely' (tier boundary: ≥8 is Likely)
     expect(
       getInterp(calcLevelA(buildInputs({ choreaPositive: true, noad: true })), 0).level,
-    ).toBe('possible');
+    ).toBe('likely');
   });
 });
 
@@ -218,8 +217,8 @@ describe('getActions', () => {
     ]);
   });
 
-  it('score 6–9 → 4 items', () => {
-    const a = getActions(3, 6); // sum 9, scoreB 6 → tier 6–9
+  it('score 6–7 → 4 items', () => {
+    const a = getActions(1, 6); // sum 7, scoreB 6 → tier 6–7
     expect(a).toHaveLength(4);
     expect(a[0]).toBe('ARF is possible — do not dismiss');
     expect(a[1]).toBe('Start Benzathine Penicillin G (BPG) prophylaxis');
@@ -227,30 +226,18 @@ describe('getActions', () => {
     expect(a[3]).toBe('Document findings and initiate prophylaxis plan');
   });
 
-  it('score 10–14 → 5 items', () => {
-    const a = getActions(8, 6); // sum 14, scoreB 6 → tier 10–14
+  it('score ≥8 → 5 items (Highly Likely tier retired; same actions for all high scores)', () => {
+    const a = getActions(2, 6); // sum 8, scoreB 6 → tier ≥8
     expect(a).toHaveLength(5);
     expect(a[0]).toBe('ARF is likely — act promptly');
   });
 
-  it('score ≥15 → 5 plain-text items (HTML stripped)', () => {
-    expect(getActions(9, 6)).toEqual([
-      // sum 15, scoreB 6 → tier ≥15
-      'ARF is highly likely — urgent action required',
-      'Start Benzathine Penicillin G (BPG) prophylaxis now',
-      'Urgent referral to secondary care',
-      'Monitor for cardiac complications',
-      'Initiate long-term secondary prophylaxis plan',
-    ]);
-  });
-
   it('boundary scores route to the correct tier', () => {
-    expect(getActions(5, 0)).toHaveLength(3);
-    expect(getActions(0, 6)).toHaveLength(4); // sum 6
-    expect(getActions(3, 6)).toHaveLength(4); // sum 9
-    expect(getActions(4, 6)).toHaveLength(5); // sum 10
-    expect(getActions(8, 6)).toHaveLength(5); // sum 14
-    expect(getActions(9, 6)).toHaveLength(5); // sum 15
+    expect(getActions(5, 0)).toHaveLength(3);   // sum 5 → unlikely
+    expect(getActions(0, 6)).toHaveLength(4);   // sum 6 → possible
+    expect(getActions(1, 6)).toHaveLength(4);   // sum 7 → possible
+    expect(getActions(2, 6)).toHaveLength(5);   // sum 8 → likely
+    expect(getActions(9, 6)).toHaveLength(5);   // sum 15 → likely (Highly Likely retired)
   });
 
   it('never contains residual HTML tags', () => {
@@ -262,9 +249,8 @@ describe('getActions', () => {
   });
 
   it('uses an em-dash (—), not a hyphen, in the boundary tiers', () => {
-    expect(getActions(0, 6)[0]).toContain('—'); // sum 6
-    expect(getActions(4, 6)[0]).toContain('—'); // sum 10
-    expect(getActions(9, 6)[0]).toContain('—'); // sum 15
+    expect(getActions(0, 6)[0]).toContain('—'); // sum 6 → possible
+    expect(getActions(2, 6)[0]).toContain('—'); // sum 8 → likely
   });
 });
 
