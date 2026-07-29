@@ -68,6 +68,9 @@ export interface EncounterRow {
   notes: string;
   referred_to: string;
   referred_to_clinic_id: string | null;
+  signed_by: string | null;
+  signed_by_user_id: string | null;
+  signed_at: string | null;
   created_at: string;
   updated_at: string;
   inactive: boolean;
@@ -156,6 +159,9 @@ export function rowToEncounter(e: EncounterRow): Encounter {
     notes: e.notes,
     referredTo: e.referred_to,
     referredToClinicId: e.referred_to_clinic_id ?? null,
+    signedBy: e.signed_by ?? '',
+    signedByUserId: e.signed_by_user_id ?? null,
+    signedAt: e.signed_at ?? null,
     createdAt: e.created_at,
     updatedAt: e.updated_at,
     inactive: e.inactive,
@@ -189,6 +195,9 @@ export function encounterToRow(e: Encounter): EncounterRow {
     notes: e.notes,
     referred_to: e.referredTo,
     referred_to_clinic_id: e.referredToClinicId ?? null,
+    signed_by: e.signedBy ?? null,
+    signed_by_user_id: e.signedByUserId ?? null,
+    signed_at: e.signedAt ?? null,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
     inactive: e.inactive,

@@ -162,6 +162,7 @@ export default function RecordScreen() {
                 {e.complications ? <Text style={styles.encRow}><Text style={styles.encKey}>Complications: </Text>{e.complications}</Text> : null}
                 {e.referredTo ? <Text style={styles.encRow}><Text style={styles.encKey}>Referred to: </Text>{e.referredTo}</Text> : null}
                 {e.notes ? <Text style={styles.encRow}><Text style={styles.encKey}>Notes: </Text>{e.notes}</Text> : null}
+                {e.signedBy ? <Text style={styles.encRow}><Text style={styles.encKey}>Signed by: </Text>{e.signedBy}{e.signedAt ? ` · ${e.signedAt.slice(0, 10)}` : ''}</Text> : null}
               </View>
               {canEditPatient(user, { clinicId: patient.clinicId ?? null }) ? (
                 <Pressable hitSlop={6} onPress={() => { setReason(''); setEncDelId(e.id); }} style={styles.encRemoveBtn}>

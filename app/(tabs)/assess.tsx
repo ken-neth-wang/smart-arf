@@ -192,7 +192,7 @@ const JOINT_VAL: Record<string, number> = { none: 0, mono: 2, poly: 3, arthritis
 const VAL_JOINT: Record<number, string> = { 0: 'none', 2: 'mono', 3: 'poly', 5: 'arthritis' };
 
 function Step3() {
-  const { inputs, setInputs, scoreA, goStep, commitLevelA } = useAssessment();
+  const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
   const interp = getInterp(scoreA, 0);
   const choreaPositive = inputs.chorea === true;
 
@@ -248,8 +248,16 @@ function Step3() {
 
         <LiveScoreCard score={scoreA} label={interp.label} subtitle="Current Level A Score" />
 
+        <Card>
+          <StepBadge>Sign</StepBadge>
+          <CardTitle>Person Responsible</CardTitle>
+          <CardSubtitle>Confirm or edit the name of the clinician responsible for this encounter.</CardSubtitle>
+          <TextField label="Signed by" value={signedBy} onChangeText={setSignedBy} placeholder="e.g. Dr. Amina" />
+        </Card>
+
         <PrimaryButton
           title="View Result & Recommendations"
+          disabled={!signedBy.trim()}
           onPress={async () => {
             // Mirrors goToResult() → renderLevelAResult(): persist the patient
             // + initial encounter (generates referral code) then show the result.

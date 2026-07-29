@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, SelectField, StepBadge, TextField, type SelectOption } from '@/components/ui/primitives';
 import { useRecords } from '@/state/RecordsContext';
+import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
 import type { BpgStatus, ConfirmedDx } from '@/lib/types';
 
@@ -32,8 +33,10 @@ export default function FollowupScreen() {
   const { id, code, name } = useLocalSearchParams<{ id: string; code: string; name: string }>();
   const router = useRouter();
   const { addFollowup } = useRecords();
+  const { user } = useAuth();
 
   const [visitDate, setVisitDate] = useState(todayISO());
+  const [signedBy, setSignedBy] = useState(user?.profile.displayName ?? '');
   const [confirmedDx, setConfirmedDx] = useState<ConfirmedDx>('');
   const [finalDx, setFinalDx] = useState('');
   const [bpgStatus, setBpgStatus] = useState<BpgStatus>('');
@@ -44,9 +47,11 @@ export default function FollowupScreen() {
 
   const submit = async () => {
     if (!visitDate) return setErr('Visit date is required.');
+    if (!signedBy.trim()) return setErr('The responsible clinician must sign (enter their name).');
     if (!id) return setErr('Missing patient.');
     await addFollowup(id, {
       visitDate,
+      signedBy: signedBy.trim(),
       confirmedDx,
       finalDx,
       bpgStatus,
@@ -79,6 +84,8 @@ export default function FollowupScreen() {
       <TextField label={<>Complications <Text style={styles.suffix}>(optional)</Text></>} value={complications} onChangeText={setComplications} placeholder="e.g. Heart failure, recurrent ARF" />
 
       <TextField label={<>Notes <Text style={styles.suffix}>(optional)</Text></>} value={notes} onChangeText={setNotes} placeholder="Additional observations" />
+
+      <TextField label="Person responsible (sign name)" value={signedBy} onChangeText={setSignedBy} placeholder="e.g. Dr. Amina" />
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 

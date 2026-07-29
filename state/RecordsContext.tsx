@@ -151,21 +151,28 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   }, [persistLocal, syncRefs]);
 
   const upsertEncounter = useCallback(async (encounter: Encounter) => {
+    // Stamp the responsible-clinician sign-off the first time a name is given
+    // (audit: the acting account + timestamp). The name can change later; the
+    // original signedAt is preserved on re-commit (set in AssessmentContext.commit).
+    let toSave = encounter;
+    if (encounter.signedBy && encounter.signedBy.trim() && !encounter.signedAt) {
+      toSave = { ...encounter, signedByUserId: authId, signedAt: new Date().toISOString() };
+    }
     const prev = encountersRef.current;
-    const idx = prev.findIndex((e) => e.id === encounter.id);
-    const next = idx >= 0 ? prev.map((e) => (e.id === encounter.id ? { ...e, ...encounter } : e)) : [encounter, ...prev];
+    const idx = prev.findIndex((e) => e.id === toSave.id);
+    const next = idx >= 0 ? prev.map((e) => (e.id === toSave.id ? { ...e, ...toSave } : e)) : [toSave, ...prev];
     syncRefs(patientsRef.current, next);
     setEncounters(next);
     if (USE_CLOUD) {
       try {
-        await saveEncounterCloud(encounter);
+        await saveEncounterCloud(toSave);
       } catch (err) {
         console.error('[records] cloud encounter save failed:', err);
       }
     } else {
       await persistLocal(patientsRef.current, next);
     }
-  }, [persistLocal, syncRefs]);
+  }, [persistLocal, syncRefs, authId]);
 
   const addFollowup = useCallback(
     async (patientId: string, fields: import('@/lib/types').FollowUpFields) => {
@@ -186,6 +193,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         complications: fields.complications,
         notes: fields.notes,
         referredTo: '',
+        signedBy: fields.signedBy?.trim() ?? '',
         createdAt: now,
         updatedAt: now,
       };

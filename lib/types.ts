@@ -182,6 +182,11 @@ export interface Encounter {
   // RLS (Clinic B sees patients referred to it). null = no clinic referral.
   referredToClinicId?: string | null;
 
+  // ─── Responsible-clinician sign-off ───────────────────────────────
+  signedBy?: string;              // typed name of the person responsible ('' / undefined = not signed)
+  signedByUserId?: string | null; // auth account that performed the sign-off
+  signedAt?: string | null;       // ISO timestamp of the sign-off
+
   createdAt: string; // ISO
   updatedAt: string; // ISO
   // soft-delete (per-visit: hides just this encounter; patient + others stay)
@@ -201,6 +206,7 @@ export interface PatientWithHistory {
 /** The lighter fields a follow-up form collects (outcome block). */
 export interface FollowUpFields {
   visitDate: string;
+  signedBy?: string; // typed name of the person responsible for this visit
   confirmedDx: ConfirmedDx;
   finalDx: string;
   bpgStatus: BpgStatus;

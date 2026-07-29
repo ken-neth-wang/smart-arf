@@ -6,7 +6,7 @@
  * Jones-criteria scoring block. Follow-up encounters are created separately via
  * RecordsContext.addFollowup().
  */
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
 import { useAuth } from './AuthContext';
 import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
@@ -47,6 +47,8 @@ interface AssessmentContextValue {
   activePatientId: string | null;
   activeEncounterId: string | null;
   referralCode: string | null;
+  signedBy: string; // typed name of the responsible clinician (pre-filled from the logged-in user)
+  setSignedBy: (name: string) => void;
   setPatient: (patch: Partial<PatientFields>) => void;
   setInputs: (patch: Partial<AssessmentInputs>) => void;
   setEntry: (field: 'fever' | 'chorea' | 'altCause', value: boolean) => void;
@@ -73,6 +75,13 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [activeEncounterId, setActiveEncounterId] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [signedBy, setSignedBy] = useState('');
+
+  // Pre-fill the signer with the logged-in user's display name (editable); the
+  // user can override it when signing on behalf of someone else.
+  useEffect(() => {
+    if (!signedBy && user?.profile.displayName) setSignedBy(user.profile.displayName);
+  }, [user?.profile.displayName, signedBy]);
 
   const setPatient = (patch: Partial<PatientFields>) => setPatientState((p) => ({ ...p, ...patch }));
   const setInputs = (patch: Partial<AssessmentInputs>) => setInputsState((i) => ({ ...i, ...patch }));
@@ -86,6 +95,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     setActivePatientId(null);
     setActiveEncounterId(null);
     setReferralCode(null);
+    setSignedBy('');
   };
 
   const goStep = (n: Step) => setStep(n);
@@ -150,6 +160,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       complications: '',
       notes: '',
       referredTo: '',
+      signedBy: signedBy.trim(),
       createdAt: now,
       updatedAt: now,
     };
@@ -175,6 +186,11 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
         encounter.complications = existing.complications;
         encounter.notes = existing.notes;
         encounter.createdAt = existing.createdAt;
+        // Preserve the sign-off stamp on re-commit (Level B); the name itself
+        // comes from the current `signedBy` state (editable in Step 3).
+        encounter.signedBy = encounter.signedBy || existing.signedBy;
+        encounter.signedByUserId = existing.signedByUserId;
+        encounter.signedAt = existing.signedAt;
       }
     }
     await records.upsertEncounter(encounter);
@@ -213,6 +229,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     activePatientId,
     activeEncounterId,
     referralCode,
+    signedBy,
+    setSignedBy,
     setPatient,
     setInputs,
     setEntry,
