@@ -12,6 +12,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { loadMembershipsCloud, loadProfileCloud } from '@/lib/sync';
 import type { AuthUser } from '@/lib/permissions';
+import type { Session } from '@supabase/supabase-js';
 
 const DATA_BACKEND = (process.env.EXPO_PUBLIC_DATA_BACKEND ?? 'local') as 'local' | 'supabase';
 const USE_CLOUD = DATA_BACKEND === 'supabase';
@@ -25,6 +26,9 @@ interface AuthContextValue {
   loading: boolean; // initial session check (blocks the app gate while true)
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+  needsPassword: boolean; // invited (no password yet) or forgot-password → must set one
+  passwordRecovery: boolean; // distinguishes the forgot-password subtitle
+  setPassword: (newPassword: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -35,6 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionLike | null>(null);
   // Only block on cloud mode; local mode has no session to resolve.
   const [loading, setLoading] = useState(USE_CLOUD && isSupabaseConfigured);
+  // Invited users land with no password (must_set_password metadata flag);
+  // the forgot-password flow triggers a PASSWORD_RECOVERY event. Either → the
+  // set-password interstitial rendered by _layout.
+  const [mustSetPassword, setMustSetPassword] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   /** Build the AuthUser (profile + memberships) for a given auth uid. */
   const buildUser = useCallback(async (uid: string): Promise<AuthUser | null> => {
@@ -62,14 +71,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabase();
     let mounted = true;
 
+    const applySession = (event: string, s: Session | null) => {
+      if (!mounted) return;
+      setSession(s);
+      // Invited users are tagged must_set_password=true at invite time.
+      setMustSetPassword(Boolean(s?.user?.user_metadata?.must_set_password));
+      // Forgot-password link click → user must choose a new password.
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+    };
+
     // Resolve any session restored from storage on cold start.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) setSession(session);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => applySession('INITIAL_SESSION', session));
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    } = supabase.auth.onAuthStateChange((event, s) => applySession(event, s));
 
     return () => {
       mounted = false;
@@ -114,13 +130,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Profile row is auto-created by the trigger with approved=false (pending).
   }, []);
 
+  const setPassword = useCallback(async (newPassword: string) => {
+    const { error } = await getSupabase().auth.updateUser({
+      password: newPassword,
+      data: { must_set_password: false }, // clear the invite flag
+    });
+    if (!error) {
+      setMustSetPassword(false);
+      setPasswordRecovery(false);
+    }
+    return { error: error?.message ?? null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await getSupabase().auth.signOut();
     setUser(null);
+    setMustSetPassword(false);
+    setPasswordRecovery(false);
   }, []);
 
+  const needsPassword = mustSetPassword || passwordRecovery;
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, needsPassword, passwordRecovery, signIn, signUp, setPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );

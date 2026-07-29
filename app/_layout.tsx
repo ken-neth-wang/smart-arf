@@ -18,6 +18,7 @@ import { Colors } from '@/constants/theme';
 import { RecordsProvider } from '@/state/RecordsContext';
 import { AssessmentProvider } from '@/state/AssessmentContext';
 import { AUTH_GATE_ACTIVE, AuthProvider, useAuth } from '@/state/AuthContext';
+import { SetPasswordScreen } from '@/components/SetPasswordScreen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,7 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const { user, loading } = useAuth();
+  const { user, loading, needsPassword } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -44,6 +45,7 @@ function RootLayoutNav() {
   // race. Runs after each render once the deps settle.
   useEffect(() => {
     if (!AUTH_GATE_ACTIVE || loading) return;
+    if (needsPassword) return; // the set-password interstitial handles this
     const inAuthRoute = segments[0] === 'login';
     if (!user && !inAuthRoute) {
       router.replace('/login');
@@ -53,7 +55,7 @@ function RootLayoutNav() {
       // logged in but not approved → send to /login (shows the pending screen)
       router.replace('/login');
     }
-  }, [user, loading, segments, router]);
+  }, [user, loading, needsPassword, segments, router]);
 
   if (AUTH_GATE_ACTIVE && loading) {
     return (
@@ -61,6 +63,13 @@ function RootLayoutNav() {
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
+  }
+
+  // Invited (must_set_password) or forgot-password (PASSWORD_RECOVERY) users
+  // must set a password before reaching the app. Rendered as a full-screen
+  // interstitial so no route/gate redirect races with it.
+  if (AUTH_GATE_ACTIVE && needsPassword) {
+    return <SetPasswordScreen />;
   }
 
   return (

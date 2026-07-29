@@ -24,6 +24,7 @@ export default function LoginScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   // Account exists but isn't approved yet → show pending, not the form.
   if (user && !user.profile.approved) {
@@ -71,6 +72,16 @@ export default function LoginScreen() {
     setErr(error ? error.message : 'Confirmation email resent — check your inbox.');
   };
 
+  const onForgot = async () => {
+    setErr(null);
+    if (!email.trim()) return setErr('Enter your email above, then tap "Forgot password?".');
+    setBusy(true);
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim());
+    setBusy(false);
+    if (error) return setErr(error.message);
+    setForgotSent(true);
+  };
+
   // Just signed up with email confirmation ON — must click the verification link.
   if (awaitingConfirmation) {
     return (
@@ -87,6 +98,26 @@ export default function LoginScreen() {
             onPress={() => { setAwaitingConfirmation(false); setMode('signin'); setErr(null); }}
           >
             I've confirmed — sign in
+          </Text>
+        </Card>
+      </View>
+    );
+  }
+
+  if (forgotSent) {
+    return (
+      <View style={styles.wrap}>
+        <Card>
+          <CardTitle>Check Your Email</CardTitle>
+          <CardSubtitle>
+            If an account exists for {email.trim()}, we've sent a password-reset link. Click it to choose a new password.
+          </CardSubtitle>
+          {err ? <Text style={styles.err}>{err}</Text> : null}
+          <Text
+            style={styles.toggle}
+            onPress={() => { setForgotSent(false); setErr(null); }}
+          >
+            Back to sign in
           </Text>
         </Card>
       </View>
@@ -111,6 +142,10 @@ export default function LoginScreen() {
 
         <PrimaryButton title={busy ? '…' : mode === 'signin' ? 'Sign In' : 'Create Account'} onPress={submit} />
 
+        {mode === 'signin' && (
+          <Text style={styles.linkBtn} onPress={onForgot}>Forgot password?</Text>
+        )}
+
         <Text style={styles.toggle} onPress={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setErr(null); }}>
           {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
         </Text>
@@ -123,4 +158,5 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, justifyContent: 'center', padding: 16, maxWidth: 480, width: '100%', alignSelf: 'center', backgroundColor: Colors.bg },
   err: { color: Colors.danger, fontSize: 13, marginTop: 6, marginBottom: 6 },
   toggle: { color: Colors.primary, textAlign: 'center', marginTop: 14, fontSize: 14, fontWeight: '600' },
+  linkBtn: { color: Colors.primary, textAlign: 'center', marginTop: 10, fontSize: 13 },
 });

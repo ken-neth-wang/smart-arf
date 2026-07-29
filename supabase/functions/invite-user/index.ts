@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
   // 2. Send the invite (creates auth.users → fires handle_new_user → approved).
   const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
     email,
-    { data: { display_name: displayName } },
+    { data: { display_name: displayName, must_set_password: true } },
   );
   if (inviteErr) {
     // e.g. "User already registered" — that email already has an account.
