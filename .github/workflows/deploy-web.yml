@@ -50,6 +50,14 @@ jobs:
           EXPO_PUBLIC_DATA_BACKEND: supabase
         run: npx expo export -p web
 
+      - name: Add custom-domain CNAME
+        # Writes the CNAME into the build output so the smartarf.com association
+        # survives every (force_orphan) deploy. Without this, each deploy wipes
+        # gh-pages and GitHub drops the custom domain → the site 404s until you
+        # re-save it in Pages settings (the recurring "works for a few hours
+        # then dies" symptom).
+        run: echo "smartarf.com" > dist/CNAME
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
