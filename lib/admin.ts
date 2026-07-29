@@ -65,6 +65,48 @@ export async function removeAllowedEmailCloud(email: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Invite a user by email: pre-approve (allowlist) + send them an invite email
+ * via the invite-user edge function (admin-only). Recipient accepts → active.
+ * `displayName` is optional (used in their profile; falls back to email prefix).
+ */
+export async function inviteUserCloud(
+  email: string,
+  clinicId: string,
+  role: Role,
+  displayName = '',
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await getSupabase().functions.invoke('invite-user', {
+    body: {
+      email: email.trim().toLowerCase(),
+      clinicId,
+      role,
+      displayName: displayName.trim(),
+    },
+  });
+  if (error) {
+    // The client surfaces a generic message; pull the real reason from the
+    // function's JSON response body so the admin UI can show it.
+    let detail = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        try {
+          const body = JSON.parse(txt);
+          if (body && typeof body.error === 'string') detail = body.error;
+        } catch {
+          if (txt) detail = txt;
+        }
+      }
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail);
+  }
+}
+
 /** Create a clinic (admin only via RLS). name required; type is free text. */
 export async function createClinicCloud(name: string, type: string): Promise<void> {
   if (!isSupabaseConfigured) return;

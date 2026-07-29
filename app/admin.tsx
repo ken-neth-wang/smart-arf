@@ -23,6 +23,7 @@ import { isAdmin } from '@/lib/permissions';
 import type { Role } from '@/lib/permissions';
 import {
   addAllowedEmailCloud,
+  inviteUserCloud,
   approveUserCloud,
   createClinicCloud,
   deactivateUserCloud,
@@ -60,6 +61,7 @@ export default function AdminScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // allowlist add form
+  const [inviteName, setInviteName] = useState('');
   const [email, setEmail] = useState('');
   const [clinicId, setClinicId] = useState('');
   const [role, setRole] = useState<Role>('health_worker');
@@ -127,8 +129,9 @@ export default function AdminScreen() {
     setBusyAction('add');
     setError(null);
     try {
-      await addAllowedEmailCloud(e, clinicId, role);
+      await inviteUserCloud(e, clinicId, role, inviteName);
       setEmail('');
+      setInviteName('');
       setClinicId('');
       setRole('health_worker');
       await refresh();
@@ -258,14 +261,20 @@ export default function AdminScreen() {
 
       {/* ── Allowlist ── */}
       <Card>
-        <StepBadge>Pre-approved Emails</StepBadge>
-        <CardTitle>Allowlist</CardTitle>
+        <StepBadge>Invite by Email</StepBadge>
+        <CardTitle>Invite Users</CardTitle>
         <Text style={styles.line}>
-          A user who signs up with one of these emails is auto-approved and assigned a clinic/role —
-          no manual step.
+          Send an invite — the recipient gets an email, sets a password, and is auto-approved with
+          the clinic/role you choose.
         </Text>
 
         <View style={styles.form}>
+          <TextField
+            label="Name (optional)"
+            value={inviteName}
+            onChangeText={setInviteName}
+            placeholder="Dr. Amina"
+          />
           <TextField
             label="Email"
             value={email}
@@ -276,22 +285,19 @@ export default function AdminScreen() {
           />
           <SelectField label="Clinic" value={clinicId} options={clinicOptions} placeholder={clinicPlaceholder} onChange={setClinicId} />
           <SelectField label="Role" value={role} options={ROLE_OPTS} onChange={(v) => setRole(v as Role)} />
-          <PrimaryButton title={busyAction === 'add' ? 'Adding…' : 'Add to Allowlist'} disabled={!email || !clinicId || !!busyAction} onPress={onAdd} />
+          <PrimaryButton title={busyAction === 'add' ? 'Sending…' : 'Send invite'} disabled={!email || !clinicId || !!busyAction} onPress={onAdd} />
         </View>
 
         {allowed.length === 0 ? (
-          <Text style={styles.muted}>No entries yet.</Text>
+          <Text style={styles.muted}>No invites sent yet.</Text>
         ) : (
           allowed.map((a) => (
             <View key={a.email} style={styles.entry}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.entryEmail}>{a.email}</Text>
-                <Text style={styles.entrySub}>
-                  {clinicName(a.clinicId)} · {a.role}
-                  {a.usedAt ? ' · ✓ used' : ''}
-                </Text>
+                <Text style={styles.entrySub}>{clinicName(a.clinicId)} · {a.role}</Text>
               </View>
-              <SecondaryButton title={busyAction === `remove:${a.email}` ? '…' : 'Remove'} onPress={() => onRemove(a.email)} />
+              <SecondaryButton title={busyAction === `remove:${a.email}` ? '…' : 'Revoke'} onPress={() => onRemove(a.email)} />
             </View>
           ))
         )}
