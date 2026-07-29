@@ -24,7 +24,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean; // initial session check (blocks the app gate while true)
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -102,12 +102,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     // display_name lands in raw_user_meta_data → the handle_new_user trigger
     // copies it into profiles.display_name.
-    const { error } = await getSupabase().auth.signUp({
+    const { data, error } = await getSupabase().auth.signUp({
       email: email.trim(),
       password,
       options: { data: { display_name: displayName.trim() } },
     });
-    return { error: error?.message ?? null };
+    // With email confirmation ON, signUp creates the user but returns NO
+    // session (data.session === null) until they click the confirmation link
+    // in their email. We surface that so the login screen can prompt them.
+    return { error: error?.message ?? null, needsEmailConfirmation: !error && !data.session };
     // Profile row is auto-created by the trigger with approved=false (pending).
   }, []);
 

@@ -9,6 +9,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, TextField } from '@/components/ui/primitives';
 import { useAuth } from '@/state/AuthContext';
+import { getSupabase } from '@/lib/supabase';
 import { Colors } from '@/constants/theme';
 
 type Mode = 'signin' | 'signup';
@@ -22,6 +23,7 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   // Account exists but isn't approved yet → show pending, not the form.
   if (user && !user.profile.approved) {
@@ -44,13 +46,52 @@ export default function LoginScreen() {
     if (!email.trim() || !password) return setErr('Email and password are required.');
     if (mode === 'signup' && !name.trim()) return setErr('Display name is required.');
     setBusy(true);
-    const { error } =
-      mode === 'signin' ? await signIn(email, password) : await signUp(email, password, name);
+    const res = mode === 'signin' ? await signIn(email, password) : await signUp(email, password, name);
     setBusy(false);
-    if (error) return setErr(error);
-    // On success the auth state change fires → the gate redirects (or shows
+    if (res.error) {
+      // Friendlier message when someone signs in before confirming their email.
+      if (/not confirmed/i.test(res.error)) {
+        return setErr('Please confirm your email first — check your inbox (and spam) for the verification link.');
+      }
+      return setErr(res.error);
+    }
+    // Email confirmation ON → user created but not yet logged in.
+    if ('needsEmailConfirmation' in res && res.needsEmailConfirmation) {
+      setAwaitingConfirmation(true);
+    }
+    // Otherwise the auth state change fires → the gate redirects (or shows
     // pending for a brand-new unapproved account).
   };
+
+  const resend = async () => {
+    setErr(null);
+    setBusy(true);
+    const { error } = await getSupabase().auth.resend({ type: 'signup', email: email.trim() });
+    setBusy(false);
+    setErr(error ? error.message : 'Confirmation email resent — check your inbox.');
+  };
+
+  // Just signed up with email confirmation ON — must click the verification link.
+  if (awaitingConfirmation) {
+    return (
+      <View style={styles.wrap}>
+        <Card>
+          <CardTitle>Check Your Email</CardTitle>
+          <CardSubtitle>
+            We sent a verification link to {email.trim()}. Click it to confirm your account, then come back to sign in. (Check spam if it doesn't arrive within a minute.)
+          </CardSubtitle>
+          {err ? <Text style={styles.err}>{err}</Text> : null}
+          <PrimaryButton title={busy ? '…' : 'Resend email'} onPress={resend} />
+          <Text
+            style={styles.toggle}
+            onPress={() => { setAwaitingConfirmation(false); setMode('signin'); setErr(null); }}
+          >
+            I've confirmed — sign in
+          </Text>
+        </Card>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
