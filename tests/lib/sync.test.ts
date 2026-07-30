@@ -70,6 +70,9 @@ function mkEncounter(over: Partial<Encounter> = {}): Encounter {
     notes: '',
     referredTo: 'Khartoum Pediatric Hospital',
     referredToClinicId: null,
+    signedBy: '',
+    signedByUserId: null,
+    signedAt: null,
     createdAt: '2026-06-22T14:30:00.000Z',
     updatedAt: '2026-06-22T14:30:00.000Z',
     ...over,
@@ -287,7 +290,9 @@ describe('field-name regression guards', () => {
       'result_label', 'range', 'breakdown', 'actions', 'includes_level_b',
       'facility_type',
       'confirmed_dx', 'final_dx', 'bpg_status', 'echo_findings',
-      'complications', 'notes', 'referred_to', 'referred_to_clinic_id', 'created_at', 'updated_at',
+      'complications', 'notes', 'referred_to', 'referred_to_clinic_id',
+      'signed_by', 'signed_by_user_id', 'signed_at',
+      'created_at', 'updated_at',
       'inactive', 'deleted_at', 'deleted_by', 'delete_reason', 'delete_notes',
     ].sort();
     expect(keys).toEqual(expected);

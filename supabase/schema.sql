@@ -154,6 +154,10 @@ create table public.encounters (
   notes                 text not null default '',
   referred_to           text not null default '',
   referred_to_clinic_id uuid references public.clinics(id),
+  -- responsible-clinician sign-off (typed name + the acting account + time)
+  signed_by            text,                     -- name of the person responsible for this encounter
+  signed_by_user_id    uuid references auth.users(id), -- account that performed the sign-off
+  signed_at            timestamptz,              -- when signed
   -- soft-delete (per-visit remove; patient + other encounters stay visible)
   inactive              boolean not null default false,
   deleted_at            timestamptz,
