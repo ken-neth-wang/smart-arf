@@ -135,7 +135,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     const scoreA = calcLevelA(inputsFinal);
     const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
     const score = scoreA + scoreB;
-    const interp = getInterp(scoreA, scoreB);
+    const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
     const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
     const now = new Date().toISOString();
     return {
@@ -150,7 +150,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       resultLabel: interp.label,
       range: interp.range,
       breakdown,
-      actions: getActions(scoreA, scoreB),
+      actions: getActions(scoreA, scoreB, inputs.feverDuration),
       includesLevelB: withLevelB,
       facilityType: inputs.facilityType,
       confirmedDx: '',

@@ -16,6 +16,7 @@ export type Setting = '' | 'endemic' | 'nonendemic' | 'unknown';
 export type TierLevel = 'unlikely' | 'possible' | 'likely' | 'urgent' | 'chorea' | 'incomplete' | 'confirmed';
 export type EchoValue = 'suggestive' | null;
 export type FacilityType = 'primary' | 'secondary';
+export type FeverDuration = '' | 'none' | 'under2w' | 'over2w';
 
 /** Raw clinical inputs — same shape as the HTML `S` object's clinical fields. */
 export interface AssessmentInputs {
@@ -40,9 +41,8 @@ export interface AssessmentInputs {
   antidnase: boolean;
   pr: boolean;
   echo: EchoValue;
-  /** Level B — timing of findings relative to fever (documentation only, no score). */
-  feverWithin2w: boolean;
-  feverAfter2w: boolean;
+  /** Level B — fever duration; decides the verdict when the total score is 6. */
+  feverDuration: FeverDuration;
   facilityType: FacilityType | null;
 }
 
@@ -68,8 +68,7 @@ export function emptyInputs(): AssessmentInputs {
     antidnase: false,
     pr: false,
     echo: null,
-    feverWithin2w: false,
-    feverAfter2w: false,
+    feverDuration: '',
     facilityType: null,
   };
 }

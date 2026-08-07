@@ -39,8 +39,8 @@ import {
 import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
-import { getActions, getInterp, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
-import type { EchoValue, FacilityType, Gender, Setting } from '@/lib/types';
+import { getActions, getInterp, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
+import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
 
 const GENDER_OPTS = [
   { label: 'Male', value: 'male' },
@@ -183,13 +183,11 @@ function Step2() {
 
 /* ============== STEP 3 — Level A ============== */
 const JOINT_OPTS = [
-  { id: 'none', name: 'None', desc: 'No joint symptoms', points: '+0' },
-  { id: 'mono', name: 'Monoarthralgia', desc: 'Pain in ONE joint only — no swelling or tenderness', points: '+2' },
-  { id: 'poly', name: 'Polyarthralgia', desc: 'Pain in MULTIPLE joints — no swelling or tenderness', points: '+3' },
-  { id: 'arthritis', name: 'Migratory Polyarthritis', desc: 'Swelling AND tenderness in joints, moves between joints', points: '+5' },
-];
-const JOINT_VAL: Record<string, number> = { none: 0, mono: 2, poly: 3, arthritis: 5 };
-const VAL_JOINT: Record<number, string> = { 0: 'none', 2: 'mono', 3: 'poly', 5: 'arthritis' };
+  { id: 'none', name: 'None', desc: 'No joint symptoms' },
+  { id: 'mono', name: 'Monoarthralgia', desc: 'Pain in ONE joint only — no swelling or tenderness' },
+  { id: 'poly', name: 'Polyarthralgia', desc: 'Pain in MULTIPLE joints — no swelling or tenderness' },
+  { id: 'arthritis', name: 'Migratory Polyarthritis', desc: 'Swelling AND tenderness in joints, moves between joints' },
+].map((o) => ({ ...o, points: '+' + jointPoints[o.id] }));
 
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
@@ -206,7 +204,7 @@ function Step3() {
         <CardSubtitle>Check every finding that is present in this patient. For joint symptoms, select the most severe category that applies.</CardSubtitle>
 
         <CategoryBlock title="Joint Symptoms" description="Select the highest applicable joint finding (arthritis > polyarthralgia > monoarthralgia)" points={inputs.joint} active={inputs.joint > 0}>
-          <RadioList options={JOINT_OPTS} selectedId={VAL_JOINT[inputs.joint] ?? 'none'} onSelect={(id) => setInputs({ joint: JOINT_VAL[id] })} />
+          <RadioList options={JOINT_OPTS} selectedId={jointIdForPoints[inputs.joint] ?? 'none'} onSelect={(id) => setInputs({ joint: jointPoints[id] })} />
         </CategoryBlock>
 
         <CategoryBlock title="Heart / Carditis" description="Check the heart murmur first. If present, document severity findings below." points={inputs.murmur ? 5 : 0} active={inputs.murmur}>
@@ -326,6 +324,8 @@ const FACILITY_OPTS = [
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
   const choreaPositive = inputs.chorea === true;
+  const total = scoreA + scoreB;
+  const feverRequired = total === 6 && !inputs.feverDuration;
 
   const setNA = (section: 'naBlood' | 'naEcg' | 'naEcho', on: boolean) => {
     if (on) {
@@ -347,11 +347,16 @@ function Step5() {
         <CardTitle>Enhanced Findings</CardTitle>
         <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
 
-        <FieldLabel>Timing relative to fever</FieldLabel>
-        <View style={{ gap: 7, marginBottom: 12 }}>
-          <CheckboxRow label="Within 2 weeks of fever" checked={inputs.feverWithin2w} onToggle={() => setInputs({ feverWithin2w: !inputs.feverWithin2w })} />
-          <CheckboxRow label="After 2 weeks of fever" checked={inputs.feverAfter2w} onToggle={() => setInputs({ feverAfter2w: !inputs.feverAfter2w })} />
-        </View>
+        <FieldLabel>Has the patient had fever for 2 weeks or more?</FieldLabel>
+        <RadioList
+          options={[
+            { id: 'over2w', name: 'Fever ≥ 2 weeks', desc: 'Fever has lasted 2 weeks or more' },
+            { id: 'under2w', name: 'Fever < 2 weeks', desc: 'Fever lasted less than 2 weeks' },
+            { id: 'none', name: 'No fever', desc: 'Patient has not had a fever' },
+          ]}
+          selectedId={inputs.feverDuration}
+          onSelect={(id) => setInputs({ feverDuration: id as FeverDuration })}
+        />
 
         <SelectField
           label="Facility type of today's assessment"
@@ -401,7 +406,12 @@ function Step5() {
           </View>
         </View>
 
-        <PrimaryButton title="View Final Result" onPress={async () => { await commitFinal(); goStep(6); }} />
+        <PrimaryButton title="View Final Result" disabled={feverRequired} onPress={async () => { await commitFinal(); goStep(6); }} />
+        {feverRequired ? (
+          <Text style={{ color: Colors.warning, fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 8, paddingHorizontal: 4 }}>
+            Answer the fever question above to determine the result.
+          </Text>
+        ) : null}
         <SecondaryButton title="Back" onPress={() => goStep(4)} />
       </Card>
     </>
@@ -412,13 +422,13 @@ function Step5() {
 function Step6() {
   const { inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
   const router = useRouter();
-  const interp = getInterp(scoreA, scoreB);
+  const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
   const choreaPositive = inputs.chorea === true;
 
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB)} />
+      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />

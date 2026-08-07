@@ -3,7 +3,7 @@
  * now the source of truth and evolves per clinical-team review (e.g. the
  * Level-B > 6 confirmation rule was added deliberately, diverging from the HTML).
  */
-import type { AssessmentInputs, BreakdownRow, TierLevel } from './types';
+import type { AssessmentInputs, BreakdownRow, FeverDuration, TierLevel } from './types';
 
 /** 31-char unambiguous alphabet (no 0, O, 1, I, L). Mirrors CODE_ALPHABET. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -44,18 +44,28 @@ export interface Interp {
   range: string;
 }
 
-export function getInterp(scoreA: number, scoreB: number): Interp {
+export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverDuration): Interp {
   // Level B > 6 independently confirms ARF (clinical-team note); takes precedence
   // over the combined-total tiers below.
   if (scoreB > 6) return { label: 'Positive ARF (Level B confirmed)', level: 'confirmed', range: 'Level B > 6' };
   const score = scoreA + scoreB;
   // Three tiers (the Highly Likely tier was retired per clinical-team review):
   if (score <= 5) return { label: 'ARF Unlikely', level: 'unlikely', range: 'Score 0–5' };
-  if (score <= 7) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
+  // Score 6 is borderline: ARF stays "possible" only if fever has persisted
+  // ≥ 2 weeks; otherwise it is ruled out. When feverDuration is unknown (live
+  // Level A previews, or not yet answered) we keep "possible" so no verdict is
+  // shown prematurely.
+  if (score === 6) {
+    if (feverDuration === 'none' || feverDuration === 'under2w') {
+      return { label: 'ARF ruled out', level: 'unlikely', range: 'Score 6 · fever < 2 weeks' };
+    }
+    return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
+  }
+  if (score === 7) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
   return { label: 'ARF Likely', level: 'likely', range: 'Score ≥8' };
 }
 
-export function getActions(scoreA: number, scoreB: number): string[] {
+export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration): string[] {
   // Level B > 6 confirms ARF — initiate the full management protocol.
   if (scoreB > 6) {
     return [
@@ -72,6 +82,15 @@ export function getActions(scoreA: number, scoreB: number): string[] {
       'Treat according to clinical diagnosis',
       'Arrange appropriate follow-up',
       'Reassess if fever persists or symptoms change',
+    ];
+  }
+  // Score 6 + fever < 2 weeks (or no fever) → ARF ruled out.
+  if (score === 6 && (feverDuration === 'none' || feverDuration === 'under2w')) {
+    return [
+      'ARF ruled out — fever has not persisted 2 weeks or more',
+      'Consider and evaluate alternative diagnoses',
+      'Treat according to the clinical picture',
+      'Routine follow-up as needed',
     ];
   }
   if (score <= 7) {
@@ -92,12 +111,23 @@ export function getActions(scoreA: number, scoreB: number): string[] {
   ];
 }
 
-const jointLabel: Record<number, string | null> = {
-  0: null,
-  2: 'Monoarthralgia',
-  3: 'Polyarthralgia',
-  5: 'Migratory Polyarthritis',
-};
+/** Single source of truth for joint findings: id ↔ points ↔ label. */
+export interface JointDef { id: string; points: number; label: string | null; }
+export const JOINT_DEFS: JointDef[] = [
+  { id: 'none', points: 0, label: null },
+  { id: 'mono', points: 1, label: 'Monoarthralgia' },
+  { id: 'poly', points: 3, label: 'Polyarthralgia' },
+  { id: 'arthritis', points: 5, label: 'Migratory Polyarthritis' },
+];
+export const jointPoints: Record<string, number> = Object.fromEntries(
+  JOINT_DEFS.map((j) => [j.id, j.points]),
+) as Record<string, number>;
+export const jointIdForPoints: Record<number, string> = Object.fromEntries(
+  JOINT_DEFS.map((j) => [j.points, j.id]),
+) as Record<number, string>;
+const jointLabel: Record<number, string | null> = Object.fromEntries(
+  JOINT_DEFS.map((j) => [j.points, j.label]),
+) as Record<number, string | null>;
 
 /**
  * Level A breakdown saved to the record (mirrors buildBreakdownArray in HTML).

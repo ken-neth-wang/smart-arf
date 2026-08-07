@@ -153,6 +153,40 @@ describe('getInterp', () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * Score 6 fever-duration rule
+ * ------------------------------------------------------------------ */
+describe('Score 6 fever-duration rule', () => {
+  it('score 6 + fever ≥ 2 weeks → ARF possible', () => {
+    const r = getInterp(0, 6, 'over2w');
+    expect(r.level).toBe('possible');
+    expect(r.label).toBe('ARF Possible');
+  });
+  it('score 6 + fever < 2 weeks → ARF ruled out', () => {
+    const r = getInterp(0, 6, 'under2w');
+    expect(r.level).toBe('unlikely');
+    expect(r.label).toBe('ARF ruled out');
+  });
+  it('score 6 + no fever → ARF ruled out', () => {
+    const r = getInterp(0, 6, 'none');
+    expect(r.level).toBe('unlikely');
+    expect(r.label).toBe('ARF ruled out');
+  });
+  it('score 6 + fever unknown (live preview) → stays possible', () => {
+    expect(getInterp(0, 6).level).toBe('possible');
+    expect(getInterp(0, 6, '').level).toBe('possible');
+  });
+  it('fever only matters at score 6 — score 7 stays possible', () => {
+    expect(getInterp(1, 6, 'none').level).toBe('possible');
+  });
+  it('score 6 + fever < 2 weeks → ruled-out actions', () => {
+    expect(getActions(0, 6, 'under2w')[0]).toBe('ARF ruled out — fever has not persisted 2 weeks or more');
+  });
+  it('score 6 + fever ≥ 2 weeks → possible actions', () => {
+    expect(getActions(0, 6, 'over2w')[0]).toBe('ARF is possible — do not dismiss');
+  });
+});
+
 describe('Level B confirmation rule (scoreB > 6)', () => {
   it('scoreB > 6 → confirmed positive ARF regardless of scoreA', () => {
     expect(getInterp(0, 7)).toEqual({
@@ -306,7 +340,7 @@ describe('buildBreakdownArray', () => {
   });
 
   it.each([
-    [2, 'Monoarthralgia'],
+    [1, 'Monoarthralgia'],
     [3, 'Polyarthralgia'],
     [5, 'Migratory Polyarthritis'],
   ] as const)('joint %i → "%s" with matching points', (value, label) => {

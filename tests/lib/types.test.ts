@@ -26,8 +26,8 @@ describe('emptyInputs', () => {
     });
   });
 
-  it('has exactly 23 fields', () => {
-    expect(Object.keys(emptyInputs())).toHaveLength(21);
+  it('has exactly 22 fields', () => {
+    expect(Object.keys(emptyInputs())).toHaveLength(22);
   });
 
   it('returns a fresh object on each call (no shared reference)', () => {
