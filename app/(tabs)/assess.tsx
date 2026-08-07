@@ -347,6 +347,12 @@ function Step5() {
         <CardTitle>Enhanced Findings</CardTitle>
         <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
 
+        <FieldLabel>Timing relative to fever</FieldLabel>
+        <View style={{ gap: 7, marginBottom: 12 }}>
+          <CheckboxRow label="Within 2 weeks of fever" checked={inputs.feverWithin2w} onToggle={() => setInputs({ feverWithin2w: !inputs.feverWithin2w })} />
+          <CheckboxRow label="After 2 weeks of fever" checked={inputs.feverAfter2w} onToggle={() => setInputs({ feverAfter2w: !inputs.feverAfter2w })} />
+        </View>
+
         <SelectField
           label="Facility type of today's assessment"
           value={inputs.facilityType ?? ''}

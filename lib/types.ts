@@ -40,6 +40,9 @@ export interface AssessmentInputs {
   antidnase: boolean;
   pr: boolean;
   echo: EchoValue;
+  /** Level B — timing of findings relative to fever (documentation only, no score). */
+  feverWithin2w: boolean;
+  feverAfter2w: boolean;
   facilityType: FacilityType | null;
 }
 
@@ -65,6 +68,8 @@ export function emptyInputs(): AssessmentInputs {
     antidnase: false,
     pr: false,
     echo: null,
+    feverWithin2w: false,
+    feverAfter2w: false,
     facilityType: null,
   };
 }
