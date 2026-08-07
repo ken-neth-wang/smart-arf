@@ -28,10 +28,25 @@ import {
   softDeleteAudio,
   uploadAudio,
 } from '@/lib/audio';
-import type { AudioRecord } from '@/lib/types';
+import type { AudioRecord, AudioClassification } from '@/lib/types';
 import { Colors } from '@/constants/theme';
 
 const DISCLAIMER = 'AI screening only — cannot diagnose murmurs or carditis. Clinical assessment is required.';
+
+function classMeta(c: AudioClassification): {
+  label: string;
+  itemStyle?: 'itemChd' | 'itemFlagged';
+  metaStyle?: 'metaChd' | 'metaFlagged';
+} {
+  switch (c) {
+    case 'normal':
+      return { label: '✓ Normal', itemStyle: undefined, metaStyle: undefined };
+    case 'chd':
+      return { label: 'CHD pattern (not ARF)', itemStyle: 'itemChd', metaStyle: 'metaChd' };
+    case 'abnormal':
+      return { label: '⚠ Abnormal — ARF-suspect', itemStyle: 'itemFlagged', metaStyle: 'metaFlagged' };
+  }
+}
 
 export function AudioCard() {
   const { activeEncounterId, activePatientId, commitLevelA } = useAssessment();
@@ -168,26 +183,29 @@ export function AudioCard() {
 
       {audios.length > 0 ? (
         <View style={styles.list}>
-          {audios.map((a) => (
-            <View key={a.id} style={[styles.item, a.murmurDetected && styles.itemFlagged]}>
-              <View style={{ flex: 1 }}>
-                {Platform.OS === 'web' && urls[a.id] ? (
-                  <audio controls src={urls[a.id]} style={{ width: '100%', height: 36 }} />
-                ) : null}
-                <Text style={styles.finding}>{a.finding}</Text>
-                <Text style={[styles.meta, a.murmurDetected && styles.metaFlagged]}>
-                  {a.murmurDetected ? '⚠ Murmur detected' : 'No murmur detected'} · {Math.round(a.confidence * 100)}% conf
-                </Text>
+          {audios.map((a) => {
+            const m = classMeta(a.classification);
+            return (
+              <View key={a.id} style={[styles.item, m.itemStyle ? styles[m.itemStyle] : undefined]}>
+                <View style={{ flex: 1 }}>
+                  {Platform.OS === 'web' && urls[a.id] ? (
+                    <audio controls src={urls[a.id]} style={{ width: '100%', height: 36 }} />
+                  ) : null}
+                  <Text style={styles.finding}>{a.finding}</Text>
+                  <Text style={[styles.meta, m.metaStyle ? styles[m.metaStyle] : undefined]}>
+                    {m.label} · {Math.round(a.confidence * 100)}% conf
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => onDelete(a.id)}
+                  style={styles.deleteBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.deleteX}>✕</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => onDelete(a.id)}
-                style={styles.deleteBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.deleteX}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ) : null}
 
@@ -214,6 +232,8 @@ const styles = StyleSheet.create({
   finding: { fontSize: 13.5, fontWeight: '600', color: Colors.text, marginTop: 6 },
   meta: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
   metaFlagged: { color: Colors.danger, fontWeight: '600' },
+  itemChd: { backgroundColor: Colors.warningBg, borderColor: Colors.warning },
+  metaChd: { color: Colors.warning, fontWeight: '600' },
   deleteBtn: { padding: 4 },
   deleteX: { color: Colors.danger, fontSize: 16, fontWeight: '700' },
 });

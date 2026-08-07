@@ -2,7 +2,7 @@
 //
 // Flow: fetch the uploaded audio from Supabase Storage (service role) → base64
 // → POST to Gemini with an auscultation prompt + structured-JSON schema →
-// return { murmurDetected, confidence, finding, notes, model }.
+// return { classification, confidence, finding, notes, model }.
 //
 // NOTE: gemini-3.5-flash accepts audio but is speech-focused — NOT validated for
 // murmur detection. Output is an experimental screening aid, flag-only (never
@@ -23,14 +23,18 @@ const MODEL = "gemini-3.5-flash";
 const MODEL_TAG = "gemini-3.5-flash";
 const STORAGE_BUCKET = "audio";
 
-const PROMPT = `You are a clinical screening assistant reviewing a short digital auscultation (heart-sound) recording.
-Listen for signs of a cardiac murmur or other abnormal heart sounds:
-- Murmur: an extra whooshing or grating sound between or overlapping the normal "lub-dub" (S1/S2).
-- If a murmur seems present, note its timing (systolic vs diastolic) and quality.
-- Normal: crisp S1 ("lub") and S2 ("dub") with no extra sounds.
+const PROMPT = `You are a clinical screening assistant reviewing a short digital auscultation (heart-sound) recording for signs of Acute Rheumatic Fever (ARF) carditis.
+Classify the recording into exactly one of three categories:
+- "normal": crisp S1 ("lub") and S2 ("dub") with no extra sounds. No murmur.
+- "chd": a murmur is present but its quality/timing suggests CONGENITAL heart disease (e.g. harsh systolic murmur, fixed split S2, continuous machinery murmur of a PDA). This is NOT rheumatic — do not flag it as ARF.
+- "abnormal": a murmur consistent with rheumatic carditis — the ARF-suspect pattern (e.g. apical pansystolic murmur of mitral regurgitation, mid-diastolic Carey-Coombs murmur).
+Guidance:
+- Murmur = an extra whooshing or grating sound between or overlapping S1/S2. If a murmur seems present, use its timing (systolic vs diastolic) and quality to choose between "chd" and "abnormal".
+- Prefer "normal" and set confidence low when the recording is unclear, noisy, very short, or not clearly a heart sound.
+- Both "chd" and "abnormal" mean a murmur is present; only "abnormal" raises ARF suspicion.
 Return JSON with:
-- murmurDetected: true if a murmur or clearly abnormal heart sound appears present, else false.
-- confidence: 0.0–1.0 (low if the recording is noisy, very short, or unclear).
+- classification: one of "normal" | "chd" | "abnormal".
+- confidence: 0.0–1.0 in your chosen classification (low if unclear/noisy/short).
 - finding: one short sentence describing what you hear.
 - notes: brief impression + any caveat (recording quality, need for clinician confirmation).
 This is a screening aid only and is NOT a diagnosis. If the recording is not clearly a heart sound, say so.`;
@@ -38,12 +42,12 @@ This is a screening aid only and is NOT a diagnosis. If the recording is not cle
 const SCHEMA = {
   type: "OBJECT",
   properties: {
-    murmurDetected: { type: "BOOLEAN" },
+    classification: { type: "STRING", enum: ["normal", "chd", "abnormal"] },
     confidence: { type: "NUMBER" },
     finding: { type: "STRING" },
     notes: { type: "STRING" },
   },
-  required: ["murmurDetected", "confidence", "finding", "notes"],
+  required: ["classification", "confidence", "finding", "notes"],
 };
 
 function mimeFromPath(path: string): string {
@@ -156,7 +160,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let parsed: {
-    murmurDetected?: boolean;
+    classification?: string;
     confidence?: number;
     finding?: string;
     notes?: string;
@@ -167,8 +171,12 @@ Deno.serve(async (req: Request) => {
     return jsonError(502, "Gemini output was not valid JSON.");
   }
 
+  const CLASSIFICATIONS = ["normal", "chd", "abnormal"];
+  const rawClass = String(parsed.classification ?? "").toLowerCase();
+  const classification = CLASSIFICATIONS.includes(rawClass) ? rawClass : "abnormal";
+
   const result = {
-    murmurDetected: Boolean(parsed.murmurDetected),
+    classification,
     confidence: clamp(Number(parsed.confidence) || 0, 0, 1),
     finding: String(parsed.finding ?? "Unable to determine from the recording."),
     notes: String(parsed.notes ?? ""),

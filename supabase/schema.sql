@@ -455,7 +455,7 @@ create table if not exists public.audio (
   storage_path    text not null,
   mime_type       text not null default '',
   finding         text not null default '',
-  murmur_detected boolean not null default false,
+  classification  text not null default 'normal' check (classification in ('normal','chd','abnormal')),
   confidence      real not null default 0,
   notes           text not null default '',
   model           text not null default '',
@@ -466,6 +466,25 @@ create table if not exists public.audio (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
+
+-- Migration: murmur_detected (boolean) → classification (3-way text). Idempotent.
+alter table public.audio add column if not exists classification text not null default 'normal';
+alter table public.audio drop constraint if exists audio_classification_check;
+alter table public.audio
+  add constraint audio_classification_check check (classification in ('normal','chd','abnormal'));
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'audio' and column_name = 'murmur_detected'
+  ) then
+    -- Best-effort backfill: the prior binary model could not distinguish CHD,
+    -- so every previously-flagged murmur is mapped to 'abnormal' (ARF-suspect).
+    update public.audio set classification = case when murmur_detected then 'abnormal' else 'normal' end;
+    alter table public.audio drop column murmur_detected;
+  end if;
+end $$;
 
 create index if not exists audio_encounter_id_idx on public.audio (encounter_id);
 create index if not exists audio_patient_id_idx   on public.audio (patient_id);

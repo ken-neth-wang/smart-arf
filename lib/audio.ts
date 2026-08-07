@@ -10,7 +10,7 @@
  * Requires Supabase to be configured (see lib/supabase.ts).
  */
 import { getSupabase } from '@/lib/supabase';
-import type { AudioAnalysis, AudioRecord } from '@/lib/types';
+import type { AudioAnalysis, AudioClassification, AudioRecord } from '@/lib/types';
 
 interface AudioRow {
   id: string;
@@ -20,7 +20,7 @@ interface AudioRow {
   storage_path: string;
   mime_type: string;
   finding: string;
-  murmur_detected: boolean;
+  classification: AudioClassification;
   confidence: number;
   notes: string;
   model: string;
@@ -38,7 +38,7 @@ function rowToAudio(r: AudioRow): AudioRecord {
     storagePath: r.storage_path,
     mimeType: r.mime_type,
     finding: r.finding,
-    murmurDetected: r.murmur_detected,
+    classification: r.classification,
     confidence: r.confidence,
     notes: r.notes,
     model: r.model,
@@ -117,7 +117,7 @@ export async function saveAudioRecord(input: {
     storage_path: input.storagePath,
     mime_type: input.mimeType,
     finding: input.analysis.finding,
-    murmur_detected: input.analysis.murmurDetected,
+    classification: input.analysis.classification,
     confidence: input.analysis.confidence,
     notes: input.analysis.notes,
     model: input.analysis.model,

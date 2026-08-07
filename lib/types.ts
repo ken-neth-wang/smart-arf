@@ -254,9 +254,12 @@ export interface PhotoRecord {
   createdAt: string;
 }
 
+/** 3-way auscultation classification from the analyze-audio edge function. */
+export type AudioClassification = 'normal' | 'chd' | 'abnormal';
+
 /** Structured result returned by the analyze-audio edge function. */
 export interface AudioAnalysis {
-  murmurDetected: boolean;
+  classification: AudioClassification;
   confidence: number; // 0–1
   finding: string;
   notes: string;
@@ -272,7 +275,7 @@ export interface AudioRecord {
   storagePath: string;
   mimeType: string;
   finding: string;
-  murmurDetected: boolean;
+  classification: AudioClassification;
   confidence: number;
   notes: string;
   model: string;
