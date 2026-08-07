@@ -87,6 +87,7 @@ function RootLayoutNav() {
           <Stack.Screen name="record" options={{ title: 'Patient Record' }} />
           <Stack.Screen name="followup" options={{ title: 'Follow-Up Visit' }} />
           <Stack.Screen name="admin" options={{ title: 'Admin' }} />
+          <Stack.Screen name="bpg-prep" options={{ title: 'BPG injection preparation' }} />
         </Stack>
       </AssessmentProvider>
     </RecordsProvider>
