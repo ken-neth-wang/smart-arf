@@ -1,12 +1,12 @@
 /**
- * PhotoCard — Step 5 card: upload a skin photo, run the (dummy) analysis,
- * store it. v0: dummy edge function. Flag only — NEVER affects the Jones score.
- *
- * Web-only file input (the app has no native build yet). Anchors each photo to
- * the current assessment's encounter (committing the draft first if needed).
+ * PhotoCard — Step 5 card: capture or upload a skin photo, run the (dummy)
+ * analysis, store it. v0: dummy edge function. Flag only — NEVER affects the
+ * Jones score. Anchors each photo to the current assessment's encounter
+ * (committing the draft first if needed).
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
   Card,
@@ -14,6 +14,7 @@ import {
   CardTitle,
   CheckboxRow,
   PrimaryButton,
+  SecondaryButton,
   StepBadge,
 } from '@/components/ui/primitives';
 import { useAssessment } from '@/state/AssessmentContext';
@@ -28,20 +29,22 @@ import {
 } from '@/lib/photos';
 import type { PhotoRecord } from '@/lib/types';
 import { Colors } from '@/constants/theme';
+import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
+import { AiProgress } from '@/components/AiProgress';
 
 const DISCLAIMER = 'AI screening only — cannot diagnose or rule out ARF. Clinical assessment is required.';
 
 export function PhotoCard() {
   const { activeEncounterId, activePatientId, commitLevelA } = useAssessment();
   const { user } = useAuth();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fileRef = useRef<any>(null);
 
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [lastAsset, setLastAsset] = useState<{ blob: Blob; mime: string } | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
 
   const clinicId = user?.memberships[0]?.clinicId ?? null;
 
@@ -70,23 +73,12 @@ export function PhotoCard() {
     else setPhotos([]);
   }, [activeEncounterId, refresh]);
 
-  const onUpload = useCallback(() => {
-    if (busy) return;
-    setError(null);
-    if (!consent) return setError('Confirm patient consent before uploading.');
-    if (!clinicId) return setError('No clinic assigned to your account.');
-    if (Platform.OS !== 'web') return setError('Photo upload is web-only for now.');
-    fileRef.current?.click();
-  }, [busy, consent, clinicId]);
-
-  const onFile = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (e: any) => {
-      const file: File | undefined = e?.target?.files?.[0];
-      if (e?.target) e.target.value = ''; // allow re-picking the same file
-      if (!file) return;
+  const processFile = useCallback(
+    async (blob: Blob, mime: string) => {
       setBusy(true);
       setError(null);
+      setLastAsset({ blob, mime }); // cache so a transient failure can be retried
+      setStage('Uploading photo');
       try {
         // Ensure a patient + encounter exist (commit the draft if needed).
         let encounterId = activeEncounterId;
@@ -97,9 +89,10 @@ export function PhotoCard() {
           patientId = ids.patientId;
         }
         // Upload → analyze → save.
-        const mime = file.type || 'image/jpeg';
-        const path = await uploadPhoto(file, encounterId!, mime);
+        const path = await uploadPhoto(blob, encounterId!, mime);
+        setStage('Analyzing image');
         const analysis = await analyzePhoto(path);
+        setStage('Saving result');
         await savePhotoRecord({
           patientId,
           encounterId: encounterId!,
@@ -113,10 +106,60 @@ export function PhotoCard() {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setBusy(false);
+        setStage(null);
       }
     },
     [activeEncounterId, activePatientId, clinicId, commitLevelA, refresh],
   );
+
+  const handleAsset = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      const mime = asset.mimeType || 'image/jpeg';
+      // base64 → data-URL → blob is reliable across web + native; fall back to
+      // fetching the asset uri when base64 isn't present.
+      const blob = asset.base64
+        ? await (await fetch(`data:${mime};base64,${asset.base64}`)).blob()
+        : await (await fetch(asset.uri)).blob();
+      await processFile(blob, mime);
+    },
+    [processFile],
+  );
+
+  const pickFromLibrary = useCallback(async () => {
+    if (busy) return;
+    setError(null);
+    if (!consent) return setError('Confirm patient consent before adding a photo.');
+    if (!clinicId) return setError('No clinic assigned to your account.');
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return setError('Photo library access was denied.');
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled) return;
+    await handleAsset(result.assets[0]);
+  }, [busy, consent, clinicId, handleAsset]);
+
+  const takePhoto = useCallback(async () => {
+    if (busy) return;
+    setError(null);
+    if (!consent) return setError('Confirm patient consent before capturing a photo.');
+    if (!clinicId) return setError('No clinic assigned to your account.');
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return setError('Camera access was denied.');
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled) return;
+    await handleAsset(result.assets[0]);
+  }, [busy, consent, clinicId, handleAsset]);
+
+  const retry = useCallback(() => {
+    if (lastAsset && !busy) void processFile(lastAsset.blob, lastAsset.mime);
+  }, [lastAsset, busy, processFile]);
 
   const onDelete = useCallback(
     async (id: string) => {
@@ -135,12 +178,7 @@ export function PhotoCard() {
     <Card>
       <StepBadge>Optional · AI Skin Photo (trial)</StepBadge>
       <CardTitle>Skin Photo</CardTitle>
-      <CardSubtitle>Upload a photo for AI screening. {DISCLAIMER}</CardSubtitle>
-
-      {/* hidden web file input */}
-      {Platform.OS === 'web' ? (
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile} />
-      ) : null}
+      <CardSubtitle>Capture or upload a photo for AI screening. {DISCLAIMER}</CardSubtitle>
 
       <View style={styles.consent}>
         <CheckboxRow
@@ -151,18 +189,20 @@ export function PhotoCard() {
       </View>
 
       {error ? (
-        <View style={{ marginTop: 8 }}>
-          <Alert variant="warning">{error}</Alert>
+        <View style={{ marginTop: 8, gap: 8 }}>
+          <Alert variant="warning">{isAiServiceError(error) ? AI_RETRY_MESSAGE : error}</Alert>
+          {isAiServiceError(error) && lastAsset ? (
+            <SecondaryButton title="Try again" disabled={busy} onPress={retry} />
+          ) : null}
         </View>
       ) : null}
 
-      <View style={{ marginTop: 8 }}>
-        <PrimaryButton
-          title={busy ? 'Uploading…' : 'Upload Photo'}
-          disabled={!consent || busy || Platform.OS !== 'web'}
-          onPress={onUpload}
-        />
+      <View style={{ marginTop: 8, gap: 8 }}>
+        <PrimaryButton title="Upload from library" disabled={!consent || busy} onPress={pickFromLibrary} />
+        <SecondaryButton title="Take photo" disabled={!consent || busy} onPress={takePhoto} />
       </View>
+
+      {busy && stage ? <AiProgress label={stage} /> : null}
 
       {photos.length > 0 ? (
         <View style={styles.list}>

@@ -38,6 +38,14 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app accesses your photos to attach skin photos to a clinical assessment.",
+          "cameraPermission": "This app uses the camera to capture skin photos for a clinical assessment.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {
