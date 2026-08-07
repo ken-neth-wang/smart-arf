@@ -529,3 +529,30 @@ create policy "audio_storage_insert" on storage.objects
   for insert with check (bucket_id = 'audio' and public.is_approved());
 create policy "audio_storage_read" on storage.objects
   for select using (bucket_id = 'audio' and (public.is_admin() or public.is_approved()));
+
+-- ═══════════════════════════════════════════════════════════════
+-- ai_runs — durable log of every AI edge-function invocation (outcome +
+-- error reason). Supabase platform logs expire after ~1 day on the Free tier,
+-- so the AI functions persist their own outcome here (written via the service
+-- role, which bypasses RLS). Admin-only read; the app never writes/deletes.
+-- Idempotent — safe to run on an existing project.
+-- ═══════════════════════════════════════════════════════════════
+create table if not exists public.ai_runs (
+  id            bigint generated always as identity primary key,
+  created_at    timestamptz not null default now(),
+  function_name text not null check (function_name in ('analyze-photo','analyze-audio','transcribe-assessment')),
+  status        text not null check (status in ('ok','error')),
+  model         text,
+  error         text,
+  duration_ms   integer
+);
+
+create index if not exists ai_runs_created_at_idx on public.ai_runs (created_at desc);
+create index if not exists ai_runs_status_idx     on public.ai_runs (status, created_at desc);
+
+alter table public.ai_runs enable row level security;
+
+drop policy if exists "ai_runs_select" on public.ai_runs;
+create policy "ai_runs_select" on public.ai_runs
+  for select using (public.is_admin());
+-- No INSERT/UPDATE/DELETE policy: only the service role (edge functions) writes.

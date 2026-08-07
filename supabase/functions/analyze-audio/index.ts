@@ -82,10 +82,38 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+// Best-effort: record this invocation's outcome to public.ai_runs so failures
+// stay diagnosable after Supabase's ~1-day free-tier log retention expires.
+// Written via the service role (bypasses RLS); never throws.
+async function logRun(
+  supabaseUrl: string | undefined,
+  serviceKey: string | undefined,
+  row: {
+    function_name: string;
+    status: "ok" | "error";
+    model: string | null;
+    error: string | null;
+    duration_ms: number;
+  },
+): Promise<void> {
+  if (!supabaseUrl || !serviceKey) return;
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/ai_runs`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
+  } catch {
+    /* logging must never break the request */
   }
+}
+
+async function handle(req: Request): Promise<Response> {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -186,4 +214,27 @@ Deno.serve(async (req: Request) => {
   return new Response(JSON.stringify(result), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const startedAt = Date.now();
+  const res = await handle(req);
+  try {
+    const raw = await res.clone().json().catch(() => null);
+    const body: Record<string, unknown> | null =
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    const model = body && typeof body.model === "string" ? body.model : null;
+    const error = body && typeof body.error === "string" ? body.error : null;
+    await logRun(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), {
+      function_name: "analyze-audio",
+      status: res.ok ? "ok" : "error",
+      model,
+      error,
+      duration_ms: Date.now() - startedAt,
+    });
+  } catch {
+    /* never break the response */
+  }
+  return res;
 });

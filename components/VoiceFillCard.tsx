@@ -26,6 +26,8 @@ import {
 } from '@/lib/voice';
 import type { VoiceAssessment } from '@/lib/types';
 import { Colors } from '@/constants/theme';
+import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
+import { AiProgress } from '@/components/AiProgress';
 
 const PRIVACY = 'Dictate clinical findings only — no patient names, DOB, or identifiers.';
 
@@ -73,10 +75,14 @@ export function VoiceFillCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VoiceAssessment | null>(null);
+  const [lastBlob, setLastBlob] = useState<Blob | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
 
   const processBlob = useCallback(async (blob: Blob) => {
     setBusy(true);
     setError(null);
+    setLastBlob(blob); // cache so a transient failure can be retried
+    setStage('Transcribing');
     try {
       const b64 = await audioBlobToBase64(blob);
       const mime = blob.type || 'audio/webm';
@@ -86,8 +92,13 @@ export function VoiceFillCard() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setStage(null);
     }
   }, []);
+
+  const retry = useCallback(() => {
+    if (lastBlob && !busy) void processBlob(lastBlob);
+  }, [lastBlob, busy, processBlob]);
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -154,8 +165,11 @@ export function VoiceFillCard() {
       <CardSubtitle>Speak the clinical findings to auto-check criteria across the assessment. {PRIVACY}</CardSubtitle>
 
       {error ? (
-        <View style={{ marginTop: 8 }}>
-          <Alert variant="warning">{error}</Alert>
+        <View style={{ marginTop: 8, gap: 8 }}>
+          <Alert variant="warning">{isAiServiceError(error) ? AI_RETRY_MESSAGE : error}</Alert>
+          {isAiServiceError(error) && lastBlob ? (
+            <SecondaryButton title="Try again" disabled={busy} onPress={retry} />
+          ) : null}
         </View>
       ) : null}
 
@@ -171,6 +185,8 @@ export function VoiceFillCard() {
           onPress={() => fileRef.current?.click()}
         />
       </View>
+
+      {busy && stage ? <AiProgress label={stage} /> : null}
 
       {Platform.OS === 'web' ? (
         <input ref={fileRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={onFile} />

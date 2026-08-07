@@ -16,6 +16,7 @@ import {
   CardTitle,
   CheckboxRow,
   PrimaryButton,
+  SecondaryButton,
   StepBadge,
 } from '@/components/ui/primitives';
 import { useAssessment } from '@/state/AssessmentContext';
@@ -30,6 +31,8 @@ import {
 } from '@/lib/audio';
 import type { AudioRecord, AudioClassification } from '@/lib/types';
 import { Colors } from '@/constants/theme';
+import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
+import { AiProgress } from '@/components/AiProgress';
 
 const DISCLAIMER = 'AI screening only — cannot diagnose murmurs or carditis. Clinical assessment is required.';
 
@@ -59,6 +62,8 @@ export function AudioCard() {
   const [error, setError] = useState<string | null>(null);
   const [audios, setAudios] = useState<AudioRecord[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
 
   const clinicId = user?.memberships[0]?.clinicId ?? null;
 
@@ -96,14 +101,12 @@ export function AudioCard() {
     fileRef.current?.click();
   }, [busy, consent, clinicId]);
 
-  const onFile = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (e: any) => {
-      const file: File | undefined = e?.target?.files?.[0];
-      if (e?.target) e.target.value = ''; // allow re-picking the same file
-      if (!file) return;
+  const processFile = useCallback(
+    async (file: File) => {
       setBusy(true);
       setError(null);
+      setLastFile(file); // cache so a transient failure can be retried
+      setStage('Uploading recording');
       try {
         // Ensure a patient + encounter exist (commit the draft if needed).
         let encounterId = activeEncounterId;
@@ -116,7 +119,9 @@ export function AudioCard() {
         // Upload → analyze → save.
         const mime = file.type || 'audio/mpeg';
         const path = await uploadAudio(file, encounterId!, mime);
+        setStage('Analyzing audio');
         const analysis = await analyzeAudio(path);
+        setStage('Saving result');
         await saveAudioRecord({
           patientId,
           encounterId: encounterId!,
@@ -130,10 +135,24 @@ export function AudioCard() {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setBusy(false);
+        setStage(null);
       }
     },
     [activeEncounterId, activePatientId, clinicId, commitLevelA, refresh],
   );
+
+  const onFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ''; // allow re-picking the same file
+      if (file) await processFile(file);
+    },
+    [processFile],
+  );
+
+  const retry = useCallback(() => {
+    if (lastFile && !busy) void processFile(lastFile);
+  }, [lastFile, busy, processFile]);
 
   const onDelete = useCallback(
     async (id: string) => {
@@ -168,18 +187,23 @@ export function AudioCard() {
       </View>
 
       {error ? (
-        <View style={{ marginTop: 8 }}>
-          <Alert variant="warning">{error}</Alert>
+        <View style={{ marginTop: 8, gap: 8 }}>
+          <Alert variant="warning">{isAiServiceError(error) ? AI_RETRY_MESSAGE : error}</Alert>
+          {isAiServiceError(error) && lastFile ? (
+            <SecondaryButton title="Try again" disabled={busy} onPress={retry} />
+          ) : null}
         </View>
       ) : null}
 
       <View style={{ marginTop: 8 }}>
         <PrimaryButton
-          title={busy ? 'Uploading…' : 'Upload Recording'}
+          title="Upload Recording"
           disabled={!consent || busy || Platform.OS !== 'web'}
           onPress={onUpload}
         />
       </View>
+
+      {busy && stage ? <AiProgress label={stage} /> : null}
 
       {audios.length > 0 ? (
         <View style={styles.list}>
