@@ -6,6 +6,7 @@
  */
 import React, { useState } from 'react';
 import {
+  Dimensions,
   Modal,
   Pressable,
   ScrollView,
@@ -13,10 +14,12 @@ import {
   Text,
   TextInput,
   View,
+  type ImageSourcePropType,
   type ViewStyle,
   type TextStyle,
   type KeyboardTypeOptions,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 
@@ -293,6 +296,8 @@ export function CheckboxRow({
   onToggle,
   pointsBadge,
   muted,
+  image,
+  imageLabel,
 }: {
   label: string;
   sub?: string;
@@ -300,6 +305,9 @@ export function CheckboxRow({
   onToggle: () => void;
   pointsBadge?: string;
   muted?: boolean;
+  /** Optional reference image shown under the label; tapping opens a full-screen lightbox. */
+  image?: ImageSourcePropType;
+  imageLabel?: string;
 }) {
   return (
     <Pressable
@@ -312,6 +320,11 @@ export function CheckboxRow({
       <View style={{ flex: 1 }}>
         <Text style={chkStyles.label}>{label}</Text>
         {sub ? <Text style={chkStyles.sub}>{sub}</Text> : null}
+        {image ? (
+          <View style={{ marginTop: 8 }}>
+            <ImageThumb source={image} label={imageLabel} />
+          </View>
+        ) : null}
       </View>
       {pointsBadge ? (
         <View style={[chkStyles.pts, muted && { backgroundColor: Colors.gray }]}>
@@ -328,6 +341,51 @@ const chkStyles = StyleSheet.create({
   label: { fontSize: 14.5, fontWeight: '600', color: Colors.text, lineHeight: 19 },
   sub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
   pts: { backgroundColor: Colors.primary, borderRadius: 99, paddingHorizontal: 9, paddingVertical: 4 },
+});
+
+/* ---------------- Reference image thumbnail + lightbox ---------------- */
+/**
+ * ImageThumb — a compact reference-image preview that opens a full-screen
+ * lightbox on tap. Self-contained modal state. Nested inside a CheckboxRow's
+ * Pressable; the thumb's own Pressable captures taps so it opens the lightbox
+ * WITHOUT toggling the checkbox.
+ */
+export function ImageThumb({ source, label }: { source: ImageSourcePropType; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const screen = Dimensions.get('window');
+  return (
+    <>
+      <Pressable onPress={() => setOpen(true)} style={thumbStyles.wrap}>
+        <ExpoImage source={source} style={thumbStyles.thumb} contentFit="cover" transition={120} />
+        <View style={thumbStyles.badge}>
+          <Ionicons name="expand" size={12} color="#fff" />
+        </View>
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={thumbStyles.overlay} onPress={() => setOpen(false)}>
+          <View style={thumbStyles.sheet}>
+            <ExpoImage
+              source={source}
+              style={{ width: screen.width - 48, height: screen.height * 0.66 }}
+              contentFit="contain"
+              transition={120}
+            />
+            {label ? <Text style={thumbStyles.caption}>{label}</Text> : null}
+            <Text style={thumbStyles.hint}>Tap anywhere to close</Text>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+const thumbStyles = StyleSheet.create({
+  wrap: { position: 'relative', width: 76, height: 76, borderRadius: 10, overflow: 'hidden', alignSelf: 'flex-start' },
+  thumb: { width: '100%', height: '100%' },
+  badge: { position: 'absolute', right: 4, bottom: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 3 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  sheet: { width: '100%', maxWidth: 480, alignItems: 'center' },
+  caption: { color: '#fff', fontSize: 15, fontWeight: '700', textAlign: 'center', marginTop: 16, lineHeight: 20 },
+  hint: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 10 },
 });
 
 /* ---------------- Not-Available toggle ---------------- */

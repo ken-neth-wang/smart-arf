@@ -229,8 +229,8 @@ function Step3() {
 
         <CategoryBlock title="Skin Findings" points={(inputs.em ? 5 : 0) + (inputs.sn ? 5 : 0)} active={inputs.em || inputs.sn}>
           <View style={{ gap: 7 }}>
-            <CheckboxRow label="Erythema marginatum" sub="Pink/red ring-shaped rash on trunk or limbs (rarely on face)" checked={inputs.em} onToggle={() => setInputs({ em: !inputs.em })} pointsBadge="+5" />
-            <CheckboxRow label="Subcutaneous nodules" sub="Firm, painless lumps over elbows, wrists, knees, or spine" checked={inputs.sn} onToggle={() => setInputs({ sn: !inputs.sn })} pointsBadge="+5" />
+            <CheckboxRow label="Erythema marginatum" sub="Pink/red ring-shaped rash on trunk or limbs (rarely on face)" checked={inputs.em} onToggle={() => setInputs({ em: !inputs.em })} pointsBadge="+5" image={require('@/assets/images/erythema-marginatum.png')} imageLabel="Erythema marginatum" />
+            <CheckboxRow label="Subcutaneous nodules" sub="Firm, painless lumps over elbows, wrists, knees, or spine" checked={inputs.sn} onToggle={() => setInputs({ sn: !inputs.sn })} pointsBadge="+5" image={require('@/assets/images/subcutaneous-nodules.png')} imageLabel="Subcutaneous nodules" />
           </View>
         </CategoryBlock>
 
