@@ -29,13 +29,14 @@ export interface PatientFields {
   phone1: string;
   phone2: string;
   dateOfBirth: string | null; // ISO YYYY-MM-DD; null = unknown
+  dobApproximate: boolean; // true when dateOfBirth was derived from a manually-entered age
   gender: Gender;
   setting: Setting;
   isTest: boolean;
 }
 
 function emptyPatient(): PatientFields {
-  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, gender: '', setting: '', isTest: false };
+  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, dobApproximate: false, gender: '', setting: '', isTest: false };
 }
 
 export type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -117,6 +118,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       phone1: patient.phone1,
       phone2: patient.phone2,
       dateOfBirth: patient.dateOfBirth,
+      dobApproximate: patient.dobApproximate,
       gender: patient.gender,
       setting: patient.setting,
       isTest: patient.isTest,
@@ -211,6 +213,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       phone1: p.phone1,
       phone2: p.phone2,
       dateOfBirth: p.dateOfBirth,
+      dobApproximate: p.dobApproximate,
       gender: p.gender,
       setting: p.setting,
       isTest: p.isTest,

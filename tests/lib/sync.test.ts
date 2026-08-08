@@ -35,6 +35,7 @@ function mkPatient(over: Partial<Patient> = {}): Patient {
     phone1: '+249912345678',
     phone2: '+249987654321',
     dateOfBirth: '2015-06-15',
+    dobApproximate: false,
     gender: 'male',
     setting: 'endemic',
     isTest: false,
@@ -136,6 +137,7 @@ describe('rowToPatient (PatientRow → Patient)', () => {
       phone1: '+249912345678',
       phone2: '',
       date_of_birth: '2015-06-15',
+      dob_approximate: false,
       gender: 'male',
       setting: 'endemic',
       is_test: false,
@@ -185,6 +187,11 @@ describe('patient round-trip', () => {
       firstName: '', lastName: '', mrn: '', phone1: '', phone2: '',
       dateOfBirth: null, gender: '', setting: '',
     });
+    expect(rowToPatient(patientToRow(original))).toEqual(original);
+  });
+
+  it('preserves dobApproximate (age-derived DOB)', () => {
+    const original = mkPatient({ dateOfBirth: '2012-01-01', dobApproximate: true });
     expect(rowToPatient(patientToRow(original))).toEqual(original);
   });
 });
@@ -276,7 +283,7 @@ describe('field-name regression guards', () => {
     const keys = Object.keys(patientToRow(mkPatient())).sort();
     const expected = [
       'id', 'referral_code', 'first_name', 'last_name', 'mrn', 'phone1', 'phone2',
-      'date_of_birth', 'gender', 'setting', 'is_test', 'inactive',
+      'date_of_birth', 'dob_approximate', 'gender', 'setting', 'is_test', 'inactive',
       'clinic_id',
       'created_at', 'updated_at', 'deleted_at', 'deleted_by', 'delete_reason', 'delete_notes',
     ].sort();

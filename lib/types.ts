@@ -103,7 +103,8 @@ export interface Patient {
   mrn: string; // unique within each clinic; cross-clinic link via referralCode; '' if unknown
   phone1: string;
   phone2: string;
-  dateOfBirth: string | null; // ISO date (YYYY-MM-DD); null = age unknown
+  dateOfBirth: string | null; // ISO date (YYYY-MM-DD); null = unknown. When only age is known, an approximate DOB (Jan 1 of the birth year) is stored with dobApproximate = true.
+  dobApproximate: boolean; // true when dateOfBirth was derived from a manually-entered age rather than an exact birth date
   gender: Gender;
   setting: Setting; // endemic/non-endemic — a patient attribute
   isTest: boolean;
@@ -129,6 +130,21 @@ export function ageFromDateOfBirth(dob: string | null, now: Date = new Date()): 
   const m = now.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
   return age >= 0 ? age : null;
+}
+
+/** Approximate a DOB (ISO YYYY-MM-DD) from an age in years, using Jan 1 of the
+ *  birth year. Used when only the age is known — store with dobApproximate = true
+ *  so the age displays as approximate ("~"). Round-trips through ageFromDateOfBirth. */
+export function approxDobFromAge(ageYears: number, now: Date = new Date()): string {
+  return `${now.getFullYear() - ageYears}-01-01`;
+}
+
+/** Display age string with a "~" prefix when the DOB was derived from a manually-
+ *  entered age. Returns null when the DOB is unknown/unparseable (no age to show). */
+export function formatAge(dob: string | null, approximate = false, now: Date = new Date()): string | null {
+  const age = ageFromDateOfBirth(dob, now);
+  if (age === null) return null;
+  return (approximate ? '~' : '') + age;
 }
 
 /* ─────────────────────────────────────────────────────────────────── *

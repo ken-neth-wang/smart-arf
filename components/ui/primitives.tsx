@@ -90,8 +90,9 @@ interface TextFieldProps {
   hint?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   secureTextEntry?: boolean;
+  editable?: boolean;
 }
-export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize, secureTextEntry }: TextFieldProps) {
+export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize, secureTextEntry, editable }: TextFieldProps) {
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <FieldLabel required={required}>{label}</FieldLabel> : null}
@@ -104,6 +105,7 @@ export function TextField({ value, onChangeText, placeholder, keyboardType, mult
         multiline={multiline}
         autoCapitalize={autoCapitalize}
         secureTextEntry={secureTextEntry}
+        editable={editable}
         style={[inputStyles.input, style]}
       />
       {hint ? <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: -10, marginBottom: 16 }}>{hint}</Text> : null}

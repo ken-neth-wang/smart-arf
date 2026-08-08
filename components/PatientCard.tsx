@@ -7,7 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, tierColor } from '@/constants/theme';
-import { ageFromDateOfBirth, type PatientSummary } from '@/lib/types';
+import { formatAge, type PatientSummary } from '@/lib/types';
 import { fullName, initials, maskMRN } from '@/lib/format';
 
 const dotBg: Record<string, string> = {
@@ -24,12 +24,12 @@ export function PatientCard({ summary, onPress }: { summary: PatientSummary; onP
   const level = latestInitial?.level ?? null;
   const dot = (level && dotBg[level]) ?? Colors.gray;
   const name = fullName(patient.firstName, patient.lastName);
-  const age = ageFromDateOfBirth(patient.dateOfBirth);
+  const ageStr = formatAge(patient.dateOfBirth, patient.dobApproximate);
 
   const meta = [
     patient.referralCode,
     patient.mrn ? `MRN ${maskMRN(patient.mrn)}` : '',
-    age ? `${age}y` : '',
+    ageStr ? `${ageStr}y` : '',
     patient.gender,
     latestInitial?.date,
     followupCount ? `${followupCount} follow-up${followupCount > 1 ? 's' : ''}` : '',

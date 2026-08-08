@@ -33,6 +33,7 @@ export interface PatientRow {
   phone1: string;
   phone2: string;
   date_of_birth: string | null;
+  dob_approximate: boolean;
   gender: Patient['gender'];
   setting: Patient['setting'];
   is_test: boolean;
@@ -94,6 +95,7 @@ export function rowToPatient(p: PatientRow): Patient {
     phone1: p.phone1,
     phone2: p.phone2,
     dateOfBirth: p.date_of_birth,
+    dobApproximate: p.dob_approximate,
     gender: p.gender,
     setting: p.setting,
     isTest: p.is_test,
@@ -118,6 +120,7 @@ export function patientToRow(p: Patient): PatientRow {
     phone1: p.phone1,
     phone2: p.phone2,
     date_of_birth: p.dateOfBirth,
+    dob_approximate: p.dobApproximate,
     gender: p.gender,
     setting: p.setting,
     is_test: p.isTest,

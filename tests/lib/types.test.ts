@@ -1,4 +1,4 @@
-import { emptyInputs } from '@/lib/types';
+import { approxDobFromAge, ageFromDateOfBirth, emptyInputs, formatAge } from '@/lib/types';
 
 describe('emptyInputs', () => {
   it('returns the documented default state', () => {
@@ -37,5 +37,27 @@ describe('emptyInputs', () => {
     a.joint = 5;
     expect(emptyInputs().murmur).toBe(false);
     expect(emptyInputs().joint).toBe(0);
+  });
+});
+
+describe('age helpers', () => {
+  const now = new Date('2026-08-06');
+
+  it('approxDobFromAge uses Jan 1 of the birth year', () => {
+    expect(approxDobFromAge(14, now)).toBe('2012-01-01');
+  });
+
+  it('round-trips: age → approximate DOB → age', () => {
+    expect(ageFromDateOfBirth(approxDobFromAge(14, now), now)).toBe(14);
+  });
+
+  it('formatAge prefixes approximate ages with ~', () => {
+    expect(formatAge('2012-01-01', false, now)).toBe('14');
+    expect(formatAge('2012-01-01', true, now)).toBe('~14');
+  });
+
+  it('formatAge returns null for unknown/unparseable DOB', () => {
+    expect(formatAge(null, false, now)).toBeNull();
+    expect(formatAge('not a date', true, now)).toBeNull();
   });
 });

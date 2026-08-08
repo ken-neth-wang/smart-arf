@@ -101,7 +101,8 @@ create table public.patients (
   mrn           text not null default '',
   phone1        text not null default '',
   phone2        text not null default '',
-  date_of_birth date,
+  date_of_birth   date,
+  dob_approximate boolean not null default false,
   gender        text not null default '',
   setting       text not null default '',
   is_test       boolean not null default false,
@@ -126,6 +127,10 @@ create index patients_inactive_idx       on public.patients (inactive);
 -- clinic_id IS NULL are not uniqueness-enforced (see null-clinic handling).
 drop index if exists patients_mrn_unique;
 create unique index patients_mrn_clinic_unique on public.patients (clinic_id, mrn) where mrn <> '';
+
+-- Migration: dob_approximate — flag a DOB derived from a manually-entered age.
+-- Idempotent; existing rows default to false (exact DOB), which is correct.
+alter table public.patients add column if not exists dob_approximate boolean not null default false;
 
 -- ═══════════════════════════════════════════════════════════════
 -- encounters — clinical visits (now with referred_to_clinic_id + audited)

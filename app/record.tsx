@@ -14,7 +14,7 @@ import { useAuth } from '@/state/AuthContext';
 import { canEditPatient } from '@/lib/permissions';
 import { Colors, tierColor } from '@/constants/theme';
 import { fullName, maskMRN, maskPhone } from '@/lib/format';
-import { ageFromDateOfBirth, type BpgStatus, type ConfirmedDx, type DeleteReason, type Encounter } from '@/lib/types';
+import { formatAge, type BpgStatus, type ConfirmedDx, type DeleteReason, type Encounter } from '@/lib/types';
 
 const REASON_OPTS: SelectOption[] = [
   { label: 'Duplicate entry', value: 'duplicate' },
@@ -57,10 +57,10 @@ export default function RecordScreen() {
 
   const { patient, encounters } = history;
   const name = fullName(patient.firstName, patient.lastName);
-  const age = ageFromDateOfBirth(patient.dateOfBirth);
+  const ageStr = formatAge(patient.dateOfBirth, patient.dobApproximate);
   const line2 = [
     patient.gender,
-    age ? `Age: ${age}y` : '',
+    ageStr ? `Age: ${ageStr}y` : '',
     patient.mrn ? `MRN: ${patient.mrn}` : '',
     patient.phone1 ? `📞 ${patient.phone1}` : '',
     patient.phone2 ? `📞 (alt) ${patient.phone2}` : '',

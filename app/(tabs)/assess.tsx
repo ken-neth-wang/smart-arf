@@ -41,6 +41,7 @@ import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
 import { getActions, getInterp, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
 import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
+import { approxDobFromAge, ageFromDateOfBirth } from '@/lib/types';
 
 const GENDER_OPTS = [
   { label: 'Male', value: 'male' },
@@ -85,6 +86,20 @@ const styles = StyleSheet.create({
 function Step1() {
   const { patient, setPatient, goStep } = useAssessment();
   const [err, setErr] = useState('');
+  // Age is always derived from the DOB. When only the age is known, an
+  // approximate DOB (Jan 1 of the birth year) is stored with dobApproximate = true.
+  // The two are mutually exclusive: entering one takes over from the other.
+  const derivedAge = ageFromDateOfBirth(patient.dateOfBirth);
+  const ageLocked = !patient.dobApproximate && patient.dateOfBirth !== null;
+  const onDobChange = (v: string) => setPatient({ dateOfBirth: v || null, dobApproximate: false });
+  const onAgeChange = (v: string) => {
+    const years = parseInt(v.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(years) || years <= 0 || years > 125) {
+      setPatient({ dateOfBirth: null, dobApproximate: false });
+      return;
+    }
+    setPatient({ dateOfBirth: approxDobFromAge(years), dobApproximate: true });
+  };
 
   const next = () => {
     if (!patient.firstName.trim() || !patient.lastName.trim()) return setErr('First and last name are required.');
@@ -116,7 +131,8 @@ function Step1() {
 
       <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
 
-      <TextField label="Date of Birth (YYYY-MM-DD)" value={patient.dateOfBirth ?? ''} onChangeText={(v) => setPatient({ dateOfBirth: v || null })} placeholder="e.g. 2015-06-15" />
+      <TextField label="Date of Birth (YYYY-MM-DD)" value={!patient.dobApproximate ? (patient.dateOfBirth ?? '') : ''} onChangeText={onDobChange} placeholder="e.g. 2015-06-15" />
+      <TextField label="Age (years)" value={derivedAge !== null ? String(derivedAge) : ''} onChangeText={onAgeChange} placeholder="e.g. 14 — enter if exact DOB is unknown" keyboardType="number-pad" editable={!ageLocked} hint="Auto-filled from date of birth; enter an age instead when the exact date is unknown." />
 
       <SelectField label="Patient Gender" value={patient.gender} options={GENDER_OPTS} onChange={(v) => setPatient({ gender: v as Gender })} />
 

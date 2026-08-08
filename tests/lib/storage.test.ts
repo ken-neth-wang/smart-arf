@@ -38,6 +38,7 @@ function mkPatient(id: number, over: Partial<Patient> = {}): Patient {
     phone1: '',
     phone2: '',
     dateOfBirth: '2015-01-01',
+    dobApproximate: false,
     gender: '',
     setting: '',
     isTest: false,
