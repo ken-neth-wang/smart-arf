@@ -544,11 +544,15 @@ create table if not exists public.ai_runs (
   status        text not null check (status in ('ok','error')),
   model         text,
   error         text,
-  duration_ms   integer
+  duration_ms   integer,
+  key_used      text
 );
 
 create index if not exists ai_runs_created_at_idx on public.ai_runs (created_at desc);
 create index if not exists ai_runs_status_idx     on public.ai_runs (status, created_at desc);
+
+-- key_used tracks free vs paid Gemini key per run (idempotent for existing projects).
+alter table public.ai_runs add column if not exists key_used text;
 
 alter table public.ai_runs enable row level security;
 

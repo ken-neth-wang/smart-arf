@@ -94,6 +94,7 @@ async function logRun(
     model: string | null;
     error: string | null;
     duration_ms: number;
+    key_used: string | null;
   },
 ): Promise<void> {
   if (!supabaseUrl || !serviceKey) return;
@@ -113,14 +114,41 @@ async function logRun(
   }
 }
 
+// POST to Gemini, preferring the free key and falling back to the paid key on a
+// transient failure (the free tier is shed first during demand spikes). If no
+// free key is set, uses the paid key directly. Returns the winning Response and
+// which key answered — for spend tracking.
+async function callGemini(
+  model: string,
+  body: string,
+  freeKey: string | undefined,
+  paidKey: string | undefined,
+): Promise<{ resp: Response; keyUsed: "free" | "paid" }> {
+  const endpoint = (key: string) =>
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const post = (key: string) =>
+    fetch(endpoint(key), { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  if (freeKey) {
+    const resp = await post(freeKey);
+    const transient =
+      resp.status === 429 || resp.status === 500 || resp.status === 502 || resp.status === 503;
+    if (resp.ok || !transient || !paidKey) {
+      return { resp, keyUsed: "free" };
+    }
+    return { resp: await post(paidKey), keyUsed: "paid" };
+  }
+  return { resp: await post(paidKey!), keyUsed: "paid" };
+}
+
 async function handle(req: Request): Promise<Response> {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const freeKey = Deno.env.get("GEMINI_API_KEY");
+  const paidKey = Deno.env.get("GEMINI_API_KEY_PAID");
 
-  if (!geminiKey) {
-    return jsonError(500, "GEMINI_API_KEY secret is not set on the edge function.");
+  if (!freeKey && !paidKey) {
+    return jsonError(500, "No GEMINI_API_KEY or GEMINI_API_KEY_PAID secret is set.");
   }
   if (!supabaseUrl || !serviceKey) {
     return jsonError(500, "Supabase service credentials are unavailable.");
@@ -150,29 +178,24 @@ async function handle(req: Request): Promise<Response> {
   const mimeType = mimeFromPath(storagePath);
   const b64 = toBase64(audioBytes);
 
-  // 2. Call Gemini 3.5 Flash (audio + text → structured JSON).
-  const geminiResp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: PROMPT },
-              { inline_data: { mime_type: mimeType, data: b64 } },
-            ],
-          },
+  // 2. Call Gemini 3.5 Flash (audio + text → structured JSON). Prefer the free
+  //    key; fall back to the paid key on a transient (503/429) failure.
+  const geminiBody = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: mimeType, data: b64 } },
         ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          responseSchema: SCHEMA,
-        },
-      }),
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: SCHEMA,
     },
-  );
+  });
+  const { resp: geminiResp, keyUsed } = await callGemini(MODEL, geminiBody, freeKey, paidKey);
 
   if (!geminiResp.ok) {
     const errText = await geminiResp.text();
@@ -212,7 +235,7 @@ async function handle(req: Request): Promise<Response> {
   };
 
   return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "x-key-used": keyUsed },
   });
 }
 
@@ -220,6 +243,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const startedAt = Date.now();
   const res = await handle(req);
+  const keyUsed = res.headers.get("x-key-used");
   try {
     const raw = await res.clone().json().catch(() => null);
     const body: Record<string, unknown> | null =
@@ -232,6 +256,7 @@ Deno.serve(async (req: Request) => {
       model,
       error,
       duration_ms: Date.now() - startedAt,
+      key_used: keyUsed,
     });
   } catch {
     /* never break the response */

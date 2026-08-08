@@ -115,6 +115,7 @@ interface ModelResult {
   parsed?: Parsed;
   model?: string;
   error?: string;
+  transient?: boolean;
 }
 
 /** Try one model; return ok + parsed result, or ok=false with an error reason. */
@@ -145,12 +146,14 @@ async function tryModel(
       },
     );
   } catch (e) {
-    return { ok: false, error: `${name} fetch failed: ${e instanceof Error ? e.message : String(e)}` };
+    return { ok: false, error: `${name} fetch failed: ${e instanceof Error ? e.message : String(e)}`, transient: true };
   }
 
   if (!resp.ok) {
     const t = await resp.text().catch(() => "");
-    return { ok: false, error: `${name} API error (${resp.status}): ${t.slice(0, 300)}` };
+    const transient =
+      resp.status === 429 || resp.status === 500 || resp.status === 502 || resp.status === 503;
+    return { ok: false, error: `${name} API error (${resp.status}): ${t.slice(0, 300)}`, transient };
   }
 
   let data: unknown;
@@ -198,6 +201,7 @@ async function logRun(
     model: string | null;
     error: string | null;
     duration_ms: number;
+    key_used: string | null;
   },
 ): Promise<void> {
   if (!supabaseUrl || !serviceKey) return;
@@ -221,10 +225,11 @@ async function handle(req: Request): Promise<Response> {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const freeKey = Deno.env.get("GEMINI_API_KEY");
+  const paidKey = Deno.env.get("GEMINI_API_KEY_PAID");
 
-  if (!geminiKey) {
-    return jsonError(500, "GEMINI_API_KEY secret is not set on the edge function.");
+  if (!freeKey && !paidKey) {
+    return jsonError(500, "No GEMINI_API_KEY or GEMINI_API_KEY_PAID secret is set.");
   }
   if (!supabaseUrl || !serviceKey) {
     return jsonError(500, "Supabase service credentials are unavailable.");
@@ -267,14 +272,39 @@ async function handle(req: Request): Promise<Response> {
 
   const errors: string[] = [];
   let success: ModelResult | null = null;
-  for (const m of MODELS) {
-    const r = await tryModel(m.name, geminiKey, contents, m.useSchema);
-    if (r.ok) {
-      success = r;
-      break;
+  let keyUsed: "free" | "paid" | null = null;
+  let freeHadTransient = false;
+
+  // 2a. Free key first (every model) — minimizes spend. Track whether any free
+  //     attempt hit a transient capacity error (the only case worth paying to retry).
+  if (freeKey) {
+    for (const m of MODELS) {
+      const r = await tryModel(m.name, freeKey, contents, m.useSchema);
+      if (r.ok) {
+        success = r;
+        keyUsed = "free";
+        break;
+      }
+      if (r.transient) freeHadTransient = true;
+      errors.push(`${m.name}/free: ${r.error ?? "unknown"}`);
+      console.log(`[analyze-photo] ${m.name} (free) failed: ${r.error ?? "unknown"}`);
     }
-    errors.push(`${m.name}: ${r.error ?? "unknown"}`);
-    console.log(`[analyze-photo] ${m.name} failed: ${r.error ?? "unknown"}`);
+  }
+
+  // 2b. Paid key only when free was unavailable OR hit a transient overload
+  //     (priority capacity). Content/parse failures are skipped — a paid key
+  //     won't change the model's output for the same input.
+  if (!success && paidKey && (!freeKey || freeHadTransient)) {
+    for (const m of MODELS) {
+      const r = await tryModel(m.name, paidKey, contents, m.useSchema);
+      if (r.ok) {
+        success = r;
+        keyUsed = "paid";
+        break;
+      }
+      errors.push(`${m.name}/paid: ${r.error ?? "unknown"}`);
+      console.log(`[analyze-photo] ${m.name} (paid) failed: ${r.error ?? "unknown"}`);
+    }
   }
 
   if (!success || !success.parsed || !success.model) {
@@ -292,7 +322,7 @@ async function handle(req: Request): Promise<Response> {
   };
 
   return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "x-key-used": keyUsed ?? "free" },
   });
 }
 
@@ -300,6 +330,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const startedAt = Date.now();
   const res = await handle(req);
+  const keyUsed = res.headers.get("x-key-used");
   try {
     const raw = await res.clone().json().catch(() => null);
     const body: Record<string, unknown> | null =
@@ -312,6 +343,7 @@ Deno.serve(async (req: Request) => {
       model,
       error,
       duration_ms: Date.now() - startedAt,
+      key_used: keyUsed,
     });
   } catch {
     /* never break the response */
