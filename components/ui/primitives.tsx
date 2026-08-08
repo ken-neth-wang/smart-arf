@@ -108,7 +108,7 @@ export function TextField({ value, onChangeText, placeholder, keyboardType, mult
         editable={editable}
         style={[inputStyles.input, style]}
       />
-      {hint ? <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: -10, marginBottom: 16 }}>{hint}</Text> : null}
+      {hint ? <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: 0, marginBottom: 16 }}>{hint}</Text> : null}
     </View>
   );
 }
