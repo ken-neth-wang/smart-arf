@@ -49,6 +49,7 @@ const FIELDS: FieldMeta[] = [
   { key: 'fever', group: 'Entry', label: 'Fever', render: (v) => ({ text: v ? 'Present' : 'Absent', flagged: v === true }) },
   { key: 'chorea', group: 'Entry', label: 'Chorea', render: (v) => ({ text: v ? 'Present' : 'Absent', flagged: v === true }) },
   { key: 'altCause', group: 'Entry', label: 'Obvious alt. cause for fever', render: (v) => ({ text: v ? 'Yes' : 'No', flagged: false }) },
+  { key: 'historyArf', group: 'Entry', label: 'History of ARF', render: (v) => ({ text: v ? 'Yes' : 'No', flagged: v === true }) },
   { key: 'joint', group: 'Level A', label: 'Joint involvement', render: (v) => ({ text: JOINT_DISPLAY[v as NonNullable<VoiceAssessment['joint']>] ?? String(v), flagged: v === 'migratory' }) },
   { key: 'murmur', group: 'Level A', label: 'Heart murmur', render: (v) => ({ text: v ? 'Present' : 'Absent', flagged: v === true }) },
   { key: 'sob', group: 'Level A', label: 'Shortness of breath', render: (v) => ({ text: v ? 'Present' : 'Absent', flagged: v === true }) },

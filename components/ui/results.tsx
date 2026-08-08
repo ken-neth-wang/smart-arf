@@ -38,6 +38,21 @@ const choreaStyles = StyleSheet.create({
   body: { color: Colors.urgent, fontSize: 13.5, lineHeight: 19 },
 });
 
+const HISTORY_ARF_BODIES: Record<3 | 4 | 5 | 6, string> = {
+  3: 'Known history of ARF with current fever indicates a likely recurrent episode. Start Benzathine Penicillin G (BPG) and refer urgently. Continue documenting findings below for the record.',
+  4: 'Positive ARF — start BPG and refer urgently regardless of total score.',
+  5: 'Continue documenting Level B findings for the record.',
+  6: 'BPG must be started and patient referred urgently regardless of total score.',
+};
+export function HistoryArfBanner({ step }: { step: 3 | 4 | 5 | 6 }) {
+  return (
+    <View style={choreaStyles.wrap}>
+      <Text style={choreaStyles.title}>⚠ Recurrent ARF Likely — Positive (history of ARF + fever)</Text>
+      <Text style={choreaStyles.body}>{HISTORY_ARF_BODIES[step]}</Text>
+    </View>
+  );
+}
+
 /* ---- Tier result card ---- */
 const tierBg: Record<string, string> = {
   unlikely: Colors.successBg,

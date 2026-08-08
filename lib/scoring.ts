@@ -44,7 +44,18 @@ export interface Interp {
   range: string;
 }
 
-export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverDuration): Interp {
+/** Hard override: a known history of ARF/RHD plus a current fever indicates a
+ *  likely recurrent episode — triage as Positive ARF regardless of Jones score. */
+export function isAutoConfirmed(s: AssessmentInputs): boolean {
+  return s.fever === true && s.historyArf === true;
+}
+
+export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): Interp {
+  // Known history of ARF + current fever → likely recurrence; triage as
+  // Positive ARF regardless of the Jones score.
+  if (autoConfirmed) {
+    return { label: 'Positive ARF (history of ARF + fever)', level: 'confirmed', range: 'History of ARF + fever' };
+  }
   // Level B > 6 independently confirms ARF (clinical-team note); takes precedence
   // over the combined-total tiers below.
   if (scoreB > 6) return { label: 'Positive ARF (Level B confirmed)', level: 'confirmed', range: 'Level B > 6' };
@@ -65,7 +76,17 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
   return { label: 'ARF Likely', level: 'likely', range: 'Score ≥8' };
 }
 
-export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration): string[] {
+export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): string[] {
+  // History of ARF + fever → recurrent ARF; full management protocol.
+  if (autoConfirmed) {
+    return [
+      'Positive ARF — known history of ARF/RHD with current fever (recurrent episode)',
+      'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
+      'Refer to secondary care for full evaluation',
+      'Initiate or continue long-term secondary prophylaxis',
+      'Educate patient and family about RHD',
+    ];
+  }
   // Level B > 6 confirms ARF — initiate the full management protocol.
   if (scoreB > 6) {
     return [

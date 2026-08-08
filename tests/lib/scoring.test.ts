@@ -10,6 +10,7 @@ import {
   generatePatientCode,
   getActions,
   getInterp,
+  isAutoConfirmed,
   levelADisplayBreakdown,
   skinScore,
 } from '@/lib/scoring';
@@ -150,6 +151,38 @@ describe('getInterp', () => {
     for (let i = 0; i <= 50; i++) {
       expect(getInterp(i, 0).level).not.toBe('chorea');
     }
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * History-of-ARF override (fever + history → auto-confirmed)
+ * ------------------------------------------------------------------ */
+describe('history-of-ARF override', () => {
+  it('isAutoConfirmed: true only when fever AND historyArf are both true', () => {
+    expect(isAutoConfirmed(buildInputs({ fever: true, historyArf: true }))).toBe(true);
+    expect(isAutoConfirmed(buildInputs({ fever: true, historyArf: false }))).toBe(false);
+    expect(isAutoConfirmed(buildInputs({ fever: false, historyArf: true }))).toBe(false);
+    expect(isAutoConfirmed(buildInputs({ fever: null, historyArf: true }))).toBe(false);
+  });
+
+  it('getInterp autoConfirmed forces Positive ARF regardless of score', () => {
+    const r = getInterp(0, 0, undefined, true);
+    expect(r.level).toBe('confirmed');
+    expect(r.label).toBe('Positive ARF (history of ARF + fever)');
+  });
+
+  it('getInterp autoConfirmed takes precedence even at a high score', () => {
+    expect(getInterp(10, 0, undefined, true).level).toBe('confirmed');
+  });
+
+  it('getActions autoConfirmed returns the recurrent-ARF management protocol', () => {
+    const actions = getActions(0, 0, undefined, true);
+    expect(actions[0]).toMatch(/Positive ARF — known history/);
+    expect(actions.some((a) => a.includes('BPG'))).toBe(true);
+  });
+
+  it('without the flag, a zero score stays Unlikely (override does not leak)', () => {
+    expect(getInterp(0, 0).level).toBe('unlikely');
   });
 });
 

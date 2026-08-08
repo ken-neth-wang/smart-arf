@@ -19,6 +19,7 @@ import {
   generatePatientCode,
   getActions,
   getInterp,
+  isAutoConfirmed,
 } from '@/lib/scoring';
 import { formatRecordDate } from '@/lib/format';
 
@@ -52,7 +53,7 @@ interface AssessmentContextValue {
   setSignedBy: (name: string) => void;
   setPatient: (patch: Partial<PatientFields>) => void;
   setInputs: (patch: Partial<AssessmentInputs>) => void;
-  setEntry: (field: 'fever' | 'chorea' | 'altCause', value: boolean) => void;
+  setEntry: (field: 'fever' | 'chorea' | 'altCause' | 'historyArf', value: boolean) => void;
   reset: () => void;
   goStep: (n: Step) => void;
   /** Commit Level A → upsert patient + create/update initial encounter. */
@@ -86,7 +87,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
 
   const setPatient = (patch: Partial<PatientFields>) => setPatientState((p) => ({ ...p, ...patch }));
   const setInputs = (patch: Partial<AssessmentInputs>) => setInputsState((i) => ({ ...i, ...patch }));
-  const setEntry = (field: 'fever' | 'chorea' | 'altCause', value: boolean) =>
+  const setEntry = (field: 'fever' | 'chorea' | 'altCause' | 'historyArf', value: boolean) =>
     setInputsState((i) => ({ ...i, [field]: value }));
 
   const reset = () => {
@@ -137,7 +138,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     const scoreA = calcLevelA(inputsFinal);
     const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
     const score = scoreA + scoreB;
-    const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
+    const interp = getInterp(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputsFinal));
     const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
     const now = new Date().toISOString();
     return {
@@ -152,7 +153,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       resultLabel: interp.label,
       range: interp.range,
       breakdown,
-      actions: getActions(scoreA, scoreB, inputs.feverDuration),
+      actions: getActions(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputsFinal)),
       includesLevelB: withLevelB,
       facilityType: inputs.facilityType,
       confirmedDx: '',

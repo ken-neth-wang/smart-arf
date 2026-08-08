@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/primitives';
 import {
   ChoreaBanner,
+  HistoryArfBanner,
   LiveScoreCard,
   PatientCodeCard,
   ResultCard,
@@ -39,7 +40,7 @@ import {
 import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
 import { Colors } from '@/constants/theme';
-import { getActions, getInterp, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
+import { getActions, getInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
 import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
 import { approxDobFromAge, ageFromDateOfBirth } from '@/lib/types';
 
@@ -162,8 +163,8 @@ function Step2() {
   const [warn, setWarn] = useState('');
 
   const next = () => {
-    if (inputs.fever === null || inputs.chorea === null || inputs.altCause === null) {
-      return setWarn('Please answer all three questions before continuing.');
+    if (inputs.fever === null || inputs.chorea === null || inputs.altCause === null || inputs.historyArf === null) {
+      return setWarn('Please answer all four questions before continuing.');
     }
     setWarn('');
     // Mirrors evalEntry(): chorea positive sets the flag (adds +5 in scoring).
@@ -175,16 +176,19 @@ function Step2() {
     <Card>
       <StepBadge>Step 2 — Entry Criteria</StepBadge>
       <CardTitle>Is This an ARF Triage Case?</CardTitle>
-      <CardSubtitle>Answer all three questions before scoring.</CardSubtitle>
+      <CardSubtitle>Answer all four questions before scoring.</CardSubtitle>
 
       <FieldLabel>{'1. Does the patient currently have a fever?'}</FieldLabel>
       <YesNoGroup value={inputs.fever} onChange={(v) => setEntry('fever', v)} />
 
-      <FieldLabel>{'2. Are abnormal involuntary movements (chorea) present?'}</FieldLabel>
+      <FieldLabel>{'2. Does the patient have a past history of ARF or RHD?'}</FieldLabel>
+      <YesNoGroup value={inputs.historyArf} onChange={(v) => setEntry('historyArf', v)} />
+
+      <FieldLabel>{'3. Are abnormal involuntary movements (chorea) present?'}</FieldLabel>
       <YesNoGroup value={inputs.chorea} onChange={(v) => setEntry('chorea', v)} />
 
       <View style={{ marginBottom: 6 }}>
-        <FieldLabel>{'3. Is there an obvious cause for the fever?'}</FieldLabel>
+        <FieldLabel>{'4. Is there an obvious cause for the fever?'}</FieldLabel>
         <Text style={styles.hintAbove}>e.g. cough &amp; runny nose (URI), diarrhea or vomiting (GI illness)</Text>
       </View>
       <YesNoGroup value={inputs.altCause} onChange={(v) => setEntry('altCause', v)} />
@@ -207,12 +211,14 @@ const JOINT_OPTS = [
 
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
-  const interp = getInterp(scoreA, 0);
+  const interp = getInterp(scoreA, 0, undefined, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
+  const autoConfirmed = isAutoConfirmed(inputs);
 
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={3} /> : null}
+      {autoConfirmed ? <HistoryArfBanner step={3} /> : null}
       <VoiceFillCard />
       <Card>
         <StepBadge>Step 3 — Level A: Clinical Assessment</StepBadge>
@@ -290,8 +296,9 @@ function Step4() {
   const { inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
   const records = useRecords();
   const router = useRouter();
-  const interp = getInterp(scoreA, 0);
+  const interp = getInterp(scoreA, 0, undefined, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
+  const autoConfirmed = isAutoConfirmed(inputs);
   const [referredToClinicId, setReferredToClinicId] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
   const clinics = records.clinics;
@@ -305,7 +312,8 @@ function Step4() {
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getActions(scoreA, 0)} />
+      {autoConfirmed ? <HistoryArfBanner step={4} /> : null}
+      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getActions(scoreA, 0, undefined, isAutoConfirmed(inputs))} />
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
@@ -340,6 +348,7 @@ const FACILITY_OPTS = [
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
   const choreaPositive = inputs.chorea === true;
+  const autoConfirmed = isAutoConfirmed(inputs);
   const total = scoreA + scoreB;
   const feverRequired = total === 6 && !inputs.feverDuration;
 
@@ -358,6 +367,7 @@ function Step5() {
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={5} /> : null}
+      {autoConfirmed ? <HistoryArfBanner step={5} /> : null}
       <Card>
         <StepBadge>Step 5 — Level B: Jones Criteria</StepBadge>
         <CardTitle>Enhanced Findings</CardTitle>
@@ -438,13 +448,15 @@ function Step5() {
 function Step6() {
   const { inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
   const router = useRouter();
-  const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
+  const interp = getInterp(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
+  const autoConfirmed = isAutoConfirmed(inputs);
 
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />
+      {autoConfirmed ? <HistoryArfBanner step={6} /> : null}
+      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs))} />
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />

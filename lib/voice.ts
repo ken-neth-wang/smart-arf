@@ -67,11 +67,12 @@ export async function transcribeAssessment(
 export function applyVoiceAssessment(
   v: VoiceAssessment,
   setInputs: (patch: Partial<AssessmentInputs>) => void,
-  setEntry: (field: 'fever' | 'chorea' | 'altCause', value: boolean) => void,
+  setEntry: (field: 'fever' | 'chorea' | 'altCause' | 'historyArf', value: boolean) => void,
 ): void {
   if (v.fever !== undefined) setEntry('fever', v.fever);
   if (v.chorea !== undefined) setEntry('chorea', v.chorea);
   if (v.altCause !== undefined) setEntry('altCause', v.altCause);
+  if (v.historyArf !== undefined) setEntry('historyArf', v.historyArf);
 
   const patch: Partial<AssessmentInputs> = {};
   if (v.joint !== undefined) patch.joint = JOINT_FROM_VOICE[v.joint] ?? 0;

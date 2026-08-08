@@ -23,6 +23,7 @@ export interface AssessmentInputs {
   fever: boolean | null;
   chorea: boolean | null;
   altCause: boolean | null;
+  historyArf: boolean | null;
   choreaPositive: boolean;
   /** 0 | 2 (monoarthralgia) | 3 (polyarthralgia) | 5 (migratory polyarthritis) */
   joint: number;
@@ -51,6 +52,7 @@ export function emptyInputs(): AssessmentInputs {
     fever: null,
     chorea: null,
     altCause: null,
+    historyArf: null,
     choreaPositive: false,
     joint: 0,
     murmur: false,
@@ -314,6 +316,7 @@ export interface VoiceAssessment {
   fever?: boolean;
   chorea?: boolean;
   altCause?: boolean;
+  historyArf?: boolean;
   // Step 3 Level A
   joint?: 'none' | 'monoarthralgia' | 'polyarthralgia' | 'migratory';
   murmur?: boolean;
