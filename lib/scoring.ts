@@ -29,13 +29,16 @@ export function calcLevelA(s: AssessmentInputs): number {
   return s.joint + carditisScore(s) + skinScore(s) + (s.noad ? 3 : 0) + (s.choreaPositive ? 5 : 0);
 }
 export function bloodInflammScore(s: AssessmentInputs): number {
-  return s.wbc || s.aso || s.esr ? 3 : 0;
+  return s.wbc || s.esr ? 3 : 0;
+}
+export function strepAntibodyScore(s: AssessmentInputs): number {
+  return s.aso || s.antidnase ? 5 : 0;
 }
 export function echoScore(s: AssessmentInputs): number {
   return s.echo === 'suggestive' ? 5 : 0;
 }
 export function calcLevelB(s: AssessmentInputs): number {
-  return bloodInflammScore(s) + (s.antidnase ? 5 : 0) + (s.pr ? 3 : 0) + echoScore(s);
+  return bloodInflammScore(s) + strepAntibodyScore(s) + (s.pr ? 3 : 0) + echoScore(s);
 }
 
 export interface Interp {
@@ -176,14 +179,18 @@ export function buildBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
 /** Level A + Level B breakdown saved to the record (mirrors buildFullBreakdownArray). */
 export function buildFullBreakdownArray(s: AssessmentInputs): BreakdownRow[] {
   const rows = buildBreakdownArray(s);
-  if (!s.naBlood && (s.wbc || s.aso || s.esr)) {
+  if (!s.naBlood && (s.wbc || s.esr)) {
     const markers: string[] = [];
     if (s.wbc) markers.push('WBC');
-    if (s.aso) markers.push('ASO');
     if (s.esr) markers.push('ESR/CRP');
     rows.push({ label: 'Inflammation markers (' + markers.join(', ') + ')', points: 3 });
   }
-  if (!s.naBlood && s.antidnase) rows.push({ label: 'Anti-DNase B positive', points: 5 });
+  if (!s.naBlood && (s.aso || s.antidnase)) {
+    const antibodies: string[] = [];
+    if (s.aso) antibodies.push('ASO');
+    if (s.antidnase) antibodies.push('Anti-DNase B');
+    rows.push({ label: 'Strep antibody (' + antibodies.join(', ') + ')', points: 5 });
+  }
   if (!s.naEcg && s.pr) rows.push({ label: 'Prolonged PR interval', points: 3 });
   if (!s.naEcho && s.echo === 'suggestive') rows.push({ label: 'Echocardiogram — Suggestive', points: 5 });
   return rows;
@@ -245,14 +252,18 @@ export function finalDisplayBreakdown(s: AssessmentInputs, scoreA: number, score
     if (s.naBlood) {
       rows.push({ label: 'Blood Tests', points: null, kind: 'na' });
     } else {
-      if (s.wbc || s.aso || s.esr) {
+      if (s.wbc || s.esr) {
         const markers: string[] = [];
         if (s.wbc) markers.push('WBC');
-        if (s.aso) markers.push('ASO');
         if (s.esr) markers.push('ESR/CRP');
         rows.push({ label: 'Inflammation markers (' + markers.join(', ') + ')', points: 3 });
       }
-      if (s.antidnase) rows.push({ label: 'Anti-DNase B positive', points: 5 });
+      if (s.aso || s.antidnase) {
+        const antibodies: string[] = [];
+        if (s.aso) antibodies.push('ASO');
+        if (s.antidnase) antibodies.push('Anti-DNase B');
+        rows.push({ label: 'Strep antibody (' + antibodies.join(', ') + ')', points: 5 });
+      }
     }
     if (s.naEcg) {
       rows.push({ label: 'ECG', points: null, kind: 'na' });

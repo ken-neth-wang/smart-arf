@@ -319,7 +319,7 @@ function Step4() {
 
       <Card>
         <StepBadge>Referral</StepBadge>
-        <CardTitle>Refer Patient (optional)</CardTitle>
+        <CardTitle>Refer Patient</CardTitle>
         <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
         <SelectField label="Referred To (clinic)" value={referredToClinicId} options={clinicOptions} onChange={setReferredToClinicId} />
         <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeEncounterId) { const c = clinics.find((x) => x.id === referredToClinicId); records.setReferral(activeEncounterId, c?.name ?? '', referredToClinicId || null); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
@@ -391,14 +391,14 @@ function Step5() {
           onChange={(v) => setInputs({ facilityType: v === '' ? null : (v as FacilityType) })}
         />
 
-        <CategoryBlock title="Blood Tests" titleSuffix="(max +8)" points={(inputs.wbc || inputs.aso || inputs.esr ? 3 : 0) + (inputs.antidnase ? 5 : 0)} active={!inputs.naBlood && ((inputs.wbc || inputs.aso || inputs.esr) || inputs.antidnase)}>
+        <CategoryBlock title="Blood Tests" titleSuffix="(max +8)" points={((inputs.wbc || inputs.esr) ? 3 : 0) + ((inputs.aso || inputs.antidnase) ? 5 : 0)} active={!inputs.naBlood && (inputs.wbc || inputs.esr || inputs.aso || inputs.antidnase)}>
           <NAToggle active={inputs.naBlood} onToggle={() => setNA('naBlood', !inputs.naBlood)} label="Not Available — blood tests were not done" />
           <View pointerEvents={inputs.naBlood ? 'none' : 'auto'} style={{ opacity: inputs.naBlood ? 0.4 : 1, gap: 7 }}>
             <SectionDivider label="Non-specific inflammation markers (any one or more = +3)" />
             <CheckboxRow label="Elevated WBC" sub="White blood cell count above normal range for age" checked={inputs.wbc} onToggle={() => setInputs({ wbc: !inputs.wbc })} pointsBadge="+3" />
-            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} pointsBadge="+3" />
             <CheckboxRow label="Elevated ESR or CRP" sub="Raised inflammatory markers" checked={inputs.esr} onToggle={() => setInputs({ esr: !inputs.esr })} pointsBadge="+3" />
-            <SectionDivider label="Specific Strep antibody" />
+            <SectionDivider label="Specific Strep antibody (ASO or Anti-DNase = +5)" />
+            <CheckboxRow label="Elevated ASO" sub="Anti-streptolysin O titer raised" checked={inputs.aso} onToggle={() => setInputs({ aso: !inputs.aso })} pointsBadge="+5" />
             <CheckboxRow label="Anti-DNase B positive" sub="Specific antibody confirming recent Group A Strep infection" checked={inputs.antidnase} onToggle={() => setInputs({ antidnase: !inputs.antidnase })} pointsBadge="+5" />
           </View>
         </CategoryBlock>

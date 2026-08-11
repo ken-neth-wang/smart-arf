@@ -13,6 +13,7 @@ import {
   isAutoConfirmed,
   levelADisplayBreakdown,
   skinScore,
+  strepAntibodyScore,
 } from '@/lib/scoring';
 import { buildInputs } from '../helpers/fixtures';
 
@@ -85,10 +86,11 @@ describe('calcLevelA', () => {
 describe('bloodInflammScore', () => {
   it('none → 0', () => expect(bloodInflammScore(buildInputs())).toBe(0));
   it('wbc alone → 3', () => expect(bloodInflammScore(buildInputs({ wbc: true }))).toBe(3));
-  it('aso alone → 3', () => expect(bloodInflammScore(buildInputs({ aso: true }))).toBe(3));
   it('esr alone → 3', () => expect(bloodInflammScore(buildInputs({ esr: true }))).toBe(3));
-  it('all three together still = 3 (grouped, NOT additive)', () => {
-    expect(bloodInflammScore(buildInputs({ wbc: true, aso: true, esr: true }))).toBe(3);
+  it('aso alone → 0 (ASO is a strep antibody, scored separately)', () =>
+    expect(bloodInflammScore(buildInputs({ aso: true }))).toBe(0));
+  it('wbc + esr together still = 3 (grouped, NOT additive)', () => {
+    expect(bloodInflammScore(buildInputs({ wbc: true, esr: true }))).toBe(3);
   });
 });
 
@@ -108,6 +110,9 @@ describe('calcLevelB', () => {
   it('empty → 0', () => expect(calcLevelB(buildInputs())).toBe(0));
   it('blood markers → 3', () => expect(calcLevelB(buildInputs({ wbc: true }))).toBe(3));
   it('antidnase → +5', () => expect(calcLevelB(buildInputs({ antidnase: true }))).toBe(5));
+  it('aso → +5 (specific strep antibody)', () => expect(calcLevelB(buildInputs({ aso: true }))).toBe(5));
+  it('aso + antidnase together still = 5 (shared strep-antibody bucket)', () =>
+    expect(calcLevelB(buildInputs({ aso: true, antidnase: true }))).toBe(5));
   it('pr → +3', () => expect(calcLevelB(buildInputs({ pr: true }))).toBe(3));
   it("echo 'suggestive' → +5", () =>
     expect(calcLevelB(buildInputs({ echo: 'suggestive' }))).toBe(5));
@@ -122,6 +127,15 @@ describe('calcLevelB', () => {
   // raw fields directly, matching the HTML source.
   it('does not itself consult na* flags (matches HTML calcLevelB)', () => {
     expect(calcLevelB(buildInputs({ wbc: true, naBlood: true }))).toBe(3);
+  });
+});
+
+describe('strepAntibodyScore', () => {
+  it('none → 0', () => expect(strepAntibodyScore(buildInputs())).toBe(0));
+  it('aso alone → 5', () => expect(strepAntibodyScore(buildInputs({ aso: true }))).toBe(5));
+  it('antidnase alone → 5', () => expect(strepAntibodyScore(buildInputs({ antidnase: true }))).toBe(5));
+  it('aso + antidnase together still = 5 (grouped, NOT additive)', () => {
+    expect(strepAntibodyScore(buildInputs({ aso: true, antidnase: true }))).toBe(5);
   });
 });
 
@@ -459,14 +473,15 @@ describe('buildFullBreakdownArray', () => {
     );
   });
 
-  it('inflammation markers join WBC, ASO, ESR/CRP in fixed order', () => {
+  it('inflammation markers join WBC, ESR/CRP in fixed order (ASO is a strep antibody)', () => {
     const rows = buildFullBreakdownArray(buildInputs({ wbc: true, aso: true, esr: true }));
-    expect(rows).toContainEqual({ label: 'Inflammation markers (WBC, ASO, ESR/CRP)', points: 3 });
+    expect(rows).toContainEqual({ label: 'Inflammation markers (WBC, ESR/CRP)', points: 3 });
+    expect(rows).toContainEqual({ label: 'Strep antibody (ASO)', points: 5 });
   });
 
-  it('antidnase → "Anti-DNase B positive" +5', () =>
+  it('antidnase → "Strep antibody (Anti-DNase B)" +5', () =>
     expect(buildFullBreakdownArray(buildInputs({ antidnase: true }))).toContainEqual({
-      label: 'Anti-DNase B positive',
+      label: 'Strep antibody (Anti-DNase B)',
       points: 5,
     }));
 
