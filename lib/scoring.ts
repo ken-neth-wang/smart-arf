@@ -65,13 +65,13 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
   const score = scoreA + scoreB;
   // Three tiers (the Highly Likely tier was retired per clinical-team review):
   if (score <= 5) return { label: 'ARF Unlikely', level: 'unlikely', range: 'Score 0–5' };
-  // Score 6 is borderline: ARF stays "possible" only if fever has persisted
-  // ≥ 2 weeks; otherwise it is ruled out. When feverDuration is unknown (live
-  // Level A previews, or not yet answered) we keep "possible" so no verdict is
-  // shown prematurely.
+  // Score 6 is borderline: ARF stays "possible" only if the fever was ≥ 2 weeks
+  // ago (timing consistent with post-strep ARF); otherwise (recent fever or no
+  // fever) it is ruled out. When feverDuration is unknown (live Level A previews,
+  // or not yet answered) we keep "possible" so no verdict is shown prematurely.
   if (score === 6) {
     if (feverDuration === 'none' || feverDuration === 'under2w') {
-      return { label: 'ARF ruled out', level: 'unlikely', range: 'Score 6 · fever < 2 weeks' };
+      return { label: 'ARF ruled out', level: 'unlikely', range: 'Score 6 · fever < 2 weeks ago' };
     }
     return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
   }
@@ -108,10 +108,10 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
       'Reassess if fever persists or symptoms change',
     ];
   }
-  // Score 6 + fever < 2 weeks (or no fever) → ARF ruled out.
+  // Score 6 + fever < 2 weeks ago (or no fever) → ARF ruled out.
   if (score === 6 && (feverDuration === 'none' || feverDuration === 'under2w')) {
     return [
-      'ARF ruled out — fever has not persisted 2 weeks or more',
+      'ARF ruled out — fever was less than 2 weeks ago (or no fever)',
       'Consider and evaluate alternative diagnoses',
       'Treat according to the clinical picture',
       'Routine follow-up as needed',

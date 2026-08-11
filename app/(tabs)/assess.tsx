@@ -373,11 +373,11 @@ function Step5() {
         <CardTitle>Enhanced Findings</CardTitle>
         <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
 
-        <FieldLabel>Has the patient had fever for 2 weeks or more?</FieldLabel>
+        <FieldLabel>How long ago did the patient have a fever?</FieldLabel>
         <RadioList
           options={[
-            { id: 'over2w', name: 'Fever ≥ 2 weeks', desc: 'Fever has lasted 2 weeks or more' },
-            { id: 'under2w', name: 'Fever < 2 weeks', desc: 'Fever lasted less than 2 weeks' },
+            { id: 'over2w', name: '> 2 weeks ago', desc: 'More than 2 weeks have passed since the fever' },
+            { id: 'under2w', name: '< 2 weeks ago', desc: 'Less than 2 weeks have passed since the fever' },
             { id: 'none', name: 'No fever', desc: 'Patient has not had a fever' },
           ]}
           selectedId={inputs.feverDuration}

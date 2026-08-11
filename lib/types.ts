@@ -42,7 +42,7 @@ export interface AssessmentInputs {
   antidnase: boolean;
   pr: boolean;
   echo: EchoValue;
-  /** Level B — fever duration; decides the verdict when the total score is 6. */
+  /** Level B — time since the fever; decides the verdict when the total score is 6. */
   feverDuration: FeverDuration;
   facilityType: FacilityType | null;
 }

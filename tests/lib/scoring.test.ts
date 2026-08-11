@@ -204,12 +204,12 @@ describe('history-of-ARF override', () => {
  * Score 6 fever-duration rule
  * ------------------------------------------------------------------ */
 describe('Score 6 fever-duration rule', () => {
-  it('score 6 + fever ≥ 2 weeks → ARF possible', () => {
+  it('score 6 + fever > 2 weeks ago → ARF possible', () => {
     const r = getInterp(0, 6, 'over2w');
     expect(r.level).toBe('possible');
     expect(r.label).toBe('ARF Possible');
   });
-  it('score 6 + fever < 2 weeks → ARF ruled out', () => {
+  it('score 6 + fever < 2 weeks ago → ARF ruled out', () => {
     const r = getInterp(0, 6, 'under2w');
     expect(r.level).toBe('unlikely');
     expect(r.label).toBe('ARF ruled out');
@@ -226,10 +226,10 @@ describe('Score 6 fever-duration rule', () => {
   it('fever only matters at score 6 — score 7 stays possible', () => {
     expect(getInterp(1, 6, 'none').level).toBe('possible');
   });
-  it('score 6 + fever < 2 weeks → ruled-out actions', () => {
-    expect(getActions(0, 6, 'under2w')[0]).toBe('ARF ruled out — fever has not persisted 2 weeks or more');
+  it('score 6 + fever < 2 weeks ago → ruled-out actions', () => {
+    expect(getActions(0, 6, 'under2w')[0]).toBe('ARF ruled out — fever was less than 2 weeks ago (or no fever)');
   });
-  it('score 6 + fever ≥ 2 weeks → possible actions', () => {
+  it('score 6 + fever > 2 weeks ago → possible actions', () => {
     expect(getActions(0, 6, 'over2w')[0]).toBe('ARF is possible — do not dismiss');
   });
 });
