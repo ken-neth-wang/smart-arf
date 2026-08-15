@@ -53,10 +53,14 @@ interface RecordsContextValue {
 function failSave(what: string, err: unknown): never {
   console.error(`[records] cloud ${what.toLowerCase()} save failed:`, err);
   const detail = err instanceof Error ? err.message : String(err);
-  Alert.alert(
-    `${what} NOT saved`,
-    `${detail}\n\nNothing was recorded. Your entries are still on this screen — reconnect or sign in again, then press Save once more.`,
-  );
+  const msg = `${detail}\n\nNothing was recorded. Your entries are still on this screen — reconnect or sign in again, then press Save once more.`;
+  // react-native-web's Alert is a NO-OP (empty stub) — on web we must use
+  // window.alert; the react-native Alert is the fallback for native builds.
+  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(`${what} NOT saved\n\n${msg}`);
+  } else {
+    Alert.alert(`${what} NOT saved`, msg);
+  }
   throw err;
 }
 
