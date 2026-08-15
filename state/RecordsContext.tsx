@@ -7,9 +7,15 @@
  * so that sequential async mutations within one flow (e.g. commit patient THEN
  * commit encounter) always build on the latest snapshot. Without the refs, a
  * stale closure would overwrite the just-added patient with the pre-call array.
+ *
+ * Save semantics (cloud): every write is SAVE-FIRST — local state is updated
+ * only after the server accepts the row, and a failed save is surfaced to the
+ * user (Alert) and rethrown so callers (wizard steps, forms) stop instead of
+ * showing a record that exists nowhere.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { Clinic, Encounter, Patient, PatientSummary, PatientWithHistory } from '@/lib/types';
+import { Alert } from 'react-native';
+import type { Clinic, Encounter, FollowUpFields, Patient, PatientSummary, PatientWithHistory } from '@/lib/types';
 import { loadData, saveData } from '@/lib/storage';
 import { loadDataCloud, loadClinicsCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
 import { useAuth } from '@/state/AuthContext';
@@ -26,7 +32,7 @@ interface RecordsContextValue {
   refresh: () => Promise<void>;
   upsertPatient: (patient: Patient) => Promise<Patient>;
   upsertEncounter: (encounter: Encounter) => Promise<void>;
-  addFollowup: (patientId: string, fields: import('@/lib/types').FollowUpFields) => Promise<void>;
+  addFollowup: (patientId: string, fields: FollowUpFields) => Promise<void>;
   softDelete: (patientId: string, reason: Patient['deleteReason'], notes?: string) => Promise<void>;
   softDeleteEncounter: (encounterId: string, reason: Encounter['deleteReason'], notes?: string) => Promise<void>;
   restoreEncounter: (encounterId: string) => Promise<void>;
@@ -39,6 +45,19 @@ interface RecordsContextValue {
   getPatientByCode: (code: string) => Patient | undefined;
   getPatientWithHistory: (id: string) => PatientWithHistory | undefined;
   getEncountersForPatient: (patientId: string) => Encounter[];
+}
+
+/** Surface a failed cloud write to the user, then rethrow so callers stop
+ *  (the wizard must not advance, the record must not look saved).
+ *  Module-level: uses no component state, keeps useCallback deps stable. */
+function failSave(what: string, err: unknown): never {
+  console.error(`[records] cloud ${what.toLowerCase()} save failed:`, err);
+  const detail = err instanceof Error ? err.message : String(err);
+  Alert.alert(
+    `${what} NOT saved`,
+    `${detail}\n\nNothing was recorded. Your entries are still on this screen — reconnect or sign in again, then press Save once more.`,
+  );
+  throw err;
 }
 
 const RecordsContext = createContext<RecordsContextValue | null>(null);
@@ -136,17 +155,18 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     } else {
       next = [patient, ...prev];
     }
-    syncRefs(next, encountersRef.current);
-    setPatients(next);
     if (USE_CLOUD) {
       try {
         await savePatientCloud(resolved);
       } catch (err) {
-        console.error('[records] cloud patient save failed:', err);
+        failSave('Patient', err);
       }
-    } else {
-      await persistLocal(next, encountersRef.current);
     }
+    // Local state is updated ONLY after the write succeeds — a failed save
+    // must never leave a record that looks saved but exists nowhere.
+    syncRefs(next, encountersRef.current);
+    setPatients(next);
+    if (!USE_CLOUD) await persistLocal(next, encountersRef.current);
     return { ...resolved };
   }, [persistLocal, syncRefs]);
 
@@ -161,21 +181,21 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     const prev = encountersRef.current;
     const idx = prev.findIndex((e) => e.id === toSave.id);
     const next = idx >= 0 ? prev.map((e) => (e.id === toSave.id ? { ...e, ...toSave } : e)) : [toSave, ...prev];
-    syncRefs(patientsRef.current, next);
-    setEncounters(next);
     if (USE_CLOUD) {
       try {
         await saveEncounterCloud(toSave);
       } catch (err) {
-        console.error('[records] cloud encounter save failed:', err);
+        failSave('Visit', err);
       }
-    } else {
-      await persistLocal(patientsRef.current, next);
     }
+    // Local state is updated ONLY after the write succeeds (see upsertPatient).
+    syncRefs(patientsRef.current, next);
+    setEncounters(next);
+    if (!USE_CLOUD) await persistLocal(patientsRef.current, next);
   }, [persistLocal, syncRefs, authId]);
 
   const addFollowup = useCallback(
-    async (patientId: string, fields: import('@/lib/types').FollowUpFields) => {
+    async (patientId: string, fields: FollowUpFields) => {
       const now = new Date().toISOString();
       const encounter: Encounter = {
         id: 'enc-' + Date.now(),
@@ -287,18 +307,22 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const setReferral = useCallback(
     async (encounterId: string, referredTo: string, referredToClinicId: string | null) => {
       const prev = encountersRef.current;
+      const target = prev.find((e) => e.id === encounterId);
+      if (!target) return;
       const ts = new Date().toISOString();
-      const next = prev.map((e) => (e.id === encounterId ? { ...e, referredTo, referredToClinicId, updatedAt: ts } : e));
-      syncRefs(patientsRef.current, next);
-      setEncounters(next);
+      const updated: Encounter = { ...target, referredTo, referredToClinicId, updatedAt: ts };
+      const next = prev.map((e) => (e.id === encounterId ? updated : e));
       if (USE_CLOUD) {
-        const target = next.find((e) => e.id === encounterId);
-        if (target) {
-          try { await saveEncounterCloud(target); } catch (err) { console.error('[records] cloud referral save failed:', err); }
+        try {
+          await saveEncounterCloud(updated);
+        } catch (err) {
+          failSave('Referral', err);
         }
       } else {
         await persistLocal(patientsRef.current, next);
       }
+      syncRefs(patientsRef.current, next);
+      setEncounters(next);
     },
     [persistLocal, syncRefs],
   );

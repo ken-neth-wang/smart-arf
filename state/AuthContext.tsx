@@ -8,6 +8,7 @@
  * Session persistence is handled by the Supabase client (lib/supabase.ts):
  * persistSession + AsyncStorage, so a logged-in user survives reloads.
  */
+import { AppState } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { loadMembershipsCloud, loadProfileCloud } from '@/lib/sync';
@@ -107,6 +108,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
     return () => {
       active = false;
+    };
+  }, [session, buildUser]);
+
+  // Re-resolve profile + memberships when the app returns to the foreground.
+  // Long-lived tabs (mobile web) otherwise keep a stale `user` — e.g. approved
+  // flipped off, or a clinic membership added after login — and record with
+  // outdated permissions. Only applied when the fetch succeeds.
+  useEffect(() => {
+    if (!USE_CLOUD || !isSupabaseConfigured || !session?.user) return;
+    const uid = session.user.id;
+    let active = true;
+    const revalidate = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const u = await buildUser(uid);
+      if (active && u) setUser(u);
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', revalidate);
+      return () => {
+        active = false;
+        document.removeEventListener('visibilitychange', revalidate);
+      };
+    }
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') revalidate();
+    });
+    return () => {
+      active = false;
+      sub.remove();
     };
   }, [session, buildUser]);
 

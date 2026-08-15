@@ -49,16 +49,23 @@ export default function FollowupScreen() {
     if (!visitDate) return setErr('Visit date is required.');
     if (!signedBy.trim()) return setErr('The responsible clinician must sign (enter their name).');
     if (!id) return setErr('Missing patient.');
-    await addFollowup(id, {
-      visitDate,
-      signedBy: signedBy.trim(),
-      confirmedDx,
-      finalDx,
-      bpgStatus,
-      echoFindings,
-      complications,
-      notes,
-    });
+    try {
+      await addFollowup(id, {
+        visitDate,
+        signedBy: signedBy.trim(),
+        confirmedDx,
+        finalDx,
+        bpgStatus,
+        echoFindings,
+        complications,
+        notes,
+      });
+    } catch (err) {
+      // Save failed — RecordsContext already alerted with the cause; keep the
+      // form on screen (entries intact) plus an inline message.
+      setErr('Could not save follow-up: ' + (err instanceof Error ? err.message : String(err)));
+      return;
+    }
     router.replace({ pathname: '/record', params: { id } });
   };
 

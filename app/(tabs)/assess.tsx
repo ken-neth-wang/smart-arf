@@ -281,8 +281,13 @@ function Step3() {
           onPress={async () => {
             // Mirrors goToResult() → renderLevelAResult(): persist the patient
             // + initial encounter (generates referral code) then show the result.
-            await commitLevelA();
-            goStep(4);
+            try {
+              await commitLevelA();
+              goStep(4);
+            } catch {
+              // Save failed — RecordsContext alerted with the cause; stay on
+              // this step so the entries can be retried.
+            }
           }}
         />
         <SecondaryButton title="Back" onPress={() => goStep(2)} />
@@ -322,7 +327,17 @@ function Step4() {
         <CardTitle>Refer Patient</CardTitle>
         <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
         <SelectField label="Referred To (clinic)" value={referredToClinicId} options={clinicOptions} onChange={setReferredToClinicId} />
-        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={() => { if (activeEncounterId) { const c = clinics.find((x) => x.id === referredToClinicId); records.setReferral(activeEncounterId, c?.name ?? '', referredToClinicId || null); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1500); } }} />
+        <PrimaryButton title={savedFlash ? '✓ Referral saved' : 'Save Referral'} onPress={async () => {
+          if (!activeEncounterId) return;
+          const c = clinics.find((x) => x.id === referredToClinicId);
+          try {
+            await records.setReferral(activeEncounterId, c?.name ?? '', referredToClinicId || null);
+            setSavedFlash(true);
+            setTimeout(() => setSavedFlash(false), 1500);
+          } catch {
+            // Save failed — RecordsContext alerted with the cause; no success flash.
+          }
+        }} />
       </Card>
 
       <ScoreBreakdown title="Level A Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />
@@ -432,7 +447,15 @@ function Step5() {
           </View>
         </View>
 
-        <PrimaryButton title="View Final Result" disabled={feverRequired} onPress={async () => { await commitFinal(); goStep(6); }} />
+        <PrimaryButton title="View Final Result" disabled={feverRequired} onPress={async () => {
+          try {
+            await commitFinal();
+            goStep(6);
+          } catch {
+            // Save failed — RecordsContext alerted with the cause; stay on
+            // this step so the entries can be retried.
+          }
+        }} />
         {feverRequired ? (
           <Text style={{ color: Colors.warning, fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 8, paddingHorizontal: 4 }}>
             Answer the fever question above to determine the result.
