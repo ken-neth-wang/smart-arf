@@ -10,6 +10,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useAssessment } from '@/state/AssessmentContext';
+import { ClinicPicker } from '@/components/ClinicPicker';
 
 export default function TabLayout() {
   const { reset } = useAssessment();
@@ -27,24 +28,44 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen
         name="index"
-        options={{ title: 'Home', headerShown: false, tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} /> }}
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+          headerRight: () => <ClinicPicker />,
+        }}
       />
       <Tabs.Screen
         name="assess"
-        options={{ title: 'Assess', headerShown: false, tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={26} color={color} /> }}
+        options={{
+          title: 'Assess',
+          tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={26} color={color} />,
+          headerRight: () => <ClinicPicker />,
+        }}
         listeners={{ tabPress: () => reset() }}
       />
       <Tabs.Screen
         name="bpg"
-        options={{ title: 'BPG', tabBarIcon: ({ color }) => <Ionicons name="medkit" size={24} color={color} /> }}
+        options={{
+          title: 'BPG',
+          tabBarIcon: ({ color }) => <Ionicons name="medkit" size={24} color={color} />,
+          headerRight: () => <ClinicPicker />,
+        }}
       />
       <Tabs.Screen
         name="records"
-        options={{ title: 'Records', tabBarIcon: ({ color }) => <Ionicons name="list" size={24} color={color} /> }}
+        options={{
+          title: 'Records',
+          tabBarIcon: ({ color }) => <Ionicons name="list" size={24} color={color} />,
+          headerRight: () => <ClinicPicker allOption />,
+        }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: 'Settings', tabBarIcon: ({ color }) => <Ionicons name="settings" size={24} color={color} /> }}
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => <Ionicons name="settings" size={24} color={color} />,
+          headerRight: () => <ClinicPicker />,
+        }}
       />
     </Tabs>
   );

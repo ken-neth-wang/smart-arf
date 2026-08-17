@@ -1,0 +1,74 @@
+# Keep Supabase logs alive for more than one day — for free.
+#
+# Why: Supabase's free plan retains dashboard logs for 1 day only, and Log
+# Drains (the official export path) are a Pro-plan add-on. But the Management
+# API (GET /v1/projects/{ref}/analytics/endpoints/logs.all) serves any window
+# up to 24h, so this workflow runs twice a day, pulls the last 24h, and stores
+# it as a GitHub Actions artifact that auto-expires after 14 days.
+# Result: ~2 weeks of debuggable logs at $0, with nothing written to git.
+#
+# One-time setup:
+#   1. Create a token at https://supabase.com/dashboard/account/tokens
+#      (fine-grained with analytics read is enough; a classic PAT works too).
+#   2. Add it as the repo secret SUPABASE_ACCESS_TOKEN
+#      (Settings → Secrets and variables → Actions).
+#   3. Add the repo *variable* SUPABASE_PROJECT_REF = your project ref — the
+#      subdomain of <ref>.supabase.co. Not a secret; it ships in the client URL.
+#
+# Retrieving logs when debugging:
+#   Web: Actions tab → "Archive Supabase Logs" run covering the incident →
+#        Artifacts → download → unzip → the .ndjson.gz day files
+#   CLI: gh run download --name supabase-logs-2026-08-15-0617 -D /tmp/logs
+#        gunzip -c /tmp/logs/*.ndjson.gz | jq -c 'select(.source=="function_logs")'
+#   Each artifact holds a full 24h window (usually two day files), so a single
+#   download is normally enough; neighboring artifacts overlap harmlessly.
+#   For instant grep-able files on disk, run the script locally instead:
+#     SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... node scripts/fetch-supabase-logs.mjs
+#
+# Privacy note: artifacts auto-expire and never touch git history. While they
+# live in Actions storage (private repo quota: 500MB; this uses a few MB at
+# most) they can contain user emails / request paths / function output.
+#
+# GitHub disables scheduled workflows after 60 days with no repo activity;
+# if that happens, re-run this workflow once from the Actions tab.
+
+name: Archive Supabase Logs
+
+on:
+  schedule:
+    - cron: '17 */12 * * *' # 2x/day; the 24h lookback means a missed run loses nothing
+  workflow_dispatch: # manual "Run workflow" button in the Actions tab
+
+concurrency:
+  group: archive-supabase-logs
+
+permissions:
+  contents: read # artifact upload needs no write scope
+
+jobs:
+  archive-logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch last 24h of logs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          # LOGS_SOURCES: 'function_logs,postgres_logs' # uncomment to restrict
+        run: node scripts/fetch-supabase-logs.mjs
+
+      - id: stamp
+        run: echo "name=supabase-logs-$(date -u +%Y-%m-%d-%H%M)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stamp.outputs.name }}
+          path: supabase/logs-archive/*.ndjson.gz
+          retention-days: 14 # tune to 7 for a tighter footprint
+          if-no-files-found: warn # a quiet 24h with zero logs is not a failure

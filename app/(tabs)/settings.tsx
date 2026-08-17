@@ -9,12 +9,12 @@ import { useRouter } from 'expo-router';
 import { Card, CardTitle, PrimaryButton, SecondaryButton, StepBadge } from '@/components/ui/primitives';
 import { useRecords } from '@/state/RecordsContext';
 import { useAuth } from '@/state/AuthContext';
-import { isAdmin } from '@/lib/permissions';
+import { isAdminAnywhere } from '@/lib/permissions';
 import { Colors } from '@/constants/theme';
 
 export default function SettingsScreen() {
   const { activePatients, patients, clinics, clearAll } = useRecords();
-  const { user, signOut } = useAuth();
+  const { user, activeClinicId, signOut } = useAuth();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -53,21 +53,32 @@ export default function SettingsScreen() {
         <Card>
           <StepBadge>Account</StepBadge>
           <CardTitle>{user.profile.displayName || 'Signed in'}</CardTitle>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Role</Text>
-            <Text style={styles.rowVal}>{user.memberships[0]?.role ?? '—'}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Clinic</Text>
-            <Text style={styles.rowVal}>{clinics.find((c) => c.id === user.memberships[0]?.clinicId)?.name ?? '—'}</Text>
-          </View>
+          {user.profile.platformAdmin ? <Text style={styles.badge}>★ platform admin</Text> : null}
+          {user.memberships.length === 0 ? (
+            <Text style={styles.line}>No clinic assigned yet — an admin can approve you into one.</Text>
+          ) : (
+            user.memberships.map((m) => {
+              const clinicName = clinics.find((c) => c.id === m.clinicId)?.name ?? '—';
+              const acting = m.clinicId === activeClinicId;
+              return (
+                <View key={m.clinicId} style={styles.memRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.memClinic}>{clinicName}</Text>
+                    <Text style={styles.memRole}>{m.role === 'admin' ? 'Admin' : 'Health Worker'}</Text>
+                  </View>
+                  {acting ? <Text style={styles.actingTag}>acting clinic</Text> : null}
+                </View>
+              );
+            })
+          )}
+          <Text style={styles.note}>Memberships are managed by your clinic admins. Records stay attributed to the clinic where they were created.</Text>
           <View style={{ marginTop: 10 }}>
             <SecondaryButton title="Sign Out" onPress={signOut} />
           </View>
         </Card>
       ) : null}
 
-      {user && isAdmin(user) ? (
+      {user && isAdminAnywhere(user) ? (
         <Card>
           <StepBadge>Administration</StepBadge>
           <CardTitle>User Management</CardTitle>
@@ -116,4 +127,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.grayLight },
   rowLabel: { fontSize: 14, color: Colors.text },
   rowVal: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  badge: { fontSize: 10.5, fontWeight: '800', color: '#b45309', backgroundColor: '#fef3c7', alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginBottom: 8 },
+  memRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.grayLight },
+  memClinic: { fontSize: 14, fontWeight: '700', color: Colors.text },
+  memRole: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  actingTag: { fontSize: 10.5, fontWeight: '800', color: Colors.primary, backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
 });

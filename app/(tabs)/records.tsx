@@ -8,7 +8,8 @@
  *     directory, not a reader). Results at another clinic offer switch-and-open.
  *   - Export covers whatever is currently shown (search results when searching).
  */
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, CardSubtitle, CardTitle, SecondaryButton, StepBadge } from '@/components/ui/primitives';
@@ -16,6 +17,8 @@ import { Colors } from '@/constants/theme';
 import type { PatientSummary } from '@/lib/types';
 import { PatientCard } from '@/components/PatientCard';
 import { useAuth } from '@/state/AuthContext';
+import { useAssessment } from '@/state/AssessmentContext';
+import { ALL_CLINICS } from '@/state/actingClinic';
 import { useRecords } from '@/state/RecordsContext';
 import { exportEncountersToCsv, EXPORT_LINK_EXPIRY_SECONDS } from '@/lib/exportCsv';
 import { describeSaveError } from '@/lib/errors';
@@ -23,9 +26,9 @@ import { describeSaveError } from '@/lib/errors';
 export default function RecordsScreen() {
   const router = useRouter();
   const { patientSummaries, encounters, clinics } = useRecords();
-  const { user, activeClinicId, setActiveClinic } = useAuth();
+  const { activeClinicId, setActiveClinic } = useAuth();
+  const { hasDraft } = useAssessment();
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState<'acting' | 'all'>('acting');
   const [exporting, setExporting] = useState(false);
 
   const activeClinicName = clinics.find((c) => c.id === activeClinicId)?.name;
@@ -50,16 +53,19 @@ export default function RecordsScreen() {
     return hay.includes(query);
   };
 
+  const viewingAll = activeClinicId === ALL_CLINICS;
   const shown = searching
     ? patientSummaries.filter(matchesQuery) // global directory (RLS-bounded)
-    : scope === 'all'
+    : viewingAll
       ? patientSummaries // every clinic you can see (RLS-bounded)
       : patientSummaries.filter((s) => actingScope.has(s.patient.id));
 
   /** Open a patient; foreign-clinic hits confirm-switch the acting clinic first. */
   const openPatient = (s: PatientSummary) => {
     const go = () => router.push({ pathname: '/record', params: { id: s.patient.id } });
-    if (actingScope.has(s.patient.id) || !s.patient.clinicId) {
+    if (viewingAll || actingScope.has(s.patient.id) || !s.patient.clinicId || hasDraft) {
+      // Viewing is safe in any scope; mid-draft we never switch clinics
+      // (the draft's clinic is locked) — just open the record.
       go();
       return;
     }
@@ -87,7 +93,7 @@ export default function RecordsScreen() {
       });
       Alert.alert(
         'Export ready',
-        `${result.rowCount} encounter${result.rowCount === 1 ? '' : 's'} exported to ${result.fileName}.` +
+        `${result.rowCount} encounter${result.rowCount === 1 ? '' : 's'} from ${shown.length} patient${shown.length === 1 ? '' : 's'} exported to ${result.fileName} (each visit is a row — initial + follow-ups).` +
           (result.mediaLinkCount > 0
             ? `\n${result.mediaLinkCount} photo/audio link${result.mediaLinkCount === 1 ? '' : 's'} included — valid for ${EXPORT_LINK_EXPIRY_SECONDS / 86400} days.`
             : ''),
@@ -109,7 +115,7 @@ export default function RecordsScreen() {
         <CardTitle>{searching ? 'Search — all your clinics' : activeClinicName ?? 'Patients'}</CardTitle>
         {!searching ? (
           <CardSubtitle>
-            {scope === 'all'
+            {viewingAll
               ? 'Every patient you can see, across all your clinics plus referrals in.'
               : `Showing ${activeClinicName ? `${activeClinicName}'s` : 'your'} patients plus referrals into it.`}{' '}
             Switch clinics in the header.
@@ -118,24 +124,6 @@ export default function RecordsScreen() {
           <CardSubtitle>Search spans every clinic you can see — switch to open a patient at another clinic.</CardSubtitle>
         )}
 
-        {!searching && (user?.memberships.length ?? 0) > 1 ? (
-          <View style={styles.scopeRow}>
-            <Pressable
-              onPress={() => setScope('acting')}
-              style={[styles.scopePill, scope === 'acting' && styles.scopePillOn]}>
-              <Text style={[styles.scopePillText, scope === 'acting' && styles.scopePillTextOn]}>
-                {activeClinicName ?? 'This clinic'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setScope('all')}
-              style={[styles.scopePill, scope === 'all' && styles.scopePillOn]}>
-              <Text style={[styles.scopePillText, scope === 'all' && styles.scopePillTextOn]}>
-                All my clinics
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
 
 
         <View style={styles.searchWrap}>
@@ -159,7 +147,7 @@ export default function RecordsScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>{searching ? '🔍' : '📋'}</Text>
             <Text style={styles.emptyText}>
-              {searching ? `No patients match "${q.trim()}"` : 'No patients at this clinic yet.'}
+              {searching ? `No patients match "${q.trim()}"` : viewingAll ? 'No patients at any of your clinics yet.' : 'No patients at this clinic yet.'}
             </Text>
           </View>
         ) : (
@@ -188,11 +176,6 @@ const styles = StyleSheet.create({
   search: { flex: 1, fontSize: 15, color: Colors.text, padding: 0 },
   empty: { alignItems: 'center', paddingVertical: 36 },
   emptyIcon: { fontSize: 40, marginBottom: 10 },
-const styles = StyleSheet.create({
-  scopeRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
-  scopePill: { borderWidth: 1, borderColor: Colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: Colors.white },
-  scopePillOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  scopePillText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
-  scopePillTextOn: { color: '#fff', fontWeight: '700' },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, backgroundColor: Colors.white },
+  emptyText: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center' },
+  foreignTag: { fontSize: 11, color: Colors.primary, fontWeight: '700', marginTop: 10, marginBottom: -4 },
 });

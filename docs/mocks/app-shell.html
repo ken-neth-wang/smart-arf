@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart-ARF — app shell mocks (acting-clinic picker)</title>
+<style>
+  :root{
+    --primary:#1a5fa8; --primary-dark:#134a85; --primary-light:#e8f0fb;
+    --success:#1a7a4a; --success-bg:#e8f5ee;
+    --danger:#c0392b; --danger-bg:#fde8e8;
+    --gray:#6b7280; --gray-light:#f3f4f6; --border:#d1d5db;
+    --text:#111827; --text2:#4b5563; --bg:#eef2f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;background:var(--bg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text)}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--text2);margin:0 0 28px;font-size:13px}
+  .row{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start}
+  .frame-wrap{width:340px}
+  .frame-label{font-weight:600;font-size:13px;margin:0 0 8px}
+  .phone{width:340px;border:1px solid var(--border);border-radius:22px;background:#fff;overflow:hidden;box-shadow:0 10px 30px rgba(17,24,39,.12)}
+  .appbar{display:flex;align-items:center;justify-content:space-between;background:var(--primary);color:#fff;padding:10px 12px;position:relative}
+  .appbar .title{font-weight:700;font-size:15px;letter-spacing:.2px}
+  .clinic-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:600;cursor:default}
+  .clinic-chip .car{font-size:9px;opacity:.9}
+  .picker{position:absolute;top:44px;right:10px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 28px rgba(17,24,39,.22);width:250px;z-index:5;overflow:hidden}
+  .picker .pi{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:13.5px;color:var(--text)}
+  .picker .pi + .pi{border-top:1px solid var(--gray-light)}
+  .picker .pi.active{background:var(--primary-light);color:var(--primary-dark);font-weight:600}
+  .picker .check{color:var(--primary);font-weight:800}
+  .picker .role{font-size:11px;color:var(--gray);font-weight:500;margin-left:6px}
+  .picker .hint{padding:8px 12px;font-size:11px;color:var(--gray);background:var(--gray-light)}
+  .body{padding:12px;background:var(--bg);min-height:330px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+  .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--primary);background:var(--primary-light);border-radius:6px;padding:2px 7px;margin-bottom:8px}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .muted{color:var(--text2);font-size:12.5px;margin:0 0 10px}
+  .strip{display:flex;align-items:center;gap:8px;background:var(--primary-light);border:1px solid #c3d7f0;color:var(--primary-dark);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:600;margin-bottom:10px}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--text2);background:#fff}
+  .pill.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .searchbar{display:flex;align-items:center;gap:8px;border:1px solid var(--primary);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text);background:#fff;margin-bottom:8px}
+  .results{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .rrow{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;font-size:13px}
+  .rrow + .rrow{border-top:1px solid var(--gray-light)}
+  .rrow .sub{display:block;font-size:11px;color:var(--gray);margin-top:1px}
+  .cl{font-size:10px;font-weight:700;letter-spacing:.4px;border-radius:6px;padding:3px 7px}
+  .cl.mine{color:var(--success);background:var(--success-bg)}
+  .cl.other{color:var(--primary);background:var(--primary-light)}
+  .member{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--gray-light)}
+  .member:last-child{border-bottom:0}
+  .member .clinic{font-weight:600;font-size:13.5px}
+  .member .role{font-size:12px;color:var(--gray)}
+  .tag{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 7px}
+  .tag.admin{color:#7c3aed;background:#f1e9ff}
+  .tag.hw{color:var(--gray);background:var(--gray-light)}
+  .tag.default{color:var(--primary);background:var(--primary-light);margin-left:6px}
+  .tag.platform{color:#b45309;background:#fef3c7}
+  .pt{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--gray-light);font-size:13px}
+  .pt:last-child{border-bottom:0}
+  .pt .sub{font-size:11.5px;color:var(--gray);margin:2px 0 0}
+  .note{background:#fff;border:1px dashed #c9a86b;border-radius:12px;padding:12px 14px;margin-top:12px;font-size:12.5px;color:var(--text2)}
+  .note b{color:var(--text)}
+  .dot{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:999px;background:#e11d48;color:#fff;font-size:10.5px;font-weight:700;margin-right:6px;flex:none}
+  .note .li{display:flex;margin:5px 0;align-items:flex-start}
+</style>
+</head>
+<body>
+  <h1>Smart-ARF — acting-clinic picker &amp; membership surfaces</h1>
+  <p class="sub">Static mock · no logic · shows UI changes only. Existing screens keep their layout; changes are highlighted with <span class="dot" style="margin:0 3px">n</span>.</p>
+
+  <div class="row">
+
+    <!-- ── Frame 1: header picker open ── -->
+    <div class="frame-wrap">
+      <p class="frame-label">1 · Records — header picker (open)</p>
+      <div class="phone">
+        <div class="appbar">
+          <span class="title">Smart-ARF</span>
+          <span class="clinic-chip">City Hospital <span class="car">▼</span></span>
+          <div class="picker">
+            <div class="hint">Acting as — used for new records &amp; uploads</div>
+            <div class="pi active"><span>City Hospital<span class="role">admin</span></span><span class="check">✓</span></div>
+            <div class="pi"><span>Riverside Clinic<span class="role">health worker</span></span></div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="card">
+            <span class="badge">Patients</span>
+            <p class="hint" style="margin:6px 0 10px">Showing <b>City Hospital</b> — its patients + referrals into it. Switch clinics in the header (the only clinic control).</p>
+            <div class="searchbar">🔍 <span>amina</span></div>
+            <div class="results">
+              <div class="rrow">
+                <span><b>Amina Yusuf</b><span class="sub">MRN 0412 · City Hospital</span></span>
+                <span class="cl mine">here</span>
+              </div>
+              <div class="rrow">
+                <span><b>Amina Yusuf</b><span class="sub">MRN 8801 · referred into City Hospital from Riverside</span></span>
+                <span class="cl mine">here</span>
+              </div>
+              <div class="rrow">
+                <span><b>Amina Dawit</b><span class="sub">MRN 1123 · Riverside Clinic</span></span>
+                <span class="cl other">switch ›</span>
+              </div>
+            </div>
+            <p class="hint" style="margin-top:8px">Search <b>always</b> spans all your clinics — there's no per-clinic search mode. It's a directory, not a reader: open something at another clinic and you switch first.</p>
+          </div>
+          <div class="card">
+            <div class="pt"><span><b>Amina Yusuf</b><span class="sub">MRN 0412 · Likely ARF</span></span><span>›</span></div>
+            <div class="pt"><span><b>Joseph Mensah</b><span class="sub">MRN 0933 · Unlikely</span></span><span>›</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="li"><span class="dot">1</span><span><b>Header clinic chip</b> — renders only when the user has &gt;1 membership. Single-clinic users see a plain label (no dropdown).</span></div>
+        <div class="li"><span class="dot">2</span><span><b>Dropdown shows role per clinic</b> so "acting as admin" is visible before switching.</span></div>
+        <div class="li"><span class="dot">3</span><span><b>List is clinic-at-a-time, search is not</b> — the list shows the acting clinic's patients + referrals into it; the search box spans all your clinics (RLS-bounded). Results are a directory: clinic chip + "switch ›" to open anything that lives elsewhere.</span></div>
+      </div>
+    </div>
+
+    <!-- ── Frame 2: assess attribution strip ── -->
+    <div class="frame-wrap">
+      <p class="frame-label">2 · Assess — attribution strip</p>
+      <div class="phone">
+        <div class="appbar">
+          <span class="title">Smart-ARF</span>
+          <span class="clinic-chip">Riverside Clinic <span class="car">▼</span></span>
+        </div>
+        <div class="body">
+          <div class="card">
+            <span class="badge">Assessment</span>
+            <h3>New Visit</h3>
+            <div class="strip">📍 Recording at: Riverside Clinic</div>
+            <p class="muted">Patient: Joseph Mensah · MRN 0933<br>Level A — major criteria, joint involvement…</p>
+            <div class="pillrow"><span class="pill">Photo</span><span class="pill">Audio</span></div>
+          </div>
+          <div class="card">
+            <span class="badge">Media</span>
+            <h3>Photo card</h3>
+            <p class="muted">No clinic UI here. Photos and audio inherit the clinic of the encounter they're attached to — derived in the database, never chosen by the client.</p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="li"><span class="dot">4</span><span><b>The strip appears exactly once</b> — when a new visit (patient + encounter) is created. That's the only moment a clinic decision exists; it echoes the header picker.</span></div>
+        <div class="li"><span class="dot">5</span><span><b>Photo/audio carry no clinic UI</b> — they inherit the encounter's clinic via an insert trigger. Today the client stamps media with an independently-chosen <code>memberships[0]</code> clinic (<code>PhotoCard.tsx:99</code>), which can diverge from the encounter's clinic; the redesign removes the choice instead of surfacing it.</span></div>
+      </div>
+    </div>
+
+    <!-- ── Frame 3: settings ── -->
+    <div class="frame-wrap">
+      <p class="frame-label">3 · Settings — memberships</p>
+      <div class="phone">
+        <div class="appbar">
+          <span class="title">Smart-ARF</span>
+          <span class="clinic-chip">City Hospital <span class="car">▼</span></span>
+        </div>
+        <div class="body">
+          <div class="card">
+            <span class="badge">Account</span>
+            <h3>Dr. Amina</h3>
+            <p class="muted">amina@clinic.org <span class="tag platform">platform admin</span></p>
+            <div class="member">
+              <span><span class="clinic">City Hospital</span><br><span class="role">admin</span></span>
+              <span class="tag default">acting clinic</span>
+            </div>
+            <div class="member">
+              <span><span class="clinic">Riverside Clinic</span><br><span class="role">health worker</span></span>
+              <span class="tag hw">member</span>
+            </div>
+            <p class="muted" style="margin:10px 0 0">Memberships are managed by your clinic admins. Signing out…</p>
+          </div>
+          <div class="card">
+            <span class="badge">Data</span>
+            <h3>Sync</h3>
+            <p class="muted">Cloud sync on · records stay attributed to the clinic where they were created.</p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="li"><span class="dot">6</span><span><b>Settings lists all memberships</b> with roles and marks the acting clinic — replaces the old single "Role / Clinic" rows that showed <code>memberships[0]</code> only.</span></div>
+        <div class="li"><span class="dot">7</span><span><b>Platform-admin badge</b> (rare) — shown when <code>profiles.platform_admin</code> is set.</span></div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

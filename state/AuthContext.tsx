@@ -12,6 +12,8 @@ import { AppState } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { loadMembershipsCloud, loadProfileCloud } from '@/lib/sync';
+import { clinicsForUser } from '@/lib/permissions';
+import { ALL_CLINICS, loadActiveClinicId, saveActiveClinicId } from './actingClinic';
 import type { AuthUser } from '@/lib/permissions';
 import type { Session } from '@supabase/supabase-js';
 
@@ -25,6 +27,11 @@ interface SessionLike {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean; // initial session check (blocks the app gate while true)
+  /** The clinic the user is working at (acting clinic). Clinic-at-a-time model:
+   *  drives the records scope + new-visit attribution. Membership-based RLS is
+   *  the security boundary — this only narrows the default view. */
+  activeClinicId: string | null;
+  setActiveClinic: (clinicId: string | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   needsPassword: boolean; // invited (no password yet) or forgot-password → must set one
@@ -37,8 +44,40 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [activeClinicId, setActiveClinicIdState] = useState<string | null>(null);
   const [session, setSession] = useState<SessionLike | null>(null);
   // Only block on cloud mode; local mode has no session to resolve.
+
+  // Acting clinic: restore the persisted choice once…
+  useEffect(() => {
+    let mounted = true;
+    loadActiveClinicId().then((id) => {
+      if (mounted) setActiveClinicIdState(id);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // …and keep it valid: if the persisted clinic is no longer one of the user's
+  // (membership removed / different account), fall back to the first membership.
+  // The ALL_CLINICS sentinel stays valid while ≥2 memberships exist.
+  useEffect(() => {
+    if (!user) {
+      setActiveClinicIdState(null);
+      return;
+    }
+    const clinics = clinicsForUser(user);
+    setActiveClinicIdState((prev) => {
+      if (prev === ALL_CLINICS) return clinics.length > 1 ? prev : (clinics[0] ?? null);
+      return prev && clinics.includes(prev) ? prev : (clinics[0] ?? null);
+    });
+  }, [user]);
+
+  const setActiveClinic = useCallback((clinicId: string | null) => {
+    setActiveClinicIdState(clinicId);
+    void saveActiveClinicId(clinicId);
+  }, []);
   const [loading, setLoading] = useState(USE_CLOUD && isSupabaseConfigured);
   // Invited users land with no password (must_set_password metadata flag);
   // the forgot-password flow triggers a PASSWORD_RECOVERY event. Either → the
@@ -181,7 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const needsPassword = mustSetPassword || passwordRecovery;
   return (
-    <AuthContext.Provider value={{ user, loading, needsPassword, passwordRecovery, signIn, signUp, setPassword, signOut }}>
+    <AuthContext.Provider value={{ user, loading, activeClinicId, setActiveClinic, needsPassword, passwordRecovery, signIn, signUp, setPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );

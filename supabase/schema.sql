@@ -16,7 +16,6 @@
 -- DROP (clean slate)
 -- ═══════════════════════════════════════════════════════════════
 -- Drop the photos storage policies FIRST: they reference the helper functions
--- below, so dropping those functions would fail on re-runs without this.
 drop policy if exists "photos_storage_insert" on storage.objects;
 drop policy if exists "photos_storage_read" on storage.objects;
 drop policy if exists "audio_storage_insert" on storage.objects;
@@ -30,6 +29,7 @@ drop table if exists public.clinic_memberships cascade;
 drop table if exists public.profiles cascade;
 drop table if exists public.clinics cascade;
 drop table if exists public.allowed_emails cascade;
+drop table if exists public.ai_runs cascade;
 
 -- Total reset: empty auth.users too. Done AFTER the public tables are dropped
 -- so no FK references (patients/encounters/etc. → auth.users, no cascade) remain.
@@ -41,6 +41,16 @@ drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_user();
 drop function if exists public.set_audit_fields();
 drop function if exists public.is_approved();
+drop function if exists public.is_admin(uuid);
+drop function if exists public.is_member(uuid);
+drop function if exists public.is_platform_admin();
+drop function if exists public.referral_into_my_clinics(text);
+drop function if exists public.patient_at_my_clinic(text);
+drop function if exists public.guard_membership_update();
+drop function if exists public.guard_profiles_update();
+drop function if exists public.derive_media_clinic();
+drop function if exists public.is_last_admin(uuid);
+
 drop function if exists public.my_clinics();
 drop function if exists public.patient_visible(text);
 
@@ -58,11 +68,12 @@ create table public.clinics (
 -- profiles — 1:1 with auth.users (auth.users is locked; holds app metadata)
 -- ═══════════════════════════════════════════════════════════════
 create table public.profiles (
-  id           uuid primary key references auth.users(id) on delete cascade,
-  display_name text not null default '',
-  email        text not null default '',   -- denormalized from auth.users (auth schema isn't API-readable)
-  approved     boolean not null default false,   -- the invite gate: false = pending
-  created_at   timestamptz not null default now()
+  id              uuid primary key references auth.users(id) on delete cascade,
+  display_name    text not null default '',
+  email           text not null default '',   -- denormalized from auth.users (auth schema isn't API-readable)
+  approved        boolean not null default false,   -- the invite gate: false = pending
+  platform_admin  boolean not null default false,   -- rare cross-clinic tier (create clinic, deactivate accounts)
+  created_at      timestamptz not null default now()
 );
 
 -- ═══════════════════════════════════════════════════════════════
@@ -248,7 +259,6 @@ create trigger patients_set_audit
 create trigger encounters_set_audit
   before update on public.encounters
   for each row execute function public.set_audit_fields();
-
 -- ═══════════════════════════════════════════════════════════════
 -- RLS helper functions (SECURITY DEFINER → bypass RLS, no recursion)
 -- ═══════════════════════════════════════════════════════════════
@@ -260,8 +270,47 @@ as $$
   select coalesce((select approved from public.profiles where id = auth.uid()), false)
 $$;
 
--- Is the current user an admin of any clinic?
-create or replace function public.is_admin()
+-- Is the current user a platform admin? (rare cross-clinic tier)
+create or replace function public.is_platform_admin()
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select coalesce((select platform_admin from public.profiles where id = auth.uid()), false)
+$$;
+
+-- Is the current user an admin of THIS clinic?
+create or replace function public.is_admin(clinic uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.clinic_memberships
+    where user_id = auth.uid() and clinic_id = clinic and role = 'admin'
+  )
+$$;
+
+-- Is the current user a member of THIS clinic (any role)?
+create or replace function public.is_member(clinic uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.clinic_memberships
+    where user_id = auth.uid() and clinic_id = clinic
+  )
+$$;
+
+-- Does THIS clinic have <= 1 admin? (blocks removing/demoting the last one)
+create or replace function public.is_last_admin(clinic uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select (
+    select count(*) from public.clinic_memberships
+    where clinic_id = clinic and role = 'admin'
+  ) <= 1
+$$;
+
+-- Is the current user an admin of ANY clinic? (Pending-approvals list:
+-- pending users belong to no clinic, so they'd otherwise be invisible to
+-- every admin — and unapprovable.)
+create or replace function public.is_any_admin()
 returns boolean language sql stable security definer set search_path = public
 as $$
   select exists (
@@ -270,11 +319,111 @@ as $$
   )
 $$;
 
+-- Guard: clinic_memberships.clinic_id is immutable (reassign = delete + insert).
+create or replace function public.guard_membership_update()
+returns trigger language plpgsql set search_path = public
+as $$
+begin
+  if new.clinic_id <> old.clinic_id then
+    raise exception 'clinic_memberships.clinic_id is immutable — delete + insert instead';
+  end if;
+  return new;
+end $$;
+
+-- Guard: profile gate transitions (approve = admin; deactivate / platform_admin
+-- flag = platform admin). Closes self-approve.
+create or replace function public.guard_profiles_update()
+returns trigger language plpgsql set search_path = public
+as $$
+begin
+  -- Administrative connections (migrations, SQL editor, service-role
+  -- harness) bypass the gates; only app-role requests are gated.
+  if pg_has_role(current_user, 'service_role', 'member')
+     or current_user in ('postgres', 'supabase_admin') then
+    return new;
+  end if;
+
+  if new.platform_admin is distinct from old.platform_admin
+     and not public.is_platform_admin() then
+    raise exception 'only platform admins can change platform_admin';
+  end if;
+
+  if new.approved is distinct from old.approved then
+    if new.approved = false then
+      if not public.is_platform_admin() then
+        raise exception 'only platform admins can deactivate accounts';
+      end if;
+    else
+      if not (public.is_platform_admin() or exists (
+        select 1 from public.clinic_memberships
+        where user_id = auth.uid() and role = 'admin'
+      )) then
+        raise exception 'only admins can approve accounts';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end $$;
+
+-- Guard triggers: memberships.clinic_id immutable; profiles gate transitions.
+drop trigger if exists memberships_guard_update on public.clinic_memberships;
+create trigger memberships_guard_update
+  before update on public.clinic_memberships
+  for each row execute function public.guard_membership_update();
+
+drop trigger if exists profiles_guard_update on public.profiles;
+create trigger profiles_guard_update
+  before update on public.profiles
+  for each row execute function public.guard_profiles_update();
+
+-- Media attribution: photos/audio inherit the clinic of their encounter
+-- (via the encounter's patient — encounters carry no clinic_id). Client-
+-- supplied clinic_id only honored for orphans (encounter_id null).
+create or replace function public.derive_media_clinic()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.encounter_id is not null then
+    select p.clinic_id into new.clinic_id
+    from public.encounters e
+    join public.patients p on p.id = e.patient_id
+    where e.id = new.encounter_id;
+  end if;
+  return new;
+end $$;
+
 -- The clinic ids the current user belongs to.
 create or replace function public.my_clinics()
 returns setof uuid language sql stable security definer set search_path = public
 as $$
   select clinic_id from public.clinic_memberships where user_id = auth.uid()
+$$;
+
+-- Snapshot-safe, recursion-safe visibility helpers for the patients /
+-- encounters SELECT policies. The app saves via INSERT .. RETURNING, where a
+-- policy that re-queries the TARGET table cannot see the new row (spurious
+-- 42501); plain inline subqueries across patients↔encounters recurse through
+-- each other's policies. SECURITY DEFINER functions reading the OTHER table
+-- with the row's id as a parameter dodge both problems.
+create or replace function public.referral_into_my_clinics(pid text)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.encounters e
+    where e.patient_id = pid
+      and e.referred_to_clinic_id in (select public.my_clinics())
+  )
+$$;
+
+create or replace function public.patient_at_my_clinic(pid text)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.patients p
+    where p.id = pid
+      and p.clinic_id in (select public.my_clinics())
+  )
 $$;
 
 -- Is a patient visible to the current user? (own clinic OR referred in)
@@ -304,78 +453,222 @@ alter table public.clinics             enable row level security;
 alter table public.patients            enable row level security;
 alter table public.encounters          enable row level security;
 
--- profiles: a user reads/edits only their own (so unapproved users can see
--- their own "pending" status). INSERT happens via the handle_new_user trigger.
+-- profiles: self read/update (unapproved users see their own pending state);
+-- platform admins and clinic admins read profiles they manage (shared clinic);
+-- approve = clinic admin, deactivate / platform flag = platform admin
+-- (enforced by guard_profiles_update trigger). INSERT via handle_new_user only.
 drop policy if exists "profiles_self_select" on public.profiles;
 drop policy if exists "profiles_self_update" on public.profiles;
--- profiles: self read/update (so unapproved users see their own pending state);
--- admins can read ALL profiles and approve (update approved) any of them.
--- (INSERT still happens only via the handle_new_user trigger.)
-create policy "profiles_self_select" on public.profiles
-  for select using (id = auth.uid() or public.is_admin());
-create policy "profiles_self_update" on public.profiles
-  for update using (id = auth.uid() or public.is_admin())
-  with check (id = auth.uid() or public.is_admin());
+drop policy if exists "profiles_select" on public.profiles;
+drop policy if exists "profiles_update" on public.profiles;
+create policy "profiles_select" on public.profiles
+  for select using (
+    id = auth.uid()
+    or public.is_platform_admin()
+    or (public.is_any_admin() and not profiles.approved)
+    or exists (
+      select 1 from public.clinic_memberships mine
+      join public.clinic_memberships theirs on theirs.clinic_id = mine.clinic_id
+      where mine.user_id = auth.uid() and theirs.user_id = profiles.id
+    )
+  );
 
--- clinic_memberships: a user reads their own; admins read all + assign memberships.
+-- USING for visibility; WITH CHECK deliberately true. Two rules make this
+-- safe: (1) for UPDATE, Postgres also applies the SELECT policy's USING to
+-- the NEW row — you cannot update a row into a state you couldn't see, so
+-- profiles_select is the real new-row gate; (2) guard_profiles_update
+-- enforces the approve/deactivate/platform transitions. NOTE for the approve
+-- flow: insert the membership BEFORE flipping approved=true, or the new row
+-- is invisible to the approving admin (shared-clinic branch needs the row).
+create policy "profiles_update" on public.profiles
+  for update
+  using (
+    id = auth.uid()
+    or public.is_platform_admin()
+    or public.is_any_admin()
+  )
+  with check (true);
+
+-- clinic_memberships: roster = your own rows + any clinic you belong to +
+-- platform admin. Admins of a clinic assign (insert), change roles (update)
+-- and remove (delete) memberships AT THAT CLINIC — never their own row, and
+-- never the clinic's last admin. clinic_id immutable (guard trigger).
 drop policy if exists "memberships_self_select" on public.clinic_memberships;
-create policy "memberships_self_select" on public.clinic_memberships
-  for select using (user_id = auth.uid() or public.is_admin());
+drop policy if exists "memberships_select" on public.clinic_memberships;
+create policy "memberships_select" on public.clinic_memberships
+  for select using (
+    user_id = auth.uid()
+    or public.is_platform_admin()
+    or public.is_member(clinic_id)
+  );
 drop policy if exists "memberships_admin_insert" on public.clinic_memberships;
 create policy "memberships_admin_insert" on public.clinic_memberships
-  for insert with check (public.is_admin());
+  for insert with check (
+    public.is_platform_admin()
+    or public.is_admin(clinic_id)
+  );
 drop policy if exists "memberships_admin_update" on public.clinic_memberships;
 create policy "memberships_admin_update" on public.clinic_memberships
-  for update using (public.is_admin()) with check (public.is_admin());
+  for update
+  using (
+    public.is_platform_admin()
+    or (
+      public.is_admin(clinic_id)
+      and user_id <> auth.uid()
+      and not (role = 'admin' and public.is_last_admin(clinic_id))
+    )
+  )
+  with check (
+    public.is_platform_admin()
+    or (public.is_admin(clinic_id) and user_id <> auth.uid())
+  );
+drop policy if exists "memberships_admin_delete" on public.clinic_memberships;
+create policy "memberships_admin_delete" on public.clinic_memberships
+  for delete using (
+    public.is_platform_admin()
+    or (
+      public.is_admin(clinic_id)
+      and user_id <> auth.uid()
+      and not (role = 'admin' and public.is_last_admin(clinic_id))
+    )
+  );
 
--- allowed_emails: admin-only (read + write). Public cannot enumerate the list.
 alter table public.allowed_emails enable row level security;
 drop policy if exists "allowlist_admin_all" on public.allowed_emails;
 create policy "allowlist_admin_all" on public.allowed_emails
-  for all using (public.is_admin()) with check (public.is_admin());
+  for all
+  using (public.is_platform_admin() or public.is_admin(clinic_id))
+  with check (public.is_platform_admin() or public.is_admin(clinic_id));
 
--- clinics: any approved user can read the clinic list; admins can create one.
+-- clinics: any approved user can read the clinic list; platform admins create.
 drop policy if exists "clinics_approved_read" on public.clinics;
 create policy "clinics_approved_read" on public.clinics
   for select using (public.is_approved());
 drop policy if exists "clinics_admin_insert" on public.clinics;
-create policy "clinics_admin_insert" on public.clinics
-  for insert with check (public.is_admin());
+drop policy if exists "clinics_platform_insert" on public.clinics;
+create policy "clinics_platform_insert" on public.clinics
+  for insert with check (public.is_platform_admin());
 
--- patients: full-history scoping. No DELETE policy → hard-delete denied.
+-- patients: full-history scoping. SELECT uses a row-ref own-clinic branch +
+-- the referral_into_my_clinics definer helper — snapshot-safe for
+-- INSERT .. RETURNING (the app's save path) and free of the
+-- patients↔encounters policy recursion. No DELETE policy → hard-delete denied.
+-- Update: own-clinic member ∨ receiving-clinic admin ∨ platform admin.
+-- Referred-in is read-only for plain members.
 drop policy if exists "patients_select" on public.patients;
 drop policy if exists "patients_insert" on public.patients;
 drop policy if exists "patients_update" on public.patients;
 create policy "patients_select" on public.patients
-  for select using (public.is_admin() or (public.is_approved() and public.patient_visible(id)));
+  for select using (
+    public.is_platform_admin()
+    or (
+      public.is_approved()
+      and (
+        clinic_id in (select public.my_clinics())
+        or public.referral_into_my_clinics(patients.id)
+      )
+    )
+  );
 create policy "patients_insert" on public.patients
   for insert with check (
-    public.is_approved()
-    and clinic_id in (select public.my_clinics())
-    and created_by = auth.uid()
+    public.is_platform_admin()
+    or (
+      public.is_approved()
+      and clinic_id in (select public.my_clinics())
+      and created_by = auth.uid()
+    )
   );
 create policy "patients_update" on public.patients
-  for update using (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
-  ) with check (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  for update
+  using (
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    or (
+      public.is_approved()
+      and exists (
+        select 1
+        from public.encounters e
+        join public.clinic_memberships m on m.clinic_id = e.referred_to_clinic_id
+        where e.patient_id = patients.id
+          and m.user_id = auth.uid()
+          and m.role = 'admin'
+      )
+    )
+  )
+  with check (
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    or (
+      public.is_approved()
+      and exists (
+        select 1
+        from public.encounters e
+        join public.clinic_memberships m on m.clinic_id = e.referred_to_clinic_id
+        where e.patient_id = patients.id
+          and m.user_id = auth.uid()
+          and m.role = 'admin'
+      )
+    )
   );
 
--- encounters: visible if the patient is visible; editable at your clinic.
+-- encounters: visible if the patient is visible; editable at your clinic or
+-- by the admin of the clinic the encounter was referred into.
 drop policy if exists "encounters_select" on public.encounters;
 drop policy if exists "encounters_insert" on public.encounters;
 drop policy if exists "encounters_update" on public.encounters;
+-- Same helper-based shape as patients_select: both cross-table branches run
+-- as definer functions (no policy recursion) and read PRIOR rows only — the
+-- new-encounter case passes via patient_at_my_clinic (its patient exists).
 create policy "encounters_select" on public.encounters
-  for select using (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)));
+  for select using (
+    public.is_platform_admin()
+    or (
+      public.is_approved()
+      and (
+        public.patient_at_my_clinic(encounters.patient_id)
+        or public.referral_into_my_clinics(encounters.patient_id)
+      )
+    )
+  );
 create policy "encounters_insert" on public.encounters
   for insert with check (
-    public.is_approved()
-    and public.patient_visible(patient_id)
-    and created_by = auth.uid()
+    public.is_platform_admin()
+    or (
+      public.is_approved()
+      and public.patient_visible(patient_id)
+      and created_by = auth.uid()
+    )
   );
 create policy "encounters_update" on public.encounters
-  for update using (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)))
-  with check (public.is_admin() or (public.is_approved() and public.patient_visible(patient_id)));
+  for update
+  using (
+    public.is_platform_admin()
+    or (public.is_approved() and public.patient_visible(patient_id))
+    or (
+      public.is_approved()
+      and exists (
+        select 1
+        from public.clinic_memberships m
+        where m.user_id = auth.uid()
+          and m.role = 'admin'
+          and m.clinic_id = encounters.referred_to_clinic_id
+      )
+    )
+  )
+  with check (
+    public.is_platform_admin()
+    or (public.is_approved() and public.patient_visible(patient_id))
+    or (
+      public.is_approved()
+      and exists (
+        select 1
+        from public.clinic_memberships m
+        where m.user_id = auth.uid()
+          and m.role = 'admin'
+          and m.clinic_id = encounters.referred_to_clinic_id
+      )
+    )
+  );
 
 -- ═════════════════════════════════════════════════════════════
 -- photos — clinician-uploaded skin photos (AI triage + later review/training)
@@ -414,13 +707,22 @@ create trigger photos_set_audit
   before update on public.photos
   for each row execute function public.set_audit_fields();
 
+-- clinic_id derived from the encounter (via its patient) on insert.
+drop trigger if exists photos_derive_clinic on public.photos;
+create trigger photos_derive_clinic
+  before insert on public.photos
+  for each row execute function public.derive_media_clinic();
+
 alter table public.photos enable row level security;
 
 drop policy if exists "photos_select" on public.photos;
 drop policy if exists "photos_insert" on public.photos;
 drop policy if exists "photos_update" on public.photos;
 create policy "photos_select" on public.photos
-  for select using (public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics())));
+  for select using (
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  );
 create policy "photos_insert" on public.photos
   for insert with check (
     public.is_approved()
@@ -429,9 +731,11 @@ create policy "photos_insert" on public.photos
   );
 create policy "photos_update" on public.photos
   for update using (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
   ) with check (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
   );
 -- No DELETE policy → photos can't be hard-deleted from the app (soft model).
 
@@ -446,7 +750,7 @@ drop policy if exists "photos_storage_read" on storage.objects;
 create policy "photos_storage_insert" on storage.objects
   for insert with check (bucket_id = 'photos' and public.is_approved());
 create policy "photos_storage_read" on storage.objects
-  for select using (bucket_id = 'photos' and (public.is_admin() or public.is_approved()));
+  for select using (bucket_id = 'photos' and (public.is_platform_admin() or public.is_approved()));
 
 -- ═══════════════════════════════════════════════════════════════
 -- audio — auscultation/heartbeat recordings + murmur screening (v0)
@@ -501,13 +805,22 @@ create trigger audio_set_audit
   before update on public.audio
   for each row execute function public.set_audit_fields();
 
+-- clinic_id derived from the encounter (via its patient) on insert.
+drop trigger if exists audio_derive_clinic on public.audio;
+create trigger audio_derive_clinic
+  before insert on public.audio
+  for each row execute function public.derive_media_clinic();
+
 alter table public.audio enable row level security;
 
 drop policy if exists "audio_select" on public.audio;
 drop policy if exists "audio_insert" on public.audio;
 drop policy if exists "audio_update" on public.audio;
 create policy "audio_select" on public.audio
-  for select using (public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics())));
+  for select using (
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
+  );
 create policy "audio_insert" on public.audio
   for insert with check (
     public.is_approved()
@@ -516,9 +829,11 @@ create policy "audio_insert" on public.audio
   );
 create policy "audio_update" on public.audio
   for update using (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
   ) with check (
-    public.is_admin() or (public.is_approved() and clinic_id in (select public.my_clinics()))
+    public.is_platform_admin()
+    or (public.is_approved() and clinic_id in (select public.my_clinics()))
   );
 -- No DELETE policy → audio can't be hard-deleted from the app (soft model).
 
@@ -533,7 +848,7 @@ drop policy if exists "audio_storage_read" on storage.objects;
 create policy "audio_storage_insert" on storage.objects
   for insert with check (bucket_id = 'audio' and public.is_approved());
 create policy "audio_storage_read" on storage.objects
-  for select using (bucket_id = 'audio' and (public.is_admin() or public.is_approved()));
+  for select using (bucket_id = 'audio' and (public.is_platform_admin() or public.is_approved()));
 
 -- ═══════════════════════════════════════════════════════════════
 -- ai_runs — durable log of every AI edge-function invocation (outcome +
@@ -563,5 +878,9 @@ alter table public.ai_runs enable row level security;
 
 drop policy if exists "ai_runs_select" on public.ai_runs;
 create policy "ai_runs_select" on public.ai_runs
-  for select using (public.is_admin());
+  for select using (public.is_platform_admin());
 -- No INSERT/UPDATE/DELETE policy: only the service role (edge functions) writes.
+
+-- One clean PostgREST schema-cache reload (the per-DDL event triggers may
+-- have been noisy during the reset; this ensures a consistent final state).
+notify pgrst, 'reload schema';

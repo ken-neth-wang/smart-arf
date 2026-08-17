@@ -53,6 +53,9 @@ export default function RecordScreen() {
   }
 
   const { patient, encounters } = history;
+  const referralTargets = [
+    ...new Set(encounters.map((e) => e.referredToClinicId).filter((c): c is string => !!c)),
+  ];
   const name = fullName(patient.firstName, patient.lastName);
   const ageStr = formatAge(patient.dateOfBirth, patient.dobApproximate);
   const line2 = [
@@ -161,7 +164,7 @@ export default function RecordScreen() {
                 {e.notes ? <Text style={styles.encRow}><Text style={styles.encKey}>Notes: </Text>{e.notes}</Text> : null}
                 {e.signedBy ? <Text style={styles.encRow}><Text style={styles.encKey}>Signed by: </Text>{e.signedBy}{e.signedAt ? ` · ${e.signedAt.slice(0, 10)}` : ''}</Text> : null}
               </View>
-              {canEditPatient(user, { clinicId: patient.clinicId ?? null }) ? (
+              {canEditPatient(user, { clinicId: patient.clinicId ?? null }, referralTargets) ? (
                 <Pressable hitSlop={6} onPress={() => { setReason(''); setEncDelId(e.id); }} style={styles.encRemoveBtn}>
                   <Text style={styles.encRemoveText}>Remove this visit</Text>
                 </Pressable>

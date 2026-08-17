@@ -325,11 +325,15 @@ describe('field-name regression guards', () => {
  * ------------------------------------------------------------------ */
 describe('rowToProfile', () => {
   it('maps snake_case → camelCase', () => {
-    const row: ProfileRow = { id: 'u1', display_name: 'Dr. Amina', approved: true, created_at: '2026-01-01T00:00:00.000Z' };
-    expect(rowToProfile(row)).toEqual({ id: 'u1', displayName: 'Dr. Amina', approved: true });
+    const row: ProfileRow = { id: 'u1', display_name: 'Dr. Amina', approved: true, platform_admin: false, created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToProfile(row)).toEqual({ id: 'u1', displayName: 'Dr. Amina', approved: true, platformAdmin: false });
+  });
+  it('maps platform_admin=true (platform tier)', () => {
+    const row: ProfileRow = { id: 'u0', display_name: 'Owner', approved: true, platform_admin: true, created_at: '2026-01-01T00:00:00.000Z' };
+    expect(rowToProfile(row).platformAdmin).toBe(true);
   });
   it('preserves approved=false (pending gate)', () => {
-    const row: ProfileRow = { id: 'u2', display_name: 'New', approved: false, created_at: '2026-01-01T00:00:00.000Z' };
+    const row: ProfileRow = { id: 'u2', display_name: 'New', approved: false, platform_admin: false, created_at: '2026-01-01T00:00:00.000Z' };
     expect(rowToProfile(row).approved).toBe(false);
   });
 });

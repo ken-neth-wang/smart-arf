@@ -9,6 +9,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useRecords } from './RecordsContext';
 import { useAuth } from './AuthContext';
+import { ALL_CLINICS } from './actingClinic';
+import { clinicsForUser } from '@/lib/permissions';
 import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
 import { emptyInputs } from '@/lib/types';
 import {
@@ -43,6 +45,8 @@ function emptyPatient(): PatientFields {
 export type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface AssessmentContextValue {
+  /** True once any patient/assessment input exists — acting clinic is locked. */
+  hasDraft: boolean;
   patient: PatientFields;
   inputs: AssessmentInputs;
   step: Step;
@@ -70,7 +74,7 @@ const AssessmentContext = createContext<AssessmentContextValue | null>(null);
 
 export function AssessmentProvider({ children }: { children: React.ReactNode }) {
   const records = useRecords();
-  const { user, activeClinicId } = useAuth();
+  const { user, activeClinicId, setActiveClinic } = useAuth();
   const [patient, setPatientState] = useState<PatientFields>(emptyPatient);
   const [inputs, setInputsState] = useState<AssessmentInputs>(emptyInputs);
   const [step, setStep] = useState<Step>(1);
@@ -78,6 +82,26 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const [activeEncounterId, setActiveEncounterId] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
+
+  /** True once the user has entered anything — the assessment draft is live.
+   *  While a draft exists the acting clinic is LOCKED (switching would
+   *  silently re-stamp where the visit gets saved). Cleared by reset(). */
+  const hasDraft = useMemo(
+    () =>
+      JSON.stringify(patient) !== JSON.stringify(emptyPatient()) ||
+      JSON.stringify(inputs) !== JSON.stringify(emptyInputs()),
+    [patient, inputs],
+  );
+
+  // A draft cannot start in "All my clinics" view mode: snap to a real clinic
+  // (first membership) the moment any input lands, so attribution is concrete.
+  useEffect(() => {
+    if (hasDraft && activeClinicId === ALL_CLINICS) {
+      const first = user ? clinicsForUser(user)[0] : undefined;
+      if (first) setActiveClinic(first);
+    }
+  }, [hasDraft, activeClinicId, user, setActiveClinic]);
+
 
   // Pre-fill the signer with the logged-in user's display name (editable); the
   // user can override it when signing on behalf of someone else.
@@ -89,6 +113,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const setInputs = (patch: Partial<AssessmentInputs>) => setInputsState((i) => ({ ...i, ...patch }));
   const setEntry = (field: 'fever' | 'chorea' | 'altCause' | 'historyArf', value: boolean) =>
     setInputsState((i) => ({ ...i, [field]: value }));
+
 
   const reset = () => {
     setPatientState(emptyPatient());
@@ -234,6 +259,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     patient,
     inputs,
     step,
+    hasDraft,
     activePatientId,
     activeEncounterId,
     referralCode,

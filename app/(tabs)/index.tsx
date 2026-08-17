@@ -4,20 +4,37 @@
  * lives in its own tab. See SMART-ARF.md.)
  */
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useRecords } from '@/state/RecordsContext';
+import { useAuth } from '@/state/AuthContext';
+import { ALL_CLINICS } from '@/state/actingClinic';
 import { useAssessment } from '@/state/AssessmentContext';
 import { PatientCard } from '@/components/PatientCard';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { patientSummaries } = useRecords();
+  const { patientSummaries, encounters } = useRecords();
+  const { activeClinicId } = useAuth();
   const { reset } = useAssessment();
   const top = useSafeAreaInsets().top;
+
+  /** Recent assessments follow the clinic-at-a-time rule: the acting
+   *  clinic's patients + referrals into it (same scope as Records' default). */
+  const scoped = useMemo(() => {
+    const referredIn = new Set(
+      encounters
+        .filter((e) => e.referredToClinicId && e.referredToClinicId === activeClinicId)
+        .map((e) => e.patientId),
+    );
+    if (activeClinicId === ALL_CLINICS) return patientSummaries;
+    return patientSummaries.filter(
+      (s) => s.patient.clinicId === activeClinicId || referredIn.has(s.patient.id),
+    );
+  }, [patientSummaries, encounters, activeClinicId]);
 
   const newAssessment = () => {
     reset();
@@ -51,13 +68,13 @@ export default function HomeScreen() {
 
         <Text style={styles.heading}>Recent Assessments</Text>
 
-        {patientSummaries.length === 0 ? (
+        {scoped.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>No assessments yet. Tap “New Patient Assessment” to begin.</Text>
+            <Text style={styles.emptyText}>No assessments at this clinic yet. Tap “New Patient Assessment” to begin.</Text>
           </View>
         ) : (
-          patientSummaries.map((s) => (
+          scoped.map((s) => (
             <PatientCard key={s.patient.id} summary={s} onPress={() => router.push({ pathname: '/record', params: { id: s.patient.id } })} />
           ))
         )}

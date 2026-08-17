@@ -80,11 +80,19 @@ Deno.serve(async (req: Request) => {
     .select("role, clinic_id")
     .eq("user_id", user.id);
   const myClinics = (myMems ?? []) as { role: string; clinic_id: string }[];
-  const isAdminCaller = myClinics.some((m) => m.role === "admin");
-  if (!isAdminCaller) return jsonError(403, "Only admins can invite users.");
-  // A clinic admin may only invite into a clinic they manage.
-  if (!myClinics.some((m) => m.clinic_id === clinicId)) {
-    return jsonError(403, "You can only invite into clinics you manage.");
+  // Clinic-scoped admin model: the caller must be an ADMIN OF THE TARGET
+  // clinic (or a platform admin). Admin-at-another-clinic is not enough.
+  const { data: myProfile } = await userClient
+    .from("profiles")
+    .select("platform_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isPlatformCaller = !!(myProfile as { platform_admin?: boolean } | null)?.platform_admin;
+  const isAdminOfTarget = myClinics.some(
+    (m) => m.clinic_id === clinicId && m.role === "admin",
+  );
+  if (!isPlatformCaller && !isAdminOfTarget) {
+    return jsonError(403, "Only admins of this clinic can invite users.");
   }
 
   // Privileged writes via the service role (bypasses RLS).

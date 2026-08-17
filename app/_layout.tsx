@@ -19,8 +19,9 @@ import { RecordsProvider } from '@/state/RecordsContext';
 import { AssessmentProvider } from '@/state/AssessmentContext';
 import { AUTH_GATE_ACTIVE, AuthProvider, useAuth } from '@/state/AuthContext';
 import { SetPasswordScreen } from '@/components/SetPasswordScreen';
+import { OfflineBanner } from '@/components/OfflineBanner';
+import { ClinicPicker } from '@/components/ClinicPicker';
 
-SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
@@ -75,7 +76,9 @@ function RootLayoutNav() {
   return (
     <RecordsProvider>
       <AssessmentProvider>
-        <Stack
+        <View style={{ flex: 1 }}>
+          <OfflineBanner />
+          <Stack
           screenOptions={{
             headerStyle: { backgroundColor: Colors.primary },
             headerTintColor: '#fff',
@@ -86,9 +89,12 @@ function RootLayoutNav() {
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="record" options={{ title: 'Patient Record' }} />
           <Stack.Screen name="followup" options={{ title: 'Follow-Up Visit' }} />
-          <Stack.Screen name="admin" options={{ title: 'Admin' }} />
-          <Stack.Screen name="bpg-prep" options={{ title: 'BPG injection preparation' }} />
+          <Stack.Screen
+            name="admin"
+            options={{ title: 'Admin', headerRight: () => <ClinicPicker /> }}
+          />
         </Stack>
+        </View>
       </AssessmentProvider>
     </RecordsProvider>
   );

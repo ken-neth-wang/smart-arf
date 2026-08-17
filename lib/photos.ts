@@ -95,11 +95,12 @@ export async function analyzePhoto(storagePath: string): Promise<PhotoAnalysis> 
   return data as PhotoAnalysis;
 }
 
-/** Persist a photo + its analysis. Returns the stored row. */
+/** Persist a photo + its analysis. Returns the stored row.
+ *  NOTE: clinic_id is NOT sent — the DB derives it from the encounter
+ *  (photos_derive_clinic trigger). The encounter is the attribution anchor. */
 export async function savePhotoRecord(input: {
   patientId: string | null;
   encounterId: string;
-  clinicId: string;
   storagePath: string;
   mimeType: string;
   analysis: PhotoAnalysis;
@@ -108,7 +109,6 @@ export async function savePhotoRecord(input: {
     id: 'photo-' + Date.now(),
     patient_id: input.patientId,
     encounter_id: input.encounterId,
-    clinic_id: input.clinicId,
     storage_path: input.storagePath,
     mime_type: input.mimeType,
     finding: input.analysis.finding,

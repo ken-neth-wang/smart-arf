@@ -1,5 +1,15 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(supabase:*)",
+      "Bash(npx supabase:*)",
+      "Bash(psql:*)",
+      "Bash(pg_dump:*)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
   }
 }

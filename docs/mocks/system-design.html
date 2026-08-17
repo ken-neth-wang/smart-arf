@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart-ARF — user/clinic management system design</title>
+<style>
+  body{margin:0;padding:32px;background:#eef2f7;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#111827}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#4b5563;margin:0 0 24px;font-size:13px}
+  section{background:#fff;border:1px solid #d1d5db;border-radius:14px;padding:18px 20px;margin-bottom:20px}
+  h2{font-size:15px;margin:0 0 4px}
+  .muted{color:#4b5563;font-size:12.5px;margin:0 0 12px}
+  .mermaid{display:flex;justify-content:center}
+</style>
+</head>
+<body>
+  <h1>Smart-ARF — user / clinic management · system design</h1>
+  <p class="sub">Relationships between screens, client state, data layer, edge functions and the database (with RLS). Companion to <code>docs/user-clinic-management-plan.md</code>.</p>
+
+  <section>
+    <h2>1 · End-to-end relationships</h2>
+    <p class="muted">Every UI surface → the state/lib it reads → the edge function or table it writes → the RLS that gates it.</p>
+    <pre class="mermaid">
+flowchart LR
+  subgraph UI["UI — Expo screens"]
+    HP["Header clinic picker<br/>(only if &gt;1 membership)"]
+    REC["records / assess / photo / audio"]
+    SET["settings"]
+    ADM["admin console"]
+  end
+  subgraph State["Client state"]
+    AC["AuthContext<br/>profile · memberships · platformAdmin<br/>activeClinicId (persisted)"]
+    RC["RecordsContext"]
+  end
+  subgraph Lib["lib/"]
+    PERM["permissions.ts<br/>isAdminAt() · isPlatformAdmin()<br/>canEditPatient()"]
+    ADMN["admin.ts<br/>roster(clinic) · updateRole · remove · addByEmail<br/>deactivate → platform only"]
+    SYNC["sync.ts<br/>profile + memberships"]
+  end
+  subgraph Edge["Edge function"]
+    INV["invite-user<br/>admin-of-target-clinic check"]
+  end
+  subgraph DB["Supabase — all behind RLS"]
+    P[("profiles<br/>+ platform_admin")]
+    M[("clinic_memberships")]
+    C[("clinics")]
+    AE[("allowed_emails")]
+    PAT[("patients")]
+    ENC[("encounters")]
+    PH[("photos · audio")]
+    RLS["RLS helpers<br/>is_admin(clinic_id) · is_last_admin(clinic_id)<br/>my_clinics() · patient_visible()"]
+  end
+
+  HP -- sets --> AC
+  REC -- reads --> AC
+  REC -- reads/writes --> RC
+  SET -- reads --> AC
+  ADM -- gates via --> PERM
+  ADM -- calls --> ADMN
+  AC -- loads via --> SYNC
+  SYNC --> P
+  SYNC --> M
+  ADMN --> M
+  ADMN --> AE
+  ADMN --> P
+  INV --> AE
+  REC --> PAT
+  REC --> ENC
+  REC --> PH
+  P --- RLS
+  M --- RLS
+  C --- RLS
+  AE --- RLS
+  PAT --- RLS
+  ENC --- RLS
+    </pre>
+  </section>
+
+  <section>
+    <h2>2 · Data model</h2>
+    <p class="muted">Memberships are the single source of truth for access; record attribution is historical fact and never rewritten.</p>
+    <pre class="mermaid">
+erDiagram
+    AUTH_USERS ||--o| PROFILES : "1:1 (approved · platform_admin)"
+    AUTH_USERS ||--o{ CLINIC_MEMBERSHIPS : ""
+    CLINICS ||--o{ CLINIC_MEMBERSHIPS : "role per (user, clinic)"
+    CLINICS ||--o{ PATIENTS : "attributed to — immutable"
+    CLINICS ||--o{ ENCOUNTERS : "referred_to — referral network"
+    PATIENTS ||--o{ ENCOUNTERS : ""
+    ENCOUNTERS ||--o{ PHOTOS : ""
+    ENCOUNTERS ||--o{ AUDIO : ""
+    CLINICS ||--o{ ALLOWED_EMAILS : "initial clinic on signup/invite"
+    </pre>
+  </section>
+
+  <section>
+    <h2>3 · Permission tiers &amp; lifecycles</h2>
+    <p class="muted">Account state (global) is orthogonal to memberships (per clinic).</p>
+    <pre class="mermaid">
+flowchart TD
+  PA["★ Platform admin — profiles.platform_admin (seeded, rare)<br/>create clinics · deactivate any account · everything below"]
+  CA["Clinic admin — membership role 'admin' AT a clinic<br/>approve into OWN clinics · memberships at OWN clinics<br/>allowlist/invite for OWN clinics · restore deleted visits<br/>edit referred-in patients at OWN clinics"]
+  HW["Health worker — member of >=1 clinic<br/>see own-clinic + referred-in patients · edit at own clinic · refer out"]
+  PA --> CA --> HW
+
+  ACT["acting clinic (header picker) →<br/>new-patient clinic · encounter/photo/audio attribution · records filter"]
+  HW -.-> ACT
+
+  subgraph ACCT["account axis (profiles)"]
+    A1((pending)) -- admin approves --> A2((active))
+    A2 -- platform admin --> A3((deactivated))
+    A3 -- re-approve --> A2
+  end
+  subgraph MEM["membership axis (per clinic)"]
+    M1((assigned)) -- admin edits --> M2((role changed))
+    M1 -- admin removes --> M3((removed))
+    M3 -- re-add --> M1
+  end
+    </pre>
+  </section>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { curve: 'basis' } });
+  </script>
+</body>
+</html>

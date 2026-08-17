@@ -29,6 +29,7 @@ import {
   type SelectOption,
 } from '@/components/ui/primitives';
 import { useAuth } from '@/state/AuthContext';
+import { ALL_CLINICS } from '@/state/actingClinic';
 import { useRecords } from '@/state/RecordsContext';
 import { isAdminAnywhere, isAdminAt, isPlatformAdmin } from '@/lib/permissions';
 import { describeSaveError } from '@/lib/errors';
@@ -84,7 +85,13 @@ export default function AdminScreen() {
   const [newClinicName, setNewClinicName] = useState('');
   const [clinicType, setClinicType] = useState('primary');
 
-  const actingClinic = clinics.find((c) => c.id === activeClinicId);
+  // The console always manages a REAL clinic — "All my clinics" (view mode)
+  // falls back to the user's first membership.
+  const adminClinicId =
+    activeClinicId === ALL_CLINICS
+      ? (user && user.memberships[0]?.clinicId) ?? null
+      : activeClinicId;
+  const actingClinic = clinics.find((c) => c.id === adminClinicId);
   const clinicName = actingClinic?.name ?? '—';
   const platform = isPlatformAdmin(user);
   /** Manage rights at the acting clinic (roster edits, approvals, invites). */
@@ -92,7 +99,7 @@ export default function AdminScreen() {
   const adminCountHere = roster.filter((m) => m.role === 'admin').length;
 
   const refresh = useCallback(async () => {
-    if (!activeClinicId) {
+    if (!adminClinicId) {
       setAllowed([]);
       setPending([]);
       setRoster([]);
@@ -105,7 +112,7 @@ export default function AdminScreen() {
       const [a, p, r] = await Promise.all([
         loadAllowedEmailsCloud(),
         loadPendingProfilesCloud(),
-        loadRosterCloud(activeClinicId),
+        loadRosterCloud(adminClinicId),
       ]);
       setAllowed(a);
       setPending(p);
@@ -140,13 +147,13 @@ export default function AdminScreen() {
   };
 
   const onInvite = async () => {
-    if (busyAction || !activeClinicId) return;
+    if (busyAction || !adminClinicId) return;
     const e = inviteEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(e)) return setError('Enter a valid email address.');
     setBusyAction('invite');
     setError(null);
     try {
-      await inviteUserCloud(e, activeClinicId, inviteRole, inviteName);
+      await inviteUserCloud(e, adminClinicId, inviteRole, inviteName);
       setInviteEmail('');
       setInviteName('');
       setInviteRole('health_worker');
@@ -159,13 +166,13 @@ export default function AdminScreen() {
   };
 
   const onAddMember = async () => {
-    if (busyAction || !activeClinicId) return;
+    if (busyAction || !adminClinicId) return;
     const e = addEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(e)) return setError('Enter a valid email address.');
     setBusyAction('add-member');
     setError(null);
     try {
-      await addMemberByEmailCloud(e, activeClinicId, addRole);
+      await addMemberByEmailCloud(e, adminClinicId, addRole);
       setAddEmail('');
       setAddRole('health_worker');
       await refresh();
@@ -177,11 +184,11 @@ export default function AdminScreen() {
   };
 
   const onApprove = async (p: PendingProfile, role: Role) => {
-    if (busyAction || !activeClinicId) return;
+    if (busyAction || !adminClinicId) return;
     setBusyAction(`approve:${p.id}`);
     setError(null);
     try {
-      await approveUserCloud(p.id, activeClinicId, role);
+      await approveUserCloud(p.id, adminClinicId, role);
       await refresh();
     } catch (err) {
       setError(describeSaveError(err));
@@ -191,11 +198,11 @@ export default function AdminScreen() {
   };
 
   const onRoleChange = async (m: RosterMember, role: Role) => {
-    if (busyAction || !activeClinicId) return;
+    if (busyAction || !adminClinicId) return;
     setBusyAction(`role:${m.userId}`);
     setError(null);
     try {
-      await updateMembershipRoleCloud(m.userId, activeClinicId, role);
+      await updateMembershipRoleCloud(m.userId, adminClinicId, role);
       await refresh();
     } catch (err) {
       setError(describeSaveError(err));
@@ -205,7 +212,8 @@ export default function AdminScreen() {
   };
 
   const onRemoveMember = (m: RosterMember) => {
-    if (busyAction || !activeClinicId || !user) return;
+    const clinicIdNow = adminClinicId;
+    if (busyAction || !clinicIdNow || !user) return;
     const isSelf = m.userId === user.profile.id;
     const isLastAdmin = m.role === 'admin' && adminCountHere <= 1;
     if (isSelf || (!platform && isLastAdmin)) return;
@@ -221,7 +229,7 @@ export default function AdminScreen() {
             setBusyAction(`remove:${m.userId}`);
             setError(null);
             try {
-              await removeMembershipCloud(m.userId, activeClinicId);
+              await removeMembershipCloud(m.userId, clinicIdNow);
               await refresh();
             } catch (err) {
               setError(describeSaveError(err));

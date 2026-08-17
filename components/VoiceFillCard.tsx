@@ -24,6 +24,7 @@ import {
   audioBlobToBase64,
   transcribeAssessment,
 } from '@/lib/voice';
+import { describeSaveError } from '@/lib/errors';
 import type { VoiceAssessment } from '@/lib/types';
 import { Colors } from '@/constants/theme';
 import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
@@ -90,7 +91,7 @@ export function VoiceFillCard() {
       const parsed = await transcribeAssessment(b64, mime);
       setResult(parsed);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeSaveError(e));
     } finally {
       setBusy(false);
       setStage(null);
@@ -123,7 +124,7 @@ export function VoiceFillCard() {
       rec.start();
       setRecording(true);
     } catch (e) {
-      setError('Could not access microphone: ' + (e instanceof Error ? e.message : String(e)));
+      setError('Could not access microphone: ' + (describeSaveError(e)));
     }
   }, [processBlob]);
 

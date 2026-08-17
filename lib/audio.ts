@@ -100,11 +100,12 @@ export async function analyzeAudio(storagePath: string): Promise<AudioAnalysis> 
   return data as AudioAnalysis;
 }
 
-/** Persist a recording + its analysis. Returns the stored row. */
+/** Persist a recording + its analysis. Returns the stored row.
+ *  NOTE: clinic_id is NOT sent — the DB derives it from the encounter
+ *  (audio_derive_clinic trigger). The encounter is the attribution anchor. */
 export async function saveAudioRecord(input: {
   patientId: string | null;
   encounterId: string;
-  clinicId: string;
   storagePath: string;
   mimeType: string;
   analysis: AudioAnalysis;
@@ -113,7 +114,6 @@ export async function saveAudioRecord(input: {
     id: 'audio-' + Date.now(),
     patient_id: input.patientId,
     encounter_id: input.encounterId,
-    clinic_id: input.clinicId,
     storage_path: input.storagePath,
     mime_type: input.mimeType,
     finding: input.analysis.finding,

@@ -259,6 +259,7 @@ export interface ProfileRow {
   id: string;
   display_name: string;
   approved: boolean;
+  platform_admin: boolean;
   created_at: string;
 }
 
@@ -271,7 +272,12 @@ export interface MembershipRow {
 }
 
 export function rowToProfile(r: ProfileRow): UserProfile {
-  return { id: r.id, displayName: r.display_name, approved: r.approved };
+  return {
+    id: r.id,
+    displayName: r.display_name,
+    approved: r.approved,
+    platformAdmin: !!r.platform_admin,
+  };
 }
 
 export function rowToMembership(r: MembershipRow): ClinicMembership {

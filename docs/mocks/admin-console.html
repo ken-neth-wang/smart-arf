@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart-ARF — admin console mocks (clinic-scoped)</title>
+<style>
+  :root{
+    --primary:#1a5fa8; --primary-dark:#134a85; --primary-light:#e8f0fb;
+    --success:#1a7a4a; --success-bg:#e8f5ee;
+    --danger:#c0392b; --danger-bg:#fde8e8;
+    --gray:#6b7280; --gray-light:#f3f4f6; --border:#d1d5db;
+    --text:#111827; --text2:#4b5563; --bg:#eef2f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;background:var(--bg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text)}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--text2);margin:0 0 28px;font-size:13px}
+  .row{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start}
+  .frame-wrap{width:360px}
+  .frame-label{font-weight:600;font-size:13px;margin:0 0 8px}
+  .who{font-size:11.5px;color:var(--gray);margin:-4px 0 10px}
+  .phone{width:360px;border:1px solid var(--border);border-radius:22px;background:#fff;overflow:hidden;box-shadow:0 10px 30px rgba(17,24,39,.12)}
+  .appbar{display:flex;align-items:center;justify-content:space-between;background:var(--primary);color:#fff;padding:10px 12px;position:relative}
+  .appbar .title{font-weight:700;font-size:15px}
+  .appbar .me{font-size:11.5px;opacity:.85}
+  .clinic-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:600}
+  .clinic-chip .car{font-size:9px;opacity:.9}
+  .ctx{display:flex;align-items:center;gap:8px;background:var(--primary-light);border:1px solid #c3d7f0;color:var(--primary-dark);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:600;margin-bottom:12px}
+  .body{padding:12px;background:var(--bg);min-height:420px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+  .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--primary);background:var(--primary-light);border-radius:6px;padding:2px 7px;margin-bottom:8px}
+  .badge.plat{color:#b45309;background:#fef3c7}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .muted{color:var(--text2);font-size:12.5px;margin:0 0 10px}
+  .person{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .prow{display:flex;align-items:center;gap:8px;padding:9px 11px}
+  .prow .who2{flex:1;min-width:0}
+  .prow .em{font-weight:600;font-size:13.5px;display:block}
+  .prow .sub{font-size:11px;color:var(--gray);margin:1px 0 0}
+  .sel{border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;color:var(--text);background:#fff}
+  .x{width:24px;height:24px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--danger);font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+  .x.dis{color:#c9ced6;border-color:#e5e7eb;background:var(--gray-light)}
+  .guard{display:flex;gap:7px;align-items:flex-start;font-size:11.5px;color:#b45309;background:#fef3c7;border-radius:8px;padding:6px 9px;margin:2px 11px 9px}
+  .also{border-top:1px dashed var(--border);margin:0 11px 9px;padding-top:8px;font-size:11.5px;color:var(--gray)}
+  .also b{color:var(--text2)}
+  .deact{margin:0 11px 10px;display:inline-block}
+  .addrow{border-top:1px dashed var(--border);margin-top:10px;padding-top:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .addrow input{flex:1;min-width:120px;border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px}
+  .btn{border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:600;border:1px solid transparent}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.small{padding:5px 10px;font-size:12px}
+  .btn.danger{background:#fff;color:var(--danger);border-color:var(--danger)}
+  .btn.success{background:var(--success);color:#fff}
+  .btn.ghost{background:#fff;color:var(--primary);border-color:var(--primary)}
+  .field{margin-bottom:8px}
+  .field label{display:block;font-size:11.5px;color:var(--gray);margin-bottom:3px;font-weight:600}
+  .field .sel,.field input{width:100%;border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;background:#fff}
+  .hint{font-size:11px;color:var(--gray);margin-top:4px}
+  .cli{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-light);font-size:13px}
+  .cli:last-child{border-bottom:0}
+  .cli .sub{font-size:11.5px;color:var(--gray)}
+  .note{background:#fff;border:1px dashed #c9a86b;border-radius:12px;padding:12px 14px;margin-top:12px;font-size:12.5px;color:var(--text2)}
+  .note b{color:var(--text)}
+  .dot{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:999px;background:#e11d48;color:#fff;font-size:10.5px;font-weight:700;margin-right:6px;flex:none}
+  .note .li{display:flex;margin:5px 0;align-items:flex-start}
+</style>
+</head>
+<body>
+  <h1>Smart-ARF — admin console, clinic-scoped</h1>
+  <p class="sub">Static mock · no logic · UI only. The console manages <b>the clinic you're at</b> — the same acting-clinic chooser the rest of the app uses. Switch clinics in the header → every card re-scopes. Same screen for both viewer tiers; the platform admin just gets more clinics in the picker + one extra card.</p>
+
+  <div class="row">
+
+    <!-- ── Clinic admin view ── -->
+    <div class="frame-wrap">
+      <p class="frame-label">A · Clinic admin — at City Hospital</p>
+      <p class="who">Viewer: admin of City Hospital only. Picker offers their clinics; all cards scope to it.</p>
+      <div class="phone">
+        <div class="appbar">
+          <span class="title">Admin</span>
+          <span class="clinic-chip">City Hospital <span class="car">▼</span></span>
+        </div>
+        <div class="body">
+
+          <div class="ctx">🏥 Managing City Hospital — switch from the header</div>
+
+          <div class="card">
+            <span class="badge">Roster</span>
+            <h3>Members here</h3>
+            <p class="muted">Role changes and removals apply to this clinic only.</p>
+
+            <div class="person">
+              <div class="prow">
+                <span class="who2"><span class="em">grace@clinic.org</span><span class="sub">member since Aug 2</span></span>
+                <span class="sel">health worker ▾</span>
+                <span class="x">✕</span>
+              </div>
+            </div>
+
+            <div class="person">
+              <div class="prow">
+                <span class="who2"><span class="em">you@clinic.org</span><span class="sub">that's you</span></span>
+                <span class="sel">admin ▾</span>
+                <span class="x dis">✕</span>
+              </div>
+              <div class="guard">⚠ Last admin of City Hospital — can't remove or demote yourself. Add another admin first.</div>
+            </div>
+
+            <div class="addrow">
+              <input placeholder="add by email — existing user or invite">
+              <span class="sel">role ▾</span>
+              <span class="btn ghost small">Add</span>
+            </div>
+            <p class="hint">Existing user → gets this clinic added. Unknown email → invite email sent. No browsing of other clinics' rosters.</p>
+          </div>
+
+          <div class="card">
+            <span class="badge">Pending</span>
+            <h3>Awaiting approval</h3>
+            <p class="muted">Pending signups belong to no clinic yet — shown everywhere. Approving adds them here.</p>
+            <div class="field"><label>sam@clinic.org</label><span class="sel" style="display:block">health worker ▾</span></div>
+            <div class="btn success">Approve into City Hospital</div>
+          </div>
+
+          <div class="card">
+            <span class="badge">Invite</span>
+            <h3>Invite to this clinic</h3>
+            <p class="muted">Allowlist + email invite — lands in City Hospital with the chosen role.</p>
+          </div>
+
+        </div>
+      </div>
+      <div class="note">
+        <div class="li"><span class="dot">1</span><span><b>One chooser, whole app</b> — the header clinic chip (same control as records/assess) scopes the admin console. No separate dropdown, no "all clinics" flat list.</span></div>
+        <div class="li"><span class="dot">2</span><span><b>Roster = one clinic's members</b>, one row per person: inline role select (reassign role at this clinic) + remove. The old cross-clinic membership chips are gone.</span></div>
+        <div class="li"><span class="dot">3</span><span><b>Add by email, not by browsing</b> — clinic admins never enumerate other clinics' users; email entry covers transfers and second-clinic assignments.</span></div>
+        <div class="li"><span class="dot">4</span><span><b>Pending stays global</b> (they have no clinic), but the action is local: "Approve into City Hospital".</span></div>
+      </div>
+    </div>
+
+    <!-- ── Platform admin view ── -->
+    <div class="frame-wrap">
+      <p class="frame-label">B · Platform admin — same screen, extra reach</p>
+      <p class="who">Viewer: platform admin. Picker offers every clinic + the same cards; one extra Platform card.</p>
+      <div class="phone">
+        <div class="appbar">
+          <span class="title">Admin</span>
+          <span class="clinic-chip">Riverside Clinic <span class="car">▼</span></span>
+        </div>
+        <div class="body">
+
+          <div class="card">
+            <span class="badge plat">Platform</span>
+            <h3>Cross-clinic actions</h3>
+            <div class="cli"><span>New clinic<span class="sub"> · name + type</span></span><span class="btn primary small">Create</span></div>
+            <div class="cli"><span>Deactivate account<span class="sub"> · by email, global + reversible</span></span><span class="btn danger small">Open</span></div>
+            <p class="hint">Only shown to platform admins. Everything else on this screen works exactly as it does for clinic admins.</p>
+          </div>
+
+          <div class="ctx">🏥 Managing Riverside Clinic — switch from the header</div>
+
+          <div class="card">
+            <span class="badge">Roster</span>
+            <h3>Members here</h3>
+
+            <div class="person">
+              <div class="prow">
+                <span class="who2"><span class="em">grace@clinic.org</span><span class="sub">also at City Hospital ▸</span></span>
+                <span class="sel">admin ▾</span>
+                <span class="x dis">✕</span>
+              </div>
+              <div class="guard">⚠ Last admin of Riverside Clinic — assign another admin before removing or demoting.</div>
+              <div class="also"><b>Also member of:</b> City Hospital · health worker <i>(managed from that clinic's view)</i></div>
+              <span class="deact"><span class="btn danger small">Deactivate account</span></span>
+            </div>
+
+            <div class="person">
+              <div class="prow">
+                <span class="who2"><span class="em">joseph@clinic.org</span><span class="sub">member since Aug 9</span></span>
+                <span class="sel">health worker ▾</span>
+                <span class="x">✕</span>
+              </div>
+            </div>
+
+            <div class="addrow">
+              <input placeholder="add by email — existing user or invite">
+              <span class="sel">role ▾</span>
+              <span class="btn ghost small">Add</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="note">
+        <div class="li"><span class="dot">5</span><span><b>Platform card replaces scattered powers</b> — create clinic + deactivate account live in one place; the roster below behaves identically to a clinic admin's.</span></div>
+        <div class="li"><span class="dot">6</span><span><b>Other-clinic memberships are context, not controls</b> — visible read-only ("managed from that clinic's view"), so you know who's shared without cross-managing.</span></div>
+        <div class="li"><span class="dot">7</span><span><b>Per-person account actions</b> (deactivate) sit in the expanded person row — global effect, platform admin only.</span></div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
