@@ -1,46 +1,87 @@
 /**
- * Records — searchable list of patients. Each card reflects the patient's
- * latest initial assessment. Source of truth: smart-arf-app.html.
+ * Records — clinic-at-a-time patient list + global search.
+ *
+ * Model (docs/user-clinic-management-plan.md §4.1/§4.5):
+ *   - List: the ACTING clinic's patients + referrals INTO it. No aggregate
+ *     "all clinics" view — the header picker is the only clinic control.
+ *   - Search: ALWAYS spans all clinics the user can see (RLS-bounded — it's a
+ *     directory, not a reader). Results at another clinic offer switch-and-open.
+ *   - Export covers whatever is currently shown (search results when searching).
  */
-import React, { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, CardSubtitle, CardTitle, SecondaryButton, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
+import { Card, CardSubtitle, CardTitle, SecondaryButton, StepBadge } from '@/components/ui/primitives';
+import { Colors } from '@/constants/theme';
+import type { PatientSummary } from '@/lib/types';
 import { PatientCard } from '@/components/PatientCard';
+import { useAuth } from '@/state/AuthContext';
 import { useRecords } from '@/state/RecordsContext';
 import { exportEncountersToCsv, EXPORT_LINK_EXPIRY_SECONDS } from '@/lib/exportCsv';
-import { Colors } from '@/constants/theme';
+import { describeSaveError } from '@/lib/errors';
 
 export default function RecordsScreen() {
   const router = useRouter();
   const { patientSummaries, encounters, clinics } = useRecords();
+  const { user, activeClinicId, setActiveClinic } = useAuth();
   const [q, setQ] = useState('');
-  const [selectedClinic, setSelectedClinic] = useState('');
+  const [scope, setScope] = useState<'acting' | 'all'>('acting');
   const [exporting, setExporting] = useState(false);
 
-  const clinicOptions: SelectOption[] = [
-    { label: 'All clinics', value: '' },
-    ...clinics.map((c) => ({ label: c.name, value: c.id })),
-  ];
+  const activeClinicName = clinics.find((c) => c.id === activeClinicId)?.name;
+
+  /** Patients visible in the acting clinic's slice: its own + referred into it. */
+  const actingScope = useMemo(() => {
+    const scope = new Set<string>();
+    for (const s of patientSummaries) {
+      if (s.patient.clinicId === activeClinicId) scope.add(s.patient.id);
+    }
+    for (const e of encounters) {
+      if (e.referredToClinicId && e.referredToClinicId === activeClinicId) scope.add(e.patientId);
+    }
+    return scope;
+  }, [patientSummaries, encounters, activeClinicId]);
 
   const query = q.trim().toLowerCase();
-  const filtered = patientSummaries
-    .filter((s) => !selectedClinic || s.patient.clinicId === selectedClinic)
-    .filter((s) => {
-      if (!query) return true;
-      const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
-      return hay.includes(query);
-    });
+  const searching = query.length > 0;
 
-  /** Export one row per encounter for the patients currently shown (clinic +
-   *  search filters apply), with demographics + signed media links inlined. */
+  const matchesQuery = (s: PatientSummary) => {
+    const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
+    return hay.includes(query);
+  };
+
+  const shown = searching
+    ? patientSummaries.filter(matchesQuery) // global directory (RLS-bounded)
+    : scope === 'all'
+      ? patientSummaries // every clinic you can see (RLS-bounded)
+      : patientSummaries.filter((s) => actingScope.has(s.patient.id));
+
+  /** Open a patient; foreign-clinic hits confirm-switch the acting clinic first. */
+  const openPatient = (s: PatientSummary) => {
+    const go = () => router.push({ pathname: '/record', params: { id: s.patient.id } });
+    if (actingScope.has(s.patient.id) || !s.patient.clinicId) {
+      go();
+      return;
+    }
+    const clinicName = clinics.find((c) => c.id === s.patient.clinicId)?.name ?? 'another clinic';
+    Alert.alert(
+      'Switch clinic?',
+      `This patient is at ${clinicName}. Switch your acting clinic there to open their record?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: `Switch to ${clinicName}`, onPress: () => { setActiveClinic(s.patient.clinicId ?? null); go(); } },
+      ],
+    );
+  };
+
+  /** Export one row per encounter for the patients currently shown, with
+   *  demographics + signed media links inlined. */
   const handleExport = async () => {
-    if (filtered.length === 0 || exporting) return;
+    if (shown.length === 0 || exporting) return;
     setExporting(true);
     try {
       const result = await exportEncountersToCsv({
-        patients: filtered.map((s) => s.patient),
+        patients: shown.map((s) => s.patient),
         encounters,
         clinics,
       });
@@ -55,7 +96,7 @@ export default function RecordsScreen() {
       // RN-web often doesn't render Alert — always log so the browser console
       // shows the real failure.
       console.error('[records] export failed:', err);
-      Alert.alert('Export failed', err instanceof Error ? err.message : String(err));
+      Alert.alert('Export failed', describeSaveError(err));
     } finally {
       setExporting(false);
     }
@@ -65,17 +106,37 @@ export default function RecordsScreen() {
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 40, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
       <Card>
         <StepBadge>Patient Records</StepBadge>
-        <CardTitle>All Patients</CardTitle>
-        <CardSubtitle>Search and review every patient saved on this device.</CardSubtitle>
+        <CardTitle>{searching ? 'Search — all your clinics' : activeClinicName ?? 'Patients'}</CardTitle>
+        {!searching ? (
+          <CardSubtitle>
+            {scope === 'all'
+              ? 'Every patient you can see, across all your clinics plus referrals in.'
+              : `Showing ${activeClinicName ? `${activeClinicName}'s` : 'your'} patients plus referrals into it.`}{' '}
+            Switch clinics in the header.
+          </CardSubtitle>
+        ) : (
+          <CardSubtitle>Search spans every clinic you can see — switch to open a patient at another clinic.</CardSubtitle>
+        )}
 
-        {clinics.length > 0 ? (
-          <SelectField
-            label="Filter by clinic"
-            value={selectedClinic}
-            options={clinicOptions}
-            onChange={setSelectedClinic}
-          />
+        {!searching && (user?.memberships.length ?? 0) > 1 ? (
+          <View style={styles.scopeRow}>
+            <Pressable
+              onPress={() => setScope('acting')}
+              style={[styles.scopePill, scope === 'acting' && styles.scopePillOn]}>
+              <Text style={[styles.scopePillText, scope === 'acting' && styles.scopePillTextOn]}>
+                {activeClinicName ?? 'This clinic'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setScope('all')}
+              style={[styles.scopePill, scope === 'all' && styles.scopePillOn]}>
+              <Text style={[styles.scopePillText, scope === 'all' && styles.scopePillTextOn]}>
+                All my clinics
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
+
 
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={16} color={Colors.gray} />
@@ -91,18 +152,31 @@ export default function RecordsScreen() {
         <SecondaryButton
           title={exporting ? 'Exporting…' : 'Export Encounters (CSV)'}
           onPress={handleExport}
-          disabled={exporting || filtered.length === 0}
+          disabled={exporting || shown.length === 0}
         />
 
-        {filtered.length === 0 ? (
+        {shown.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>{query ? '🔍' : '📋'}</Text>
-            <Text style={styles.emptyText}>{query ? `No patients match "${q.trim()}"` : 'No patients yet.'}</Text>
+            <Text style={styles.emptyIcon}>{searching ? '🔍' : '📋'}</Text>
+            <Text style={styles.emptyText}>
+              {searching ? `No patients match "${q.trim()}"` : 'No patients at this clinic yet.'}
+            </Text>
           </View>
         ) : (
-          filtered.map((s) => (
-            <PatientCard key={s.patient.id} summary={s} onPress={() => router.push({ pathname: '/record', params: { id: s.patient.id } })} />
-          ))
+          shown.map((s) => {
+            const foreign = searching && !actingScope.has(s.patient.id) && !!s.patient.clinicId;
+            const clinicName = clinics.find((c) => c.id === s.patient.clinicId)?.name ?? '—';
+            return (
+              <View key={s.patient.id}>
+                {foreign ? (
+                  <Text style={styles.foreignTag}>
+                    {clinicName} · tap to switch ›
+                  </Text>
+                ) : null}
+                <PatientCard summary={s} onPress={() => openPatient(s)} />
+              </View>
+            );
+          })
         )}
       </Card>
     </ScrollView>
@@ -114,5 +188,11 @@ const styles = StyleSheet.create({
   search: { flex: 1, fontSize: 15, color: Colors.text, padding: 0 },
   empty: { alignItems: 'center', paddingVertical: 36 },
   emptyIcon: { fontSize: 40, marginBottom: 10 },
-  emptyText: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center' },
+const styles = StyleSheet.create({
+  scopeRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
+  scopePill: { borderWidth: 1, borderColor: Colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: Colors.white },
+  scopePillOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  scopePillText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  scopePillTextOn: { color: '#fff', fontWeight: '700' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, backgroundColor: Colors.white },
 });

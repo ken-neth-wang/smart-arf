@@ -20,7 +20,6 @@ import {
   StepBadge,
 } from '@/components/ui/primitives';
 import { useAssessment } from '@/state/AssessmentContext';
-import { useAuth } from '@/state/AuthContext';
 import {
   analyzeAudio,
   getAudioUrl,
@@ -29,6 +28,7 @@ import {
   softDeleteAudio,
   uploadAudio,
 } from '@/lib/audio';
+import { describeSaveError } from '@/lib/errors';
 import type { AudioRecord, AudioClassification } from '@/lib/types';
 import { Colors } from '@/constants/theme';
 import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
@@ -53,7 +53,6 @@ function classMeta(c: AudioClassification): {
 
 export function AudioCard() {
   const { activeEncounterId, activePatientId, commitLevelA } = useAssessment();
-  const { user } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fileRef = useRef<any>(null);
 
@@ -65,7 +64,7 @@ export function AudioCard() {
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [stage, setStage] = useState<string | null>(null);
 
-  const clinicId = user?.memberships[0]?.clinicId ?? null;
+  // No clinic here — media inherit the encounter's clinic (DB-derived).
 
   const refresh = useCallback(async (encounterId: string) => {
     try {
@@ -96,10 +95,9 @@ export function AudioCard() {
     if (busy) return;
     setError(null);
     if (!consent) return setError('Confirm patient consent before uploading.');
-    if (!clinicId) return setError('No clinic assigned to your account.');
     if (Platform.OS !== 'web') return setError('Audio upload is web-only for now.');
     fileRef.current?.click();
-  }, [busy, consent, clinicId]);
+  }, [busy, consent]);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -125,20 +123,19 @@ export function AudioCard() {
         await saveAudioRecord({
           patientId,
           encounterId: encounterId!,
-          clinicId: clinicId!,
           storagePath: path,
           mimeType: mime,
           analysis,
         });
         await refresh(encounterId!);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(describeSaveError(err));
       } finally {
         setBusy(false);
         setStage(null);
       }
     },
-    [activeEncounterId, activePatientId, clinicId, commitLevelA, refresh],
+    [activeEncounterId, activePatientId, commitLevelA, refresh],
   );
 
   const onFile = useCallback(
@@ -161,7 +158,7 @@ export function AudioCard() {
         await softDeleteAudio(id);
         if (activeEncounterId) await refresh(activeEncounterId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(describeSaveError(err));
       }
     },
     [activeEncounterId, refresh],

@@ -18,6 +18,7 @@ import { Alert } from 'react-native';
 import type { Clinic, Encounter, FollowUpFields, Patient, PatientSummary, PatientWithHistory } from '@/lib/types';
 import { loadData, saveData } from '@/lib/storage';
 import { loadDataCloud, loadClinicsCloud, saveEncounterCloud, savePatientCloud } from '@/lib/sync';
+import { describeSaveError } from '@/lib/errors';
 import { useAuth } from '@/state/AuthContext';
 
 /** 'local' (AsyncStorage, default) or 'supabase' (cloud, QA opt-in). */
@@ -52,7 +53,7 @@ interface RecordsContextValue {
  *  Module-level: uses no component state, keeps useCallback deps stable. */
 function failSave(what: string, err: unknown): never {
   console.error(`[records] cloud ${what.toLowerCase()} save failed:`, err);
-  const detail = err instanceof Error ? err.message : String(err);
+  const detail = describeSaveError(err);
   const msg = `${detail}\n\nNothing was recorded. Your entries are still on this screen — reconnect or sign in again, then press Save once more.`;
   // react-native-web's Alert is a NO-OP (empty stub) — on web we must use
   // window.alert; the react-native Alert is the fallback for native builds.
@@ -238,7 +239,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
           await savePatientCloud(updated);
         } catch (err) {
           console.error('[records] cloud soft-delete failed:', err);
-          if (typeof window !== 'undefined') window.alert('Could not remove patient (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          if (typeof window !== 'undefined') window.alert('Could not remove patient (not saved to cloud): ' + (describeSaveError(err)));
           return; // don't hide locally if it didn't persist
         }
       }
@@ -262,7 +263,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
           await saveEncounterCloud(updated);
         } catch (err) {
           console.error('[records] cloud encounter soft-delete failed:', err);
-          if (typeof window !== 'undefined') window.alert('Could not remove visit (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          if (typeof window !== 'undefined') window.alert('Could not remove visit (not saved to cloud): ' + (describeSaveError(err)));
           return;
         }
       }
@@ -296,7 +297,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
           await saveEncounterCloud(updated);
         } catch (err) {
           console.error('[records] cloud encounter restore failed:', err);
-          if (typeof window !== 'undefined') window.alert('Could not restore visit (not saved to cloud): ' + (err instanceof Error ? err.message : String(err)));
+          if (typeof window !== 'undefined') window.alert('Could not restore visit (not saved to cloud): ' + (describeSaveError(err)));
           return;
         }
       }

@@ -18,7 +18,6 @@ import {
   StepBadge,
 } from '@/components/ui/primitives';
 import { useAssessment } from '@/state/AssessmentContext';
-import { useAuth } from '@/state/AuthContext';
 import {
   analyzePhoto,
   getPhotoUrl,
@@ -27,6 +26,7 @@ import {
   softDeletePhoto,
   uploadPhoto,
 } from '@/lib/photos';
+import { describeSaveError } from '@/lib/errors';
 import type { PhotoRecord } from '@/lib/types';
 import { Colors } from '@/constants/theme';
 import { AI_RETRY_MESSAGE, isAiServiceError } from '@/lib/aiErrors';
@@ -36,7 +36,6 @@ const DISCLAIMER = 'AI screening only — cannot diagnose or rule out ARF. Clini
 
 export function PhotoCard() {
   const { activeEncounterId, activePatientId, commitLevelA } = useAssessment();
-  const { user } = useAuth();
 
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,7 +45,7 @@ export function PhotoCard() {
   const [lastAsset, setLastAsset] = useState<{ blob: Blob; mime: string } | null>(null);
   const [stage, setStage] = useState<string | null>(null);
 
-  const clinicId = user?.memberships[0]?.clinicId ?? null;
+  // No clinic here — media inherit the encounter's clinic (DB-derived).
 
   const refresh = useCallback(async (encounterId: string) => {
     try {
@@ -96,20 +95,19 @@ export function PhotoCard() {
         await savePhotoRecord({
           patientId,
           encounterId: encounterId!,
-          clinicId: clinicId!,
           storagePath: path,
           mimeType: mime,
           analysis,
         });
         await refresh(encounterId!);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(describeSaveError(err));
       } finally {
         setBusy(false);
         setStage(null);
       }
     },
-    [activeEncounterId, activePatientId, clinicId, commitLevelA, refresh],
+    [activeEncounterId, activePatientId, commitLevelA, refresh],
   );
 
   const handleAsset = useCallback(
@@ -129,7 +127,6 @@ export function PhotoCard() {
     if (busy) return;
     setError(null);
     if (!consent) return setError('Confirm patient consent before adding a photo.');
-    if (!clinicId) return setError('No clinic assigned to your account.');
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return setError('Photo library access was denied.');
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -139,13 +136,12 @@ export function PhotoCard() {
     });
     if (result.canceled) return;
     await handleAsset(result.assets[0]);
-  }, [busy, consent, clinicId, handleAsset]);
+  }, [busy, consent, handleAsset]);
 
   const takePhoto = useCallback(async () => {
     if (busy) return;
     setError(null);
     if (!consent) return setError('Confirm patient consent before capturing a photo.');
-    if (!clinicId) return setError('No clinic assigned to your account.');
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) return setError('Camera access was denied.');
     const result = await ImagePicker.launchCameraAsync({
@@ -155,7 +151,7 @@ export function PhotoCard() {
     });
     if (result.canceled) return;
     await handleAsset(result.assets[0]);
-  }, [busy, consent, clinicId, handleAsset]);
+  }, [busy, consent, handleAsset]);
 
   const retry = useCallback(() => {
     if (lastAsset && !busy) void processFile(lastAsset.blob, lastAsset.mime);
@@ -168,7 +164,7 @@ export function PhotoCard() {
         await softDeletePhoto(id);
         if (activeEncounterId) await refresh(activeEncounterId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(describeSaveError(err));
       }
     },
     [activeEncounterId, refresh],

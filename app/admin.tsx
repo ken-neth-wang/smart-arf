@@ -1,10 +1,21 @@
 /**
- * Admin console — manage the pre-approved email allowlist + approve pending
- * users. Reachable from Settings; guarded by `isAdmin`. Both data sources are
- * RLS-gated to admins server-side (is_admin()), so this is belt-and-suspenders.
+ * Admin console — CLINIC-SCOPED (docs/user-clinic-management-plan.md §4.4).
+ *
+ * The console always manages the ACTING clinic (the same header picker the rest
+ * of the app uses). Switch clinics → every card re-scopes. Cards:
+ *   - Platform (platform admins only): create clinic, deactivate an account
+ *   - Roster: one row per member of this clinic — role select, remove (×),
+ *     last-admin guard; other-clinic memberships shown read-only
+ *   - Add member by email (existing user joins; unknown email → invite)
+ *   - Pending approvals: global list (pending users belong to no clinic);
+ *     approving adds them HERE with the chosen role
+ *   - Invite: into this clinic
+ *   - Removed visits: restore (unchanged)
+ *
+ * All actions are RLS-gated server-side; this UI mirrors those rules.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert as AlertBox, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Alert,
@@ -19,21 +30,24 @@ import {
 } from '@/components/ui/primitives';
 import { useAuth } from '@/state/AuthContext';
 import { useRecords } from '@/state/RecordsContext';
-import { isAdmin } from '@/lib/permissions';
+import { isAdminAnywhere, isAdminAt, isPlatformAdmin } from '@/lib/permissions';
+import { describeSaveError } from '@/lib/errors';
 import type { Role } from '@/lib/permissions';
 import {
-  addAllowedEmailCloud,
-  inviteUserCloud,
+  addMemberByEmailCloud,
   approveUserCloud,
   createClinicCloud,
   deactivateUserCloud,
-  loadActiveUsersCloud,
+  inviteUserCloud,
   loadAllowedEmailsCloud,
   loadPendingProfilesCloud,
+  loadRosterCloud,
   removeAllowedEmailCloud,
-  type ActiveUser,
+  removeMembershipCloud,
+  updateMembershipRoleCloud,
   type AllowedEmail,
   type PendingProfile,
+  type RosterMember,
 } from '@/lib/admin';
 import { Colors } from '@/constants/theme';
 
@@ -49,59 +63,63 @@ const CLINIC_TYPE_OPTS: SelectOption[] = [
 ];
 
 export default function AdminScreen() {
-  const { user } = useAuth();
+  const { user, activeClinicId } = useAuth();
   const { clinics, refresh: refreshRecords, encounters, getPatientById, restoreEncounter, loading: recordsLoading } = useRecords();
   const router = useRouter();
 
   const [allowed, setAllowed] = useState<AllowedEmail[]>([]);
   const [pending, setPending] = useState<PendingProfile[]>([]);
-  const [active, setActive] = useState<ActiveUser[]>([]);
+  const [roster, setRoster] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // allowlist add form
+  // invite / add-member forms (both target the ACTING clinic)
   const [inviteName, setInviteName] = useState('');
-  const [email, setEmail] = useState('');
-  const [clinicId, setClinicId] = useState('');
-  const [role, setRole] = useState<Role>('health_worker');
-
-  // pending approval form
-  const [approveUserId, setApproveUserId] = useState('');
-  const [approveClinicId, setApproveClinicId] = useState('');
-  const [approveRole, setApproveRole] = useState<Role>('health_worker');
-
-  // create-clinic form
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<Role>('health_worker');
+  const [addEmail, setAddEmail] = useState('');
+  const [addRole, setAddRole] = useState<Role>('health_worker');
+  const [pendingRoles, setPendingRoles] = useState<Record<string, Role>>({});
   const [newClinicName, setNewClinicName] = useState('');
   const [clinicType, setClinicType] = useState('primary');
 
+  const actingClinic = clinics.find((c) => c.id === activeClinicId);
+  const clinicName = actingClinic?.name ?? '—';
+  const platform = isPlatformAdmin(user);
+  /** Manage rights at the acting clinic (roster edits, approvals, invites). */
+  const manageHere = !!activeClinicId && !!user && isAdminAt(user, activeClinicId);
+  const adminCountHere = roster.filter((m) => m.role === 'admin').length;
+
   const refresh = useCallback(async () => {
+    if (!activeClinicId) {
+      setAllowed([]);
+      setPending([]);
+      setRoster([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const [a, p, act] = await Promise.all([
+      const [a, p, r] = await Promise.all([
         loadAllowedEmailsCloud(),
         loadPendingProfilesCloud(),
-        loadActiveUsersCloud(),
+        loadRosterCloud(activeClinicId),
       ]);
       setAllowed(a);
       setPending(p);
-      setActive(act);
+      setRoster(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeSaveError(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeClinicId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  const clinicName = (id: string) => clinics.find((c) => c.id === id)?.name ?? '—';
-  const clinicOptions = clinics.map((c) => ({ label: c.name, value: c.id }));
-  const clinicPlaceholder = clinicOptions.length ? 'Select…' : 'Loading clinics…';
-  const others = active.filter((u) => u.id !== user?.profile.id);
 
   // Soft-deleted visits (admin restore). Patients are restored via SQL.
   const deletedVisits = encounters
@@ -115,75 +133,143 @@ export default function AdminScreen() {
     try {
       await restoreEncounter(encounterId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
   };
 
-  const onAdd = async () => {
-    if (busyAction) return;
-    const e = email.trim().toLowerCase();
+  const onInvite = async () => {
+    if (busyAction || !activeClinicId) return;
+    const e = inviteEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(e)) return setError('Enter a valid email address.');
-    if (!clinicId) return setError('Pick a clinic.');
-    setBusyAction('add');
+    setBusyAction('invite');
     setError(null);
     try {
-      await inviteUserCloud(e, clinicId, role, inviteName);
-      setEmail('');
+      await inviteUserCloud(e, activeClinicId, inviteRole, inviteName);
+      setInviteEmail('');
       setInviteName('');
-      setClinicId('');
-      setRole('health_worker');
+      setInviteRole('health_worker');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
   };
 
-  const onRemove = async (mail: string) => {
-    if (busyAction) return;
-    setBusyAction(`remove:${mail}`);
+  const onAddMember = async () => {
+    if (busyAction || !activeClinicId) return;
+    const e = addEmail.trim().toLowerCase();
+    if (!EMAIL_RE.test(e)) return setError('Enter a valid email address.');
+    setBusyAction('add-member');
     setError(null);
     try {
-      await removeAllowedEmailCloud(mail);
+      await addMemberByEmailCloud(e, activeClinicId, addRole);
+      setAddEmail('');
+      setAddRole('health_worker');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
   };
 
-  const onApprove = async () => {
-    if (busyAction) return;
-    if (!approveUserId) return setError('Pick a user to approve.');
-    if (!approveClinicId) return setError('Pick a clinic.');
-    setBusyAction(`approve:${approveUserId}`);
+  const onApprove = async (p: PendingProfile, role: Role) => {
+    if (busyAction || !activeClinicId) return;
+    setBusyAction(`approve:${p.id}`);
     setError(null);
     try {
-      await approveUserCloud(approveUserId, approveClinicId, approveRole);
-      setApproveUserId('');
-      setApproveClinicId('');
-      setApproveRole('health_worker');
+      await approveUserCloud(p.id, activeClinicId, role);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
   };
 
-  const onDeactivate = async (userId: string) => {
-    if (busyAction) return;
-    setBusyAction(`deactivate:${userId}`);
+  const onRoleChange = async (m: RosterMember, role: Role) => {
+    if (busyAction || !activeClinicId) return;
+    setBusyAction(`role:${m.userId}`);
     setError(null);
     try {
-      await deactivateUserCloud(userId);
+      await updateMembershipRoleCloud(m.userId, activeClinicId, role);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const onRemoveMember = (m: RosterMember) => {
+    if (busyAction || !activeClinicId || !user) return;
+    const isSelf = m.userId === user.profile.id;
+    const isLastAdmin = m.role === 'admin' && adminCountHere <= 1;
+    if (isSelf || (!platform && isLastAdmin)) return;
+    AlertBox.alert(
+      'Remove from clinic?',
+      `${m.email || m.displayName || 'This member'} loses access to ${clinicName}. Records they created stay with the clinic.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyAction(`remove:${m.userId}`);
+            setError(null);
+            try {
+              await removeMembershipCloud(m.userId, activeClinicId);
+              await refresh();
+            } catch (err) {
+              setError(describeSaveError(err));
+            } finally {
+              setBusyAction(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onDeactivate = (m: RosterMember) => {
+    if (busyAction || !user) return;
+    AlertBox.alert(
+      'Deactivate account?',
+      `${m.email || 'This user'} loses access to ALL clinics (reversible — they return to Pending).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyAction(`deactivate:${m.userId}`);
+            setError(null);
+            try {
+              await deactivateUserCloud(m.userId);
+              await refresh();
+            } catch (err) {
+              setError(describeSaveError(err));
+            } finally {
+              setBusyAction(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onRevokeInvite = async (email: string) => {
+    if (busyAction) return;
+    setBusyAction(`revoke:${email}`);
+    setError(null);
+    try {
+      await removeAllowedEmailCloud(email);
+      await refresh();
+    } catch (err) {
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
@@ -200,13 +286,13 @@ export default function AdminScreen() {
       setClinicType('primary');
       await refreshRecords();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeSaveError(err));
     } finally {
       setBusyAction(null);
     }
   };
 
-  if (!isAdmin(user)) {
+  if (!isAdminAnywhere(user)) {
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
         <Card>
@@ -221,6 +307,8 @@ export default function AdminScreen() {
     );
   }
 
+  const clinicInvites = allowed.filter((a) => a.clinicId === activeClinicId);
+
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 48, maxWidth: 620, width: '100%', alignSelf: 'center' }}>
       <View style={{ marginBottom: 8 }}>
@@ -233,136 +321,171 @@ export default function AdminScreen() {
         </View>
       ) : null}
 
-      {/* ── Clinics ── */}
-      <Card>
-        <StepBadge>Clinics</StepBadge>
-        <CardTitle>Facilities</CardTitle>
-        <Text style={styles.line}>
-          Create a clinic so it's available in pickers and for user/patient assignment.
-        </Text>
-        <View style={styles.form}>
-          <TextField label="Clinic name" value={newClinicName} onChangeText={setNewClinicName} placeholder="e.g. City Hospital" />
+      <View style={styles.ctxStrip}>
+        <Text style={styles.ctxText}>🏥 Managing {clinicName} — switch clinics in the header</Text>
+      </View>
+
+      {/* ── Platform (platform admins only) ── */}
+      {platform ? (
+        <Card>
+          <StepBadge>Platform</StepBadge>
+          <CardTitle>Cross-clinic actions</CardTitle>
+          <Text style={styles.line}>Create clinics — the only action here that crosses clinic boundaries (deactivation lives in roster rows).</Text>
+          <TextField label="New clinic name" value={newClinicName} onChangeText={setNewClinicName} placeholder="e.g. City Hospital" />
           <SelectField label="Type" value={clinicType} options={CLINIC_TYPE_OPTS} onChange={setClinicType} />
           <PrimaryButton title={busyAction === 'create-clinic' ? 'Creating…' : 'Create Clinic'} disabled={!newClinicName.trim() || !!busyAction} onPress={onCreateClinic} />
-        </View>
-        {clinics.length === 0 ? (
-          <Text style={styles.muted}>No clinics yet.</Text>
-        ) : (
-          clinics.map((c) => (
-            <View key={c.id} style={styles.entry}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.entryEmail}>{c.name}</Text>
-                <Text style={styles.entrySub}>{c.type || '—'}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </Card>
+        </Card>
+      ) : null}
 
-      {/* ── Allowlist ── */}
+      {/* ── Roster (the acting clinic's members) ── */}
       <Card>
-        <StepBadge>Invite by Email</StepBadge>
-        <CardTitle>Invite Users</CardTitle>
-        <Text style={styles.line}>
-          Send an invite — the recipient gets an email, sets a password, and is auto-approved with
-          the clinic/role you choose.
-        </Text>
-
-        <View style={styles.form}>
-          <TextField
-            label="Name (optional)"
-            value={inviteName}
-            onChangeText={setInviteName}
-            placeholder="Dr. Amina"
-          />
-          <TextField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="name@clinic.org"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <SelectField label="Clinic" value={clinicId} options={clinicOptions} placeholder={clinicPlaceholder} onChange={setClinicId} />
-          <SelectField label="Role" value={role} options={ROLE_OPTS} onChange={(v) => setRole(v as Role)} />
-          <PrimaryButton title={busyAction === 'add' ? 'Sending…' : 'Send invite'} disabled={!email || !clinicId || !!busyAction} onPress={onAdd} />
-        </View>
-
-        {allowed.length === 0 ? (
-          <Text style={styles.muted}>No invites sent yet.</Text>
+        <StepBadge>Roster</StepBadge>
+        <CardTitle>Members here</CardTitle>
+        {!manageHere ? (
+          <Text style={styles.line}>You're not an admin at {clinicName} — roster is read-only.</Text>
+        ) : null}
+        {loading && roster.length === 0 ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginVertical: 16 }} />
+        ) : roster.length === 0 ? (
+          <Text style={styles.muted}>No members yet at this clinic.</Text>
         ) : (
-          allowed.map((a) => (
-            <View key={a.email} style={styles.entry}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.entryEmail}>{a.email}</Text>
-                <Text style={styles.entrySub}>{clinicName(a.clinicId)} · {a.role}</Text>
+          roster.map((m) => {
+            const isSelf = !!user && m.userId === user.profile.id;
+            const isLastAdmin = m.role === 'admin' && adminCountHere <= 1;
+            const canManage = manageHere && !isSelf && (platform || !isLastAdmin);
+            return (
+              <View key={m.userId} style={styles.memberRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.memberEmail} numberOfLines={1}>{m.email || m.displayName || m.userId.slice(0, 8)}</Text>
+                  <Text style={styles.memberSub}>
+                    {m.role === 'admin' ? 'Admin' : 'Health Worker'}
+                    {isSelf ? ' · you' : ''}
+                    {m.otherClinics.length > 0 ? ` · also at ${m.otherClinics.length} other clinic${m.otherClinics.length > 1 ? 's' : ''}` : ''}
+                  </Text>
+                  {isLastAdmin && !platform ? (
+                    <Text style={styles.guardText}>⚠ Last admin of {clinicName} — protected</Text>
+                  ) : null}
+                </View>
+                {manageHere ? (
+                  <View style={styles.memberActions}>
+                    <SelectField
+                      label=""
+                      value={m.role}
+                      options={ROLE_OPTS}
+                      onChange={(v) => void onRoleChange(m, v as Role)}
+                    />
+                    <SecondaryButton
+                      title={busyAction === `remove:${m.userId}` ? '…' : '✕'}
+                      onPress={() => onRemoveMember(m)}
+                      disabled={!canManage || !!busyAction}
+                    />
+                    {platform && !isSelf ? (
+                      <SecondaryButton
+                        title={busyAction === `deactivate:${m.userId}` ? '…' : 'Deactivate'}
+                        onPress={() => onDeactivate(m)}
+                        disabled={!!busyAction}
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
-              <SecondaryButton title={busyAction === `remove:${a.email}` ? '…' : 'Revoke'} onPress={() => onRemove(a.email)} />
-            </View>
-          ))
+            );
+          })
         )}
+        {manageHere ? (
+          <View style={styles.addForm}>
+            <TextInput
+              value={addEmail}
+              onChangeText={setAddEmail}
+              placeholder="add by email — existing user or invite"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.addInput}
+              placeholderTextColor={Colors.gray}
+            />
+            <SelectField label="" value={addRole} options={ROLE_OPTS} onChange={(v) => setAddRole(v as Role)} />
+            <SecondaryButton
+              title={busyAction === 'add-member' ? '…' : 'Add'}
+              onPress={onAddMember}
+              disabled={!addEmail || !!busyAction}
+            />
+          </View>
+        ) : null}
       </Card>
 
-      {/* ── Pending approvals ── */}
+      {/* ── Pending approvals (global list; approve INTO the acting clinic) ── */}
       <Card>
         <StepBadge>Pending Users</StepBadge>
-        <CardTitle>Awaiting Approval</CardTitle>
+        <CardTitle>Awaiting approval</CardTitle>
         <Text style={styles.line}>
-          Users who signed up without being on the allowlist. Pick one, assign a clinic + role, and approve.
+          Pending signups belong to no clinic yet. Approving adds them to {clinicName}.
         </Text>
-
         {loading && pending.length === 0 ? (
           <ActivityIndicator color={Colors.primary} style={{ marginVertical: 16 }} />
         ) : pending.length === 0 ? (
           <Text style={styles.muted}>No pending users. 🎉</Text>
         ) : (
-          <View style={styles.form}>
-            <SelectField
-              label="User"
-              value={approveUserId}
-              options={pending.map((p) => ({ label: p.email || p.displayName || 'Unknown user', value: p.id }))}
-              placeholder="Select user…"
-              onChange={setApproveUserId}
-            />
-            <SelectField label="Clinic" value={approveClinicId} options={clinicOptions} placeholder={clinicPlaceholder} onChange={setApproveClinicId} />
-            <SelectField label="Role" value={approveRole} options={ROLE_OPTS} onChange={(v) => setApproveRole(v as Role)} />
-            <PrimaryButton
-              title={busyAction === `approve:${approveUserId}` ? 'Approving…' : 'Approve'}
-              color={Colors.success}
-              disabled={!approveUserId || !approveClinicId || !!busyAction}
-              onPress={onApprove}
-            />
-          </View>
+          pending.map((p) => {
+            const role = pendingRoles[p.id] ?? 'health_worker';
+            return (
+              <View key={p.id} style={styles.memberRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.memberEmail} numberOfLines={1}>{p.email || p.displayName || 'Unknown user'}</Text>
+                  {manageHere ? (
+                    <SelectField
+                      label=""
+                      value={role}
+                      options={ROLE_OPTS}
+                      onChange={(v) => setPendingRoles((prev) => ({ ...prev, [p.id]: v as Role }))}
+                    />
+                  ) : null}
+                </View>
+                {manageHere ? (
+                  <PrimaryButton
+                    title={busyAction === `approve:${p.id}` ? 'Approving…' : 'Approve'}
+                    color={Colors.success}
+                    onPress={() => void onApprove(p, role)}
+                    disabled={!!busyAction}
+                  />
+                ) : null}
+              </View>
+            );
+          })
         )}
       </Card>
 
-      {/* ── Active users (deactivate / soft delete) ── */}
+      {/* ── Invite (into the acting clinic) ── */}
       <Card>
-        <StepBadge>Active Users</StepBadge>
-        <CardTitle>Current Access</CardTitle>
+        <StepBadge>Invite by Email</StepBadge>
+        <CardTitle>Invite to {clinicName}</CardTitle>
         <Text style={styles.line}>
-          Approved users with clinic access. Deactivate to revoke access — reversible (they return to Pending).
+          The recipient gets an email, sets a password, and lands here with the role you choose.
         </Text>
-        {others.length === 0 ? (
-          <Text style={styles.muted}>No other active users.</Text>
+        {manageHere ? (
+          <View style={styles.form}>
+            <TextField label="Name (optional)" value={inviteName} onChangeText={setInviteName} placeholder="Dr. Amina" />
+            <TextField label="Email" value={inviteEmail} onChangeText={setInviteEmail} placeholder="name@clinic.org" keyboardType="email-address" autoCapitalize="none" />
+            <SelectField label="Role" value={inviteRole} options={ROLE_OPTS} onChange={(v) => setInviteRole(v as Role)} />
+            <PrimaryButton title={busyAction === 'invite' ? 'Sending…' : 'Send invite'} disabled={!inviteEmail || !!busyAction} onPress={onInvite} />
+          </View>
         ) : (
-          others.map((u) => (
-            <View key={u.id} style={styles.entry}>
+          <Text style={styles.muted}>Only admins of {clinicName} can invite.</Text>
+        )}
+        {clinicInvites.length > 0 ? (
+          clinicInvites.map((a) => (
+            <View key={a.email} style={styles.memberRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.entryEmail}>{u.email || u.displayName || 'Unknown'}</Text>
-                <Text style={styles.entrySub}>
-                  {u.memberships.map((m) => `${clinicName(m.clinicId)} · ${m.role}`).join(', ') || 'no clinic'}
-                </Text>
+                <Text style={styles.memberEmail}>{a.email}</Text>
+                <Text style={styles.memberSub}>{a.role}{a.usedAt ? ' · accepted' : ' · invited'}</Text>
               </View>
-              <PrimaryButton
-                title={busyAction === `deactivate:${u.id}` ? '…' : 'Deactivate'}
-                color={Colors.danger}
+              <SecondaryButton
+                title={busyAction === `revoke:${a.email}` ? '…' : 'Revoke'}
+                onPress={() => void onRevokeInvite(a.email)}
                 disabled={!!busyAction}
-                onPress={() => onDeactivate(u.id)}
               />
             </View>
           ))
-        )}
+        ) : null}
       </Card>
 
       {/* ── Deleted records (visit restore) ── */}
@@ -382,24 +505,22 @@ export default function AdminScreen() {
             const p = getPatientById(e.patientId);
             const name = p ? `${p.firstName} ${p.lastName}`.trim() || '(no name)' : 'Unknown patient';
             return (
-              <View key={e.id} style={styles.entry}>
+              <View key={e.id} style={styles.memberRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.entryEmail}>
+                  <Text style={styles.memberEmail}>
                     {name}
                     {p?.inactive ? '  ·  ⚠ patient also deleted' : ''}
                   </Text>
-                  <Text style={styles.entrySub}>
+                  <Text style={styles.memberSub}>
                     {e.type === 'initial' ? 'Initial' : 'Follow-up'} · {e.date}
                     {e.deletedAt ? ` · removed ${new Date(e.deletedAt).toLocaleDateString()}` : ''}
                   </Text>
-                  {e.deleteReason ? (
-                    <Text style={styles.entrySub}>Reason: {e.deleteReason}</Text>
-                  ) : null}
+                  {e.deleteReason ? <Text style={styles.memberSub}>Reason: {e.deleteReason}</Text> : null}
                 </View>
                 <SecondaryButton
                   title={busyAction === `restore:${e.id}` ? '…' : 'Restore'}
                   disabled={!!busyAction}
-                  onPress={() => onRestore(e.id)}
+                  onPress={() => void onRestore(e.id)}
                 />
               </View>
             );
@@ -413,9 +534,31 @@ export default function AdminScreen() {
 
 const styles = StyleSheet.create({
   line: { fontSize: 13.5, color: Colors.textSecondary, marginBottom: 8, lineHeight: 19 },
-  muted: { fontSize: 13, color: Colors.textSecondary, marginTop: 6, fontStyle: 'italic' },
-  form: { marginTop: 8, gap: 10 },
-  entry: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.grayLight, gap: 10 },
-  entryEmail: { fontSize: 14, fontWeight: '700', color: Colors.text },
-  entrySub: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
+  muted: { fontSize: 13.5, color: Colors.gray, paddingVertical: 8 },
+  ctxStrip: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: '#c3d7f0',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  ctxText: { color: Colors.primaryDark, fontSize: 12.5, fontWeight: '700' },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.grayLight,
+  },
+  memberEmail: { fontWeight: '700', fontSize: 13.5, color: Colors.text },
+  memberSub: { fontSize: 12, color: Colors.gray, marginTop: 1 },
+  guardText: { fontSize: 11.5, color: '#b45309', fontWeight: '700', marginTop: 3 },
+  memberActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  addForm: { borderTopWidth: 1, borderTopColor: Colors.border, borderStyle: 'dashed', marginTop: 10, paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  addInput: { flex: 1, minWidth: 140, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12.5, backgroundColor: Colors.white, color: Colors.text },
+  form: { gap: 4 },
 });

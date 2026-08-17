@@ -11,6 +11,7 @@ import { useRecords } from '@/state/RecordsContext';
 import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
 import type { BpgStatus, ConfirmedDx } from '@/lib/types';
+import { describeSaveError } from '@/lib/errors';
 
 const DX_OPTS: SelectOption[] = [
   { label: 'ARF Confirmed', value: 'arf' },
@@ -63,7 +64,7 @@ export default function FollowupScreen() {
     } catch (err) {
       // Save failed — RecordsContext already alerted with the cause; keep the
       // form on screen (entries intact) plus an inline message.
-      setErr('Could not save follow-up: ' + (err instanceof Error ? err.message : String(err)));
+      setErr('Could not save follow-up: ' + (describeSaveError(err)));
       return;
     }
     router.replace({ pathname: '/record', params: { id } });
