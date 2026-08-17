@@ -43,13 +43,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={[styles.header, { paddingTop: top + 30 }]}>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Pressable onPress={() => router.navigate('/(tabs)/settings')} style={styles.gearBtn}>
-            <Ionicons name="settings" size={16} color="#fff" />
-            <Text style={styles.gearText}>Settings</Text>
-          </Pressable>
-        </View>
+      <View style={[styles.header, { paddingTop: top + 34 }]}>
         <Text style={styles.title}>SMART-ARF</Text>
         <Text style={styles.tagline}>Clinical Decision Support & Triage for Acute Rheumatic Fever</Text>
         <Text style={styles.version}>Version 6 · For frontline healthcare workers</Text>
@@ -85,8 +79,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingBottom: 28 },
-  gearBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  gearText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   title: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
   tagline: { color: 'rgba(255,255,255,0.82)', fontSize: 13.5, textAlign: 'center', marginTop: 6 },
   version: { color: 'rgba(255,255,255,0.55)', fontSize: 11, textAlign: 'center', marginTop: 6 },
