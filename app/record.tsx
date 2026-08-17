@@ -13,8 +13,8 @@ import { useAssessment } from '@/state/AssessmentContext';
 import { useAuth } from '@/state/AuthContext';
 import { canEditPatient } from '@/lib/permissions';
 import { Colors, tierColor } from '@/constants/theme';
-import { fullName, maskMRN, maskPhone } from '@/lib/format';
-import { formatAge, type BpgStatus, type ConfirmedDx, type DeleteReason, type Encounter } from '@/lib/types';
+import { fullName, maskMRN, maskPhone, DX_LABEL, BPG_LABEL, ENCOUNTER_TYPE_LABEL as TYPE_LABEL } from '@/lib/format';
+import { formatAge, type DeleteReason, type Encounter } from '@/lib/types';
 
 const REASON_OPTS: SelectOption[] = [
   { label: 'Duplicate entry', value: 'duplicate' },
@@ -25,9 +25,6 @@ const REASON_OPTS: SelectOption[] = [
   { label: 'Other', value: 'other' },
 ];
 
-const DX_LABEL: Record<ConfirmedDx, string> = { '': '—', arf: 'ARF Confirmed', 'not-arf': 'Not ARF', uncertain: 'Uncertain' };
-const BPG_LABEL: Record<BpgStatus, string> = { '': '—', started: 'Started', continued: 'Continued', stopped: 'Stopped', 'not-given': 'Not given' };
-const TYPE_LABEL: Record<Encounter['type'], string> = { initial: 'Assessment', followup: 'Follow-Up' };
 
 export default function RecordScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

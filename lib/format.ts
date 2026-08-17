@@ -2,6 +2,8 @@
  * PII masking + date formatting — mirrors maskPhone / maskMRN and the date format
  * used in smart-arf-app.html saveRecord().
  */
+import type { BpgStatus, ConfirmedDx, EncounterType } from './types';
+
 export function maskPhone(input: string): string {
   if (!input) return '';
   const digits = String(input).replace(/\D/g, '');
@@ -43,3 +45,20 @@ export function fullName(first: string, last: string): string {
 export function normalizeCode(code: string): string {
   return code.toUpperCase().replace(/\s+/g, '');
 }
+
+/** "male" → "Male", "nonendemic" → "Nonendemic". Empty stays empty. */
+export function capitalize(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+}
+
+/* ---------------- Enum display labels (shared: record detail + CSV export) ---------------- */
+
+export const DX_LABEL: Record<ConfirmedDx, string> = {
+  '': '—', arf: 'ARF Confirmed', 'not-arf': 'Not ARF', uncertain: 'Uncertain',
+};
+export const BPG_LABEL: Record<BpgStatus, string> = {
+  '': '—', started: 'Started', continued: 'Continued', stopped: 'Stopped', 'not-given': 'Not given',
+};
+export const ENCOUNTER_TYPE_LABEL: Record<EncounterType, string> = {
+  initial: 'Assessment', followup: 'Follow-Up',
+};

@@ -143,6 +143,18 @@ export async function loadAudioForEncounter(encounterId: string): Promise<AudioR
   return ((data as AudioRow[]) ?? []).map(rowToAudio);
 }
 
+/** Load ALL active recordings the caller can see (RLS-scoped). Used by the
+ *  records export to attach signed Storage links to each encounter row. */
+export async function loadAllAudio(): Promise<AudioRecord[]> {
+  const { data, error } = await getSupabase()
+    .from('audio')
+    .select('*')
+    .eq('inactive', false)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return ((data as AudioRow[]) ?? []).map(rowToAudio);
+}
+
 /** Soft-delete a recording (hide it from the list; recoverable via SQL). */
 export async function softDeleteAudio(id: string): Promise<void> {
   const { data, error } = await getSupabase()

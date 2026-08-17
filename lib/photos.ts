@@ -138,6 +138,18 @@ export async function loadPhotosForEncounter(encounterId: string): Promise<Photo
   return ((data as PhotoRow[]) ?? []).map(rowToPhoto);
 }
 
+/** Load ALL active photos the caller can see (RLS-scoped). Used by the
+ *  records export to attach signed Storage links to each encounter row. */
+export async function loadAllPhotos(): Promise<PhotoRecord[]> {
+  const { data, error } = await getSupabase()
+    .from('photos')
+    .select('*')
+    .eq('inactive', false)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return ((data as PhotoRow[]) ?? []).map(rowToPhoto);
+}
+
 /** Soft-delete a photo (hide it from the list; recoverable via SQL). */
 export async function softDeletePhoto(id: string): Promise<void> {
   const { data, error } = await getSupabase()

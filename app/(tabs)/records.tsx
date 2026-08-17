@@ -4,18 +4,20 @@
  */
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, CardSubtitle, CardTitle, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
+import { Card, CardSubtitle, CardTitle, SecondaryButton, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
 import { PatientCard } from '@/components/PatientCard';
 import { useRecords } from '@/state/RecordsContext';
+import { exportEncountersToCsv, EXPORT_LINK_EXPIRY_SECONDS } from '@/lib/exportCsv';
 import { Colors } from '@/constants/theme';
 
 export default function RecordsScreen() {
   const router = useRouter();
-  const { patientSummaries, clinics } = useRecords();
+  const { patientSummaries, encounters, clinics } = useRecords();
   const [q, setQ] = useState('');
   const [selectedClinic, setSelectedClinic] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const clinicOptions: SelectOption[] = [
     { label: 'All clinics', value: '' },
@@ -30,6 +32,34 @@ export default function RecordsScreen() {
       const hay = `${s.patient.firstName} ${s.patient.lastName} ${s.patient.mrn} ${s.patient.referralCode} ${s.latestInitial?.resultLabel ?? ''}`.toLowerCase();
       return hay.includes(query);
     });
+
+  /** Export one row per encounter for the patients currently shown (clinic +
+   *  search filters apply), with demographics + signed media links inlined. */
+  const handleExport = async () => {
+    if (filtered.length === 0 || exporting) return;
+    setExporting(true);
+    try {
+      const result = await exportEncountersToCsv({
+        patients: filtered.map((s) => s.patient),
+        encounters,
+        clinics,
+      });
+      Alert.alert(
+        'Export ready',
+        `${result.rowCount} encounter${result.rowCount === 1 ? '' : 's'} exported to ${result.fileName}.` +
+          (result.mediaLinkCount > 0
+            ? `\n${result.mediaLinkCount} photo/audio link${result.mediaLinkCount === 1 ? '' : 's'} included — valid for ${EXPORT_LINK_EXPIRY_SECONDS / 86400} days.`
+            : ''),
+      );
+    } catch (err) {
+      // RN-web often doesn't render Alert — always log so the browser console
+      // shows the real failure.
+      console.error('[records] export failed:', err);
+      Alert.alert('Export failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 40, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
@@ -57,6 +87,12 @@ export default function RecordsScreen() {
             style={styles.search}
           />
         </View>
+
+        <SecondaryButton
+          title={exporting ? 'Exporting…' : 'Export Encounters (CSV)'}
+          onPress={handleExport}
+          disabled={exporting || filtered.length === 0}
+        />
 
         {filtered.length === 0 ? (
           <View style={styles.empty}>
