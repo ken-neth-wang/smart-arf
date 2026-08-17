@@ -39,10 +39,12 @@ import {
 } from '@/components/ui/results';
 import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
+import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
 import { getActions, getInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
 import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
-import { approxDobFromAge, ageFromDateOfBirth } from '@/lib/types';
+import { approxDobFromAge, ageFromDateOfBirth, maskDobInput, normalizeDobEntry } from '@/lib/types';
+import { validatePatientFields } from '@/lib/validation';
 
 const GENDER_OPTS = [
   { label: 'Male', value: 'male' },
@@ -86,13 +88,23 @@ const styles = StyleSheet.create({
 /* ============== STEP 1 — Patient ============== */
 function Step1() {
   const { patient, setPatient, goStep } = useAssessment();
+  const records = useRecords();
+  const { user } = useAuth();
   const [err, setErr] = useState('');
+  // Field-level feedback: the DOB is optional but must be WELL-FORMED. Red is
+  // shown only after the field is blurred (or Continue fails) — never while
+  // typing, where partial values like "2015-0" are legitimate intermediate state.
+  const [dobTouched, setDobTouched] = useState(false);
+  const dobMalformed = !!patient.dateOfBirth && normalizeDobEntry(patient.dateOfBirth) === null;
+  const dobShowError = dobTouched && dobMalformed;
   // Age is always derived from the DOB. When only the age is known, an
   // approximate DOB (Jan 1 of the birth year) is stored with dobApproximate = true.
   // The two are mutually exclusive: entering one takes over from the other.
   const derivedAge = ageFromDateOfBirth(patient.dateOfBirth);
   const ageLocked = !patient.dobApproximate && patient.dateOfBirth !== null;
-  const onDobChange = (v: string) => setPatient({ dateOfBirth: v || null, dobApproximate: false });
+  // Digits only, dashes auto-inserted (lib/types.ts maskDobInput) — garbage is
+  // untypeable; impossible dates still caught by validatePatientFields at Continue.
+  const onDobChange = (v: string) => setPatient({ dateOfBirth: maskDobInput(v) || null, dobApproximate: false });
   const onAgeChange = (v: string) => {
     const years = parseInt(v.replace(/[^0-9]/g, ''), 10);
     if (isNaN(years) || years <= 0 || years > 125) {
@@ -102,9 +114,17 @@ function Step1() {
     setPatient({ dateOfBirth: approxDobFromAge(years), dobApproximate: true });
   };
 
+  // Every rule here mirrors a server-side rejection (Postgres 22007/23505 or
+  // RLS 42501) — see lib/validation.ts. Bad input stops at Step 1, never at save.
   const next = () => {
-    if (!patient.firstName.trim() || !patient.lastName.trim()) return setErr('First and last name are required.');
-    if (!patient.phone1.trim()) return setErr('Primary phone is required.');
+    const v = validatePatientFields(patient, records.patients, user?.memberships[0]?.clinicId ?? null);
+    if (!v.ok) {
+      setDobTouched(true); // surface field-level red if the DOB is the offender
+      return setErr(v.error);
+    }
+    if (v.dateOfBirth !== patient.dateOfBirth || v.dobApproximate !== patient.dobApproximate) {
+      setPatient({ dateOfBirth: v.dateOfBirth, dobApproximate: v.dobApproximate });
+    }
     setErr('');
     goStep(2);
   };
@@ -132,7 +152,7 @@ function Step1() {
 
       <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
 
-      <TextField label="Date of Birth (YYYY-MM-DD)" value={!patient.dobApproximate ? (patient.dateOfBirth ?? '') : ''} onChangeText={onDobChange} placeholder="e.g. 2015-06-15" />
+      <TextField label="Date of Birth (YYYY-MM-DD)" value={!patient.dobApproximate ? (patient.dateOfBirth ?? '') : ''} onChangeText={onDobChange} onBlur={() => setDobTouched(true)} placeholder="e.g. 2015-06-15" keyboardType="number-pad" error={dobShowError} hint={dobShowError ? 'Check the date — use a full date like 2015-06-15, a 4-digit year like 1998, or leave it blank.' : "Digits only, auto-formatted. Full date, or just a 4-digit birth year if that's all you know."} />
       <TextField label="Age (years)" value={derivedAge !== null ? String(derivedAge) : ''} onChangeText={onAgeChange} placeholder="e.g. 14 — enter if exact DOB is unknown" keyboardType="number-pad" editable={!ageLocked} hint="Auto-filled from date of birth; enter an age instead when the exact date is unknown." />
 
       <SelectField label="Patient Gender" value={patient.gender} options={GENDER_OPTS} onChange={(v) => setPatient({ gender: v as Gender })} />

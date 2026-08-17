@@ -141,6 +141,47 @@ export function approxDobFromAge(ageYears: number, now: Date = new Date()): stri
   return `${now.getFullYear() - ageYears}-01-01`;
 }
 
+const DOB_FULL_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Normalize Step-1 DOB entry before it can reach the database.
+ *  - ''            → null (DOB unknown)
+ *  - '1998'        → '1998-01-01', approximate (year only — same treatment as
+ *                    a manually-entered age)
+ *  - '2015-06-15'  → passthrough, exact — must be a REAL date
+ *  - anything else → null (invalid; caller must block with a message)
+ *
+ *  Exists because Postgres rejects malformed dates with 22007 on insert — a
+ *  bare year typed into the DOB field used to kill the whole patient save. */
+export function normalizeDobEntry(
+  raw: string,
+): { dateOfBirth: string | null; dobApproximate: boolean } | null {
+  const t = raw.trim();
+  if (!t) return { dateOfBirth: null, dobApproximate: false };
+  if (/^\d{4}$/.test(t)) {
+    // The derived Jan-1 date must itself be real. JS parses '0000-01-01' as
+    // 1 BC (valid), but Postgres' date type rejects year 0 — bound it explicitly.
+    const derived = `${t}-01-01`;
+    return Number(t) >= 1 && ageFromDateOfBirth(derived) !== null
+      ? { dateOfBirth: derived, dobApproximate: true }
+      : null;
+  }
+  if (DOB_FULL_RE.test(t) && ageFromDateOfBirth(t) !== null) {
+    return { dateOfBirth: t, dobApproximate: false };
+  }
+  return null;
+}
+
+/** Keystroke mask for the DOB field: digits only, dashes auto-inserted at the
+ *  YYYY-MM-DD positions, capped at 8 digits. A 4-digit value stays a bare
+ *  year (Continue normalizes it via normalizeDobEntry); combined, non-date
+ *  garbage is untypeable and impossible dates are blocked at the gate. */
+export function maskDobInput(raw: string): string {
+  const digits = raw.replace(/\D+/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
 /** Display age string with a "~" prefix when the DOB was derived from a manually-
  *  entered age. Returns null when the DOB is unknown/unparseable (no age to show). */
 export function formatAge(dob: string | null, approximate = false, now: Date = new Date()): string | null {

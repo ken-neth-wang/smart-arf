@@ -91,8 +91,12 @@ interface TextFieldProps {
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   secureTextEntry?: boolean;
   editable?: boolean;
+  /** Marks the field invalid (red border + red hint). Callers decide validity —
+   *  typically onBlur well-formedness checks; never mid-keystroke. */
+  error?: boolean;
+  onBlur?: () => void;
 }
-export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize, secureTextEntry, editable }: TextFieldProps) {
+export function TextField({ value, onChangeText, placeholder, keyboardType, multiline, style, label, required, hint, autoCapitalize, secureTextEntry, editable, error, onBlur }: TextFieldProps) {
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <FieldLabel required={required}>{label}</FieldLabel> : null}
@@ -106,9 +110,10 @@ export function TextField({ value, onChangeText, placeholder, keyboardType, mult
         autoCapitalize={autoCapitalize}
         secureTextEntry={secureTextEntry}
         editable={editable}
-        style={[inputStyles.input, style]}
+        onBlur={onBlur}
+        style={[inputStyles.input, error ? inputStyles.inputError : null, style]}
       />
-      {hint ? <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: 0, marginBottom: 16 }}>{hint}</Text> : null}
+      {hint ? <Text style={{ fontSize: 12, color: error ? Colors.danger : Colors.textSecondary, marginTop: 0, marginBottom: 16 }}>{hint}</Text> : null}
     </View>
   );
 }
@@ -123,6 +128,9 @@ const inputStyles = StyleSheet.create({
     color: Colors.text,
     backgroundColor: Colors.white,
     minHeight: 50,
+  },
+  inputError: {
+    borderColor: Colors.danger,
   },
 });
 
