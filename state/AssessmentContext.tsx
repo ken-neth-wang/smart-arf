@@ -70,7 +70,7 @@ const AssessmentContext = createContext<AssessmentContextValue | null>(null);
 
 export function AssessmentProvider({ children }: { children: React.ReactNode }) {
   const records = useRecords();
-  const { user } = useAuth();
+  const { user, activeClinicId } = useAuth();
   const [patient, setPatientState] = useState<PatientFields>(emptyPatient);
   const [inputs, setInputsState] = useState<AssessmentInputs>(emptyInputs);
   const [step, setStep] = useState<Step>(1);
@@ -123,9 +123,10 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       gender: patient.gender,
       setting: patient.setting,
       isTest: patient.isTest,
-      // Assign the patient to the current user's clinic so RLS can see it.
-      // (For users with >1 clinic, takes the first — a picker is deferred.)
-      clinicId: user?.memberships[0]?.clinicId ?? null,
+      // The ONE attribution decision: the acting clinic stamps the new visit
+      // (header picker). Everything downstream (media) derives from the
+      // encounter — no other clinic choice exists in the app.
+      clinicId: activeClinicId,
       inactive: false,
       createdAt: now,
       updatedAt: now,
@@ -173,6 +174,11 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     // Upsert the patient (RecordsContext dedups by MRN at the data layer when
     // the UI lookup is not used).
     const savedPatient = await records.upsertPatient(buildPatient());
+    // Stamp the persisted identity NOW, before the encounter save. If the
+    // encounter write fails, the retry must reuse this patient id (upsert →
+    // update); otherwise an MRN-less patient would mint a new id and duplicate.
+    setActivePatientId(savedPatient.id);
+    setReferralCode(savedPatient.referralCode);
     // Preserve the patient's stable id/code + createdAt after dedup.
     const encounter = buildEncounter(savedPatient.id, withLevelB);
     // Preserve date + referral on edit (don't overwrite a prior encounter's date).
@@ -197,9 +203,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       }
     }
     await records.upsertEncounter(encounter);
-    setActivePatientId(savedPatient.id);
     setActiveEncounterId(encounter.id);
-    setReferralCode(savedPatient.referralCode);
     return { patientId: savedPatient.id, encounterId: encounter.id };
   };
 
