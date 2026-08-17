@@ -149,8 +149,10 @@ export async function loadPendingProfilesCloud(): Promise<PendingProfile[]> {
 }
 
 /**
- * Approve a pending user + assign a clinic/role. Two writes (profiles update
- * + membership upsert); both permitted by the admin RLS policies.
+ * Approve a pending user + assign a clinic/role. ORDER MATTERS: the membership
+ * is inserted FIRST, then approved flips — the SELECT policy gates the NEW row
+ * on update, and an approved profile with no shared clinic would be invisible
+ * to the approving admin (RLS 42501). See migration notes.
  */
 export async function approveUserCloud(
   userId: string,
@@ -160,16 +162,16 @@ export async function approveUserCloud(
   if (!isSupabaseConfigured) return;
   const supabase = getSupabase();
   const { error: e1 } = await supabase
-    .from('profiles')
-    .update({ approved: true })
-    .eq('id', userId);
-  if (e1) throw e1;
-  const { error: e2 } = await supabase
     .from('clinic_memberships')
     .upsert(
       { user_id: userId, clinic_id: clinicId, role },
       { onConflict: 'user_id,clinic_id' },
     );
+  if (e1) throw e1;
+  const { error: e2 } = await supabase
+    .from('profiles')
+    .update({ approved: true })
+    .eq('id', userId);
   if (e2) throw e2;
 }
 
@@ -218,6 +220,143 @@ export async function deactivateUserCloud(userId: string): Promise<void> {
     .update({ approved: false })
     .eq('id', userId);
   if (error) throw error;
+}
+
+// ── Clinic roster (clinic-scoped console) ────────────────────────
+
+export interface RosterMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  /** Memberships at OTHER clinics (read-only context in the UI). */
+  otherClinics: { clinicId: string; role: Role }[];
+}
+
+/** Load the members of ONE clinic (admin of that clinic / platform via RLS). */
+export async function loadRosterCloud(clinicId: string): Promise<RosterMember[]> {
+  if (!isSupabaseConfigured) return [];
+  const supabase = getSupabase();
+
+  // Roster of the acting clinic. memberships RLS shows this clinic's rows
+  // (we're a member/admin there); profiles RLS limits names to shared-clinic
+  // people + pending — rows without a visible profile keep their membership
+  // data with an empty name/email.
+  const memRes = await supabase
+    .from('clinic_memberships')
+    .select('*')
+    .eq('clinic_id', clinicId);
+  if (memRes.error) throw memRes.error;
+  const rosterRows = (memRes.data as AdminMembershipRow[]) ?? [];
+  if (rosterRows.length === 0) return [];
+
+  const userIds = [...new Set(rosterRows.map((m) => m.user_id))];
+  const [profRes, otherMemsRes] = await Promise.all([
+    supabase.from('profiles').select('*').in('id', userIds),
+    // Other-clinic memberships of these users (RLS shows only what we may see).
+    supabase.from('clinic_memberships').select('*').in('user_id', userIds).neq('clinic_id', clinicId),
+  ]);
+  if (profRes.error) throw profRes.error;
+  if (otherMemsRes.error) throw otherMemsRes.error;
+
+  const profiles = new Map(
+    ((profRes.data as AdminProfileRow[]) ?? []).map((r) => [r.id, r]),
+  );
+  const otherByUser = new Map<string, { clinicId: string; role: Role }[]>();
+  for (const m of (otherMemsRes.data as AdminMembershipRow[]) ?? []) {
+    const list = otherByUser.get(m.user_id) ?? [];
+    list.push({ clinicId: m.clinic_id, role: m.role });
+    otherByUser.set(m.user_id, list);
+  }
+
+  return rosterRows.map((m) => {
+    const p = profiles.get(m.user_id);
+    return {
+      userId: m.user_id,
+      email: p?.email ?? '',
+      displayName: p?.display_name ?? '',
+      role: m.role,
+      otherClinics: otherByUser.get(m.user_id) ?? [],
+    };
+  });
+}
+
+/** Change a member's role at a clinic. RLS: admin of that clinic, never your
+ *  own row, never the last admin (guard) — denials surface as errors. */
+export async function updateMembershipRoleCloud(
+  userId: string,
+  clinicId: string,
+  role: Role,
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await getSupabase()
+    .from('clinic_memberships')
+    .update({ role })
+    .eq('user_id', userId)
+    .eq('clinic_id', clinicId);
+  if (error) throw error;
+}
+
+/** Remove a membership (the ACCESS ROW ONLY — clinical data is clinic-owned
+ *  and untouched). RLS: admin of that clinic, not your own row, not the last
+ *  admin. Silent no-op if RLS denies (row invisible → 0 rows deleted). */
+export async function removeMembershipCloud(
+  userId: string,
+  clinicId: string,
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await getSupabase()
+    .from('clinic_memberships')
+    .delete()
+    .eq('user_id', userId)
+    .eq('clinic_id', clinicId);
+  if (error) throw error;
+}
+
+/** Add a member by email: an existing approved user gains a membership at this
+ *  clinic; an unknown email falls through to the invite flow. Returns a short
+ *  outcome string for the UI. */
+export async function addMemberByEmailCloud(
+  email: string,
+  clinicId: string,
+  role: Role,
+): Promise<'added' | 'invited'> {
+  if (!isSupabaseConfigured) return 'invited';
+  const supabase = getSupabase();
+  const norm = email.trim().toLowerCase();
+
+  // Pending + shared-clinic profiles are visible to admins; if we can see a
+  // profile with this email, add the membership directly…
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, approved')
+    .ilike('email', norm)
+    .limit(1);
+  if (error) throw error;
+  const profile = (data ?? [])[0] as { id: string; approved: boolean } | undefined;
+  if (profile) {
+    const { error: memErr } = await supabase
+      .from('clinic_memberships')
+      .upsert(
+        { user_id: profile.id, clinic_id: clinicId, role },
+        { onConflict: 'user_id,clinic_id' },
+      );
+    if (memErr) throw memErr;
+    if (!profile.approved) {
+      // pending signup found by email: approve them into this clinic (order:
+      // membership first — see approveUserCloud).
+      const { error: apprErr } = await supabase
+        .from('profiles')
+        .update({ approved: true })
+        .eq('id', profile.id);
+      if (apprErr) throw apprErr;
+    }
+    return 'added';
+  }
+
+  // …otherwise send an invite (edge function allowlists + emails them).
+  await inviteUserCloud(norm, clinicId, role);
+  return 'invited';
 }
 
 
