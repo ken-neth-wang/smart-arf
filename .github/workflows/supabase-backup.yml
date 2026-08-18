@@ -1,0 +1,73 @@
+# Daily encrypted Supabase DB backup to Cloudflare R2 — $0 at Smart-ARF's size.
+#
+# Why: Supabase free plan takes NO automatic backups (daily backups start at Pro,
+# $25/mo). Supabase's own recommendation for free projects is scheduled
+# `db dump` + off-site storage. This workflow does that daily:
+#   pg_dump (public schema, docker postgres:17 client)
+#   → openssl aes-256-cbc + pbkdf2 encrypt (patient data — never stored plaintext)
+#   → upload .enc + .sha256 to R2 → prune objects older than RETENTION_DAYS.
+# At ~1–10 MB/dump and 30d retention this stays far inside R2's free 10 GB.
+#
+# One-time setup (full runbook: docs/backup-restore.md):
+#   1. Cloudflare dashboard → R2 → create bucket `smart-arf-backups`
+#      (needs a card on file; free tier charges nothing at this volume).
+#   2. R2 → Manage API Tokens → create token: Object Read & Write, scoped to
+#      that bucket. Note the Access Key ID + Secret + endpoint
+#      (https://<ACCOUNT_ID>.r2.cloudflarestorage.com).
+#   3. GitHub repo Settings → Secrets and variables → Actions:
+#        Secrets: SUPABASE_DB_URL   session pooler URI (port 5432) from
+#                                  Supabase Dashboard → Connect. NOT the
+#                                  transaction 6542/6543 URI — pg_dump breaks.
+#                 BACKUP_PASSPHRASE  long random string (openssl decrypt key).
+#                                  STORE IT OFF-GITHUB TOO (password manager) —
+#                                  lost passphrase = unusable backups.
+#                 R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT
+#        Variables: R2_BUCKET = smart-arf-backups
+#
+# Restore: see docs/backup-restore.md, or
+#   scripts/supabase-db.sh restore latest <target-db-url>
+#
+# Not covered (by design): auth.users (restore stubs them from profiles —
+# password resets afterwards), storage.objects metadata, and photos bucket
+# files — DB backups never include Storage objects.
+#
+# GitHub disables scheduled workflows after 60 days with no repo activity;
+# if that happens, re-run once from the Actions tab.
+
+name: Supabase DB Backup
+
+on:
+  schedule:
+    - cron: '23 6 * * *' # daily 06:23 UTC ≈ 2:23am ET; off the top of the hour
+  workflow_dispatch: # manual "Run workflow" button
+
+concurrency:
+  group: supabase-db-backup
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest runners don't ship rclone (not in the runner-images
+      # toolset); Ubuntu's apt build (1.60) covers everything used here.
+      - name: Install rclone
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      # ubuntu-latest ships pg_dump 16 < server 17, so the script's docker
+      # fallback (postgres:17-alpine) handles the dump — same code path as local.
+      - name: Dump, encrypt, upload to R2, prune
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          RETENTION_DAYS: '30'
+        run: scripts/supabase-db.sh backup

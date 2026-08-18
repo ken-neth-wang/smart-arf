@@ -91,3 +91,10 @@ context.md
 /*.wav
 /*.webp
 arf_test.jpg
+
+# ─────────────────────────────────────────────────────────────
+# Local backup artifacts (scripts/supabase-db.sh scratch)
+# ─────────────────────────────────────────────────────────────
+backups/
+*.dump
+*.dump.enc
