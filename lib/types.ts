@@ -25,7 +25,7 @@ export interface AssessmentInputs {
   altCause: boolean | null;
   historyArf: boolean | null;
   choreaPositive: boolean;
-  /** 0 | 2 (monoarthralgia) | 3 (polyarthralgia) | 5 (migratory polyarthritis) */
+  /** 0 | 1 (monoarthralgia) | 3 (polyarthralgia) | 5 (migratory polyarthritis) — mirrors JOINT_DEFS */
   joint: number;
   murmur: boolean;
   sob: boolean;
