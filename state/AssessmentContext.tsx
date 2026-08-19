@@ -21,6 +21,8 @@ import {
   generatePatientCode,
   getActions,
   getInterp,
+  getLevelAActions,
+  getLevelAInterp,
   isAutoConfirmed,
 } from '@/lib/scoring';
 import { formatRecordDate } from '@/lib/format';
@@ -164,7 +166,12 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     const scoreA = calcLevelA(inputsFinal);
     const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
     const score = scoreA + scoreB;
-    const interp = getInterp(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputsFinal));
+    const autoConfirmed = isAutoConfirmed(inputsFinal);
+    // Level A-only saves store the Level A verdict (the Step 3/4 wording);
+    // Level B commits keep the combined tiers.
+    const interp = withLevelB
+      ? getInterp(scoreA, scoreB, inputs.feverDuration, autoConfirmed)
+      : getLevelAInterp(scoreA, autoConfirmed);
     const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
     const now = new Date().toISOString();
     return {
@@ -179,7 +186,9 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       resultLabel: interp.label,
       range: interp.range,
       breakdown,
-      actions: getActions(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputsFinal)),
+      actions: withLevelB
+        ? getActions(scoreA, scoreB, inputs.feverDuration, autoConfirmed)
+        : getLevelAActions(scoreA, autoConfirmed),
       includesLevelB: withLevelB,
       facilityType: inputs.facilityType,
       confirmedDx: '',

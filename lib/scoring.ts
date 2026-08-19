@@ -47,6 +47,22 @@ export interface Interp {
   range: string;
 }
 
+/** Shared action lists (referenced by both the combined verdicts and the
+ *  Level A preview verdicts so wording can't drift between them). */
+const ACTIONS_AUTO_CONFIRMED: string[] = [
+  'Positive ARF — known history of ARF/RHD with current fever (recurrent episode)',
+  'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
+  'Refer to secondary care for full evaluation',
+  'Initiate or continue long-term secondary prophylaxis',
+  'Educate patient and family about RHD',
+];
+const ACTIONS_POSSIBLE: string[] = [
+  'ARF is possible — do not dismiss',
+  'Start Benzathine Penicillin G (BPG) prophylaxis',
+  'Refer to secondary care for confirmation',
+  'Document findings and initiate prophylaxis plan',
+];
+
 /** Hard override: a known history of ARF/RHD plus a current fever indicates a
  *  likely recurrent episode — triage as Positive ARF regardless of Jones score. */
 export function isAutoConfirmed(s: AssessmentInputs): boolean {
@@ -82,13 +98,7 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
 export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): string[] {
   // History of ARF + fever → recurrent ARF; full management protocol.
   if (autoConfirmed) {
-    return [
-      'Positive ARF — known history of ARF/RHD with current fever (recurrent episode)',
-      'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
-      'Refer to secondary care for full evaluation',
-      'Initiate or continue long-term secondary prophylaxis',
-      'Educate patient and family about RHD',
-    ];
+    return ACTIONS_AUTO_CONFIRMED;
   }
   // Level B > 6 confirms ARF — initiate the full management protocol.
   if (scoreB > 6) {
@@ -118,12 +128,7 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
     ];
   }
   if (score <= 7) {
-    return [
-      'ARF is possible — do not dismiss',
-      'Start Benzathine Penicillin G (BPG) prophylaxis',
-      'Refer to secondary care for confirmation',
-      'Document findings and initiate prophylaxis plan',
-    ];
+    return ACTIONS_POSSIBLE;
   }
   // Score ≥8 — "Likely" (Highly Likely tier retired; same actions for all high scores).
   return [
@@ -133,6 +138,36 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
     'Initiate long-term secondary prophylaxis plan',
     'Educate patient and family about RHD',
   ];
+}
+
+/* ─────────────────────────────────────────────────────────────────── *
+ * Level A preview verdicts (Steps 3–4 + Level-A-only saves)
+ * ─────────────────────────────────────────────────────────────────── */
+
+/** Level A wording per clinical-team feedback (2026-08): a Level A score
+ *  below 6 rules ARF out; 6 or more keeps it Possible pending Level B —
+ *  there is no "Likely" tier at Level A. The history-of-ARF + fever
+ *  override still takes precedence. */
+export function getLevelAInterp(scoreA: number, autoConfirmed = false): Interp {
+  if (autoConfirmed) {
+    return { label: 'Positive ARF (history of ARF + fever)', level: 'confirmed', range: 'History of ARF + fever' };
+  }
+  if (scoreA < 6) return { label: 'ARF ruled out', level: 'unlikely', range: 'Level A < 6' };
+  return { label: 'ARF Possible', level: 'possible', range: 'Level A ≥ 6' };
+}
+
+/** Actions matching getLevelAInterp's tiers. */
+export function getLevelAActions(scoreA: number, autoConfirmed = false): string[] {
+  if (autoConfirmed) return ACTIONS_AUTO_CONFIRMED;
+  if (scoreA < 6) {
+    return [
+      'ARF ruled out — Level A score below 6',
+      'Consider and evaluate alternative diagnoses',
+      'Treat according to the clinical picture',
+      'Routine follow-up as needed',
+    ];
+  }
+  return ACTIONS_POSSIBLE;
 }
 
 /** Single source of truth for joint findings: id ↔ points ↔ label. */

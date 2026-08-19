@@ -10,6 +10,8 @@ import {
   generatePatientCode,
   getActions,
   getInterp,
+  getLevelAActions,
+  getLevelAInterp,
   isAutoConfirmed,
   levelADisplayBreakdown,
   skinScore,
@@ -197,6 +199,47 @@ describe('history-of-ARF override', () => {
 
   it('without the flag, a zero score stays Unlikely (override does not leak)', () => {
     expect(getInterp(0, 0).level).toBe('unlikely');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Level A preview verdicts (Steps 3–4) — clinical-team feedback 2026-08
+ * ------------------------------------------------------------------ */
+describe('getLevelAInterp', () => {
+  it('Level A < 6 → ARF ruled out', () => {
+    expect(getLevelAInterp(0)).toEqual({ label: 'ARF ruled out', level: 'unlikely', range: 'Level A < 6' });
+    expect(getLevelAInterp(5).level).toBe('unlikely');
+  });
+
+  it('Level A ≥ 6 → ARF Possible (no Likely tier at Level A)', () => {
+    expect(getLevelAInterp(6)).toEqual({ label: 'ARF Possible', level: 'possible', range: 'Level A ≥ 6' });
+    expect(getLevelAInterp(8).level).toBe('possible'); // was 'likely' under the combined tiers
+    expect(getLevelAInterp(23).level).toBe('possible');
+  });
+
+  it('history-of-ARF + fever override still wins at any Level A score', () => {
+    expect(getLevelAInterp(0, true).level).toBe('confirmed');
+    expect(getLevelAInterp(20, true).label).toBe('Positive ARF (history of ARF + fever)');
+  });
+
+  it('only ever returns unlikely/possible/confirmed', () => {
+    for (let i = 0; i <= 28; i++) {
+      expect(['unlikely', 'possible', 'confirmed']).toContain(getLevelAInterp(i).level);
+    }
+  });
+});
+
+describe('getLevelAActions', () => {
+  it('below 6 → ruled-out actions', () => {
+    expect(getLevelAActions(3)[0]).toBe('ARF ruled out — Level A score below 6');
+  });
+
+  it('6 or more → the shared possible-actions list', () => {
+    expect(getLevelAActions(6)).toEqual(getActions(0, 6, 'over2w'));
+  });
+
+  it('autoConfirmed → recurrent-ARF protocol', () => {
+    expect(getLevelAActions(0, true)[0]).toMatch(/Positive ARF — known history/);
   });
 });
 

@@ -41,7 +41,7 @@ import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
 import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
-import { getActions, getInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
+import { getActions, getInterp, getLevelAActions, getLevelAInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
 import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
 import { approxDobFromAge, ageFromDateOfBirth, maskDobInput, normalizeDobEntry } from '@/lib/types';
 import { validatePatientFields } from '@/lib/validation';
@@ -231,7 +231,7 @@ const JOINT_OPTS = [
 
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
-  const interp = getInterp(scoreA, 0, undefined, isAutoConfirmed(inputs));
+  const interp = getLevelAInterp(scoreA, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
   const autoConfirmed = isAutoConfirmed(inputs);
 
@@ -321,7 +321,7 @@ function Step4() {
   const { inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
   const records = useRecords();
   const router = useRouter();
-  const interp = getInterp(scoreA, 0, undefined, isAutoConfirmed(inputs));
+  const interp = getLevelAInterp(scoreA, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
   const autoConfirmed = isAutoConfirmed(inputs);
   const [referredToClinicId, setReferredToClinicId] = useState('');
@@ -338,7 +338,7 @@ function Step4() {
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={4} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getActions(scoreA, 0, undefined, isAutoConfirmed(inputs))} />
+      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA, isAutoConfirmed(inputs))} />
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
