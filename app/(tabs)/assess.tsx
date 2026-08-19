@@ -41,6 +41,7 @@ import { useAssessment } from '@/state/AssessmentContext';
 import { useRecords } from '@/state/RecordsContext';
 import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
+import { fullName } from '@/lib/format';
 import { getActions, getInterp, getLevelAActions, getLevelAInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
 import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
 import { approxDobFromAge, ageFromDateOfBirth, maskDobInput, normalizeDobEntry } from '@/lib/types';
@@ -489,7 +490,7 @@ function Step5() {
 
 /* ============== STEP 6 — Final Result ============== */
 function Step6() {
-  const { inputs, scoreA, scoreB, referralCode, reset } = useAssessment();
+  const { inputs, scoreA, scoreB, referralCode, patient, activePatientId, reset } = useAssessment();
   const router = useRouter();
   const interp = getInterp(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs));
   const choreaPositive = inputs.chorea === true;
@@ -502,6 +503,16 @@ function Step6() {
       <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs))} />
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
+      {activePatientId ? (
+        <SecondaryButton
+          title="Record Final Diagnosis"
+          onPress={() => {
+            const params = { id: activePatientId, code: referralCode ?? '', name: fullName(patient.firstName, patient.lastName) };
+            reset();
+            router.push({ pathname: '/followup', params });
+          }}
+        />
+      ) : null}
       <PrimaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       <Text style={styles.disclaimer}>⚕️ SMART-ARF is a clinical decision-support tool. All findings must be interpreted by a qualified healthcare provider. This tool does not replace clinical judgment or the Jones Criteria.</Text>
     </>

@@ -48,7 +48,7 @@ function encounter(patch: Partial<Encounter> = {}): Encounter {
     actions: ['Start penicillin', 'Echo in 2 weeks'],
     includesLevelB: false,
     facilityType: 'primary',
-    confirmedDx: 'arf',
+    confirmedDx: 'confirmed',
     finalDx: '',
     bpgStatus: 'started',
     echoFindings: '',
@@ -130,7 +130,7 @@ describe('buildEncounterExportRows', () => {
     expect(row[columnIndexOf('Encounter Type')]).toBe('Assessment');
     expect(row[columnIndexOf('Total Score')]).toBe('4');
     expect(row[columnIndexOf('Risk Tier')]).toBe('Likely ARF');
-    expect(row[columnIndexOf('Confirmed Dx')]).toBe('ARF Confirmed');
+    expect(row[columnIndexOf('Confirmed Dx')]).toBe('Confirmed');
     expect(row[columnIndexOf('BPG Status')]).toBe('Started');
     expect(row[columnIndexOf('Recommended Actions')]).toBe('Start penicillin ; Echo in 2 weeks');
   });

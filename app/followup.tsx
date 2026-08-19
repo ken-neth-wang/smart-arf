@@ -14,9 +14,10 @@ import type { BpgStatus, ConfirmedDx } from '@/lib/types';
 import { describeSaveError } from '@/lib/errors';
 
 const DX_OPTS: SelectOption[] = [
-  { label: 'ARF Confirmed', value: 'arf' },
-  { label: 'Not ARF — Alternative Diagnosis', value: 'not-arf' },
-  { label: 'Uncertain / Pending Further Evaluation', value: 'uncertain' },
+  { label: 'Ruled out', value: 'ruled-out' },
+  { label: 'Possible', value: 'possible' },
+  { label: 'Likely', value: 'likely' },
+  { label: 'Confirmed', value: 'confirmed' },
 ];
 const BPG_OPTS: SelectOption[] = [
   { label: 'Started at this visit', value: 'started' },

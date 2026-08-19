@@ -5,6 +5,7 @@ import {
   maskMRN,
   maskPhone,
   normalizeCode,
+  DX_LABEL,
 } from '@/lib/format';
 
 /* ------------------------------------------------------------------ *
@@ -126,5 +127,24 @@ describe('normalizeCode', () => {
   it('is idempotent for an already-normalized code', () => {
     const code = 'ARF-AAAA-BBBB';
     expect(normalizeCode(code)).toBe(code);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * DX_LABEL — current + legacy confirmed_dx values
+ * ------------------------------------------------------------------ */
+describe('DX_LABEL', () => {
+  it('labels the four current options', () => {
+    expect(DX_LABEL['ruled-out']).toBe('Ruled out');
+    expect(DX_LABEL.possible).toBe('Possible');
+    expect(DX_LABEL.likely).toBe('Likely');
+    expect(DX_LABEL.confirmed).toBe('Confirmed');
+    expect(DX_LABEL['']).toBe('—');
+  });
+
+  it('still maps legacy values so pre-migration rows render sensibly', () => {
+    expect(DX_LABEL.arf).toBe('Confirmed');
+    expect(DX_LABEL['not-arf']).toBe('Ruled out');
+    expect(DX_LABEL.uncertain).toBe('—');
   });
 });

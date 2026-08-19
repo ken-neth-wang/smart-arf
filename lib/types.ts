@@ -83,7 +83,11 @@ export type DeleteReason =
   | 'patient-withdrew'
   | 'other';
 
-export type ConfirmedDx = '' | 'arf' | 'not-arf' | 'uncertain';
+/** Clinical-team feedback (2026-08): graded outcome mirroring the verdict
+ *  vocabulary. Legacy rows may still hold 'arf' / 'not-arf' / 'uncertain'
+ *  until the owner-run migration (supabase/migrations/20260819_*) lands —
+ *  DX_LABEL maps those onto the closest new label. */
+export type ConfirmedDx = '' | 'ruled-out' | 'possible' | 'likely' | 'confirmed';
 export type BpgStatus = '' | 'started' | 'continued' | 'stopped' | 'not-given';
 
 export interface BreakdownRow {

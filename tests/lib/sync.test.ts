@@ -218,12 +218,12 @@ describe('encounterToRow / rowToEncounter', () => {
       date: '2026-07-01',
       inputs: null, score: null, level: null, resultLabel: null, range: null,
       breakdown: null, actions: null, includesLevelB: false,
-      confirmedDx: 'arf', bpgStatus: 'started', echoFindings: 'Mild MR',
+      confirmedDx: 'confirmed', bpgStatus: 'started', echoFindings: 'Mild MR',
     });
     const row = encounterToRow(followup);
     expect(row.inputs).toBeNull();
     expect(row.score).toBeNull();
-    expect(row.confirmed_dx).toBe('arf');
+    expect(row.confirmed_dx).toBe('confirmed');
     expect(row.bpg_status).toBe('started');
   });
 
@@ -237,7 +237,7 @@ describe('encounterToRow / rowToEncounter', () => {
       type: 'followup', date: '2026-07-01',
       inputs: null, score: null, level: null, resultLabel: null,
       range: null, breakdown: null, actions: null,
-      confirmedDx: 'not-arf', finalDx: 'Reactive arthritis', bpgStatus: 'stopped',
+      confirmedDx: 'ruled-out', finalDx: 'Reactive arthritis', bpgStatus: 'stopped',
     });
     expect(rowToEncounter(encounterToRow(original))).toEqual(original);
   });
@@ -310,13 +310,13 @@ describe('field-name regression guards', () => {
       includesLevelB: true,
       resultLabel: 'CUSTOM',
       referredTo: 'CUSTOM REF',
-      confirmedDx: 'arf',
+      confirmedDx: 'confirmed',
     });
     const back = rowToEncounter(encounterToRow(e));
     expect(back.includesLevelB).toBe(true);
     expect(back.resultLabel).toBe('CUSTOM');
     expect(back.referredTo).toBe('CUSTOM REF');
-    expect(back.confirmedDx).toBe('arf');
+    expect(back.confirmedDx).toBe('confirmed');
   });
 });
 

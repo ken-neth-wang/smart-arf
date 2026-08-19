@@ -53,8 +53,12 @@ export function capitalize(value: string): string {
 
 /* ---------------- Enum display labels (shared: record detail + CSV export) ---------------- */
 
-export const DX_LABEL: Record<ConfirmedDx, string> = {
-  '': '—', arf: 'ARF Confirmed', 'not-arf': 'Not ARF', uncertain: 'Uncertain',
+/** Labels for confirmed_dx. Also carries the legacy values ('arf' / 'not-arf' /
+ *  'uncertain') so rows saved before the 2026-08 option change keep rendering
+ *  sensibly until the owner-run migration lands. */
+export const DX_LABEL: Record<ConfirmedDx, string> & Record<string, string> = {
+  '': '—', 'ruled-out': 'Ruled out', possible: 'Possible', likely: 'Likely', confirmed: 'Confirmed',
+  arf: 'Confirmed', 'not-arf': 'Ruled out', uncertain: '—',
 };
 export const BPG_LABEL: Record<BpgStatus, string> = {
   '': '—', started: 'Started', continued: 'Continued', stopped: 'Stopped', 'not-given': 'Not given',
