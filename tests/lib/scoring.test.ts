@@ -171,9 +171,9 @@ describe('getInterp', () => {
 });
 
 /* ------------------------------------------------------------------ *
- * History-of-ARF override (fever + history → auto-confirmed)
+ * History-of-ARF signal (advisory banner only — override retired)
  * ------------------------------------------------------------------ */
-describe('history-of-ARF override', () => {
+describe('history-of-ARF signal (advisory only — override retired 2026-08)', () => {
   it('isAutoConfirmed: true only when fever AND historyArf are both true', () => {
     expect(isAutoConfirmed(buildInputs({ fever: true, historyArf: true }))).toBe(true);
     expect(isAutoConfirmed(buildInputs({ fever: true, historyArf: false }))).toBe(false);
@@ -181,23 +181,18 @@ describe('history-of-ARF override', () => {
     expect(isAutoConfirmed(buildInputs({ fever: null, historyArf: true }))).toBe(false);
   });
 
-  it('getInterp autoConfirmed forces Positive ARF regardless of score', () => {
-    const r = getInterp(0, 0, undefined, true);
-    expect(r.level).toBe('confirmed');
-    expect(r.label).toBe('Positive ARF (history of ARF + fever)');
+  it('fever + history alone no longer bypasses the ladder — score 0 is ruled out', () => {
+    const s = buildInputs({ fever: true, historyArf: true });
+    expect(getInterp(calcLevelA(s), calcLevelB(s)).label).toBe('ARF ruled out');
   });
 
-  it('getInterp autoConfirmed takes precedence even at a high score', () => {
-    expect(getInterp(10, 0, undefined, true).level).toBe('confirmed');
+  it('the reported case: score 5 with fever + history reads ruled out, not Positive', () => {
+    const s = buildInputs({ fever: true, historyArf: true, joint: 5 });
+    expect(calcLevelA(s)).toBe(5);
+    expect(getLevelAInterp(calcLevelA(s)).label).toBe('ARF ruled out');
   });
 
-  it('getActions autoConfirmed returns the recurrent-ARF management protocol', () => {
-    const actions = getActions(0, 0, undefined, true);
-    expect(actions[0]).toMatch(/Positive ARF — known history/);
-    expect(actions.some((a) => a.includes('BPG'))).toBe(true);
-  });
-
-  it('without the flag, a zero score stays Unlikely (override does not leak)', () => {
+  it('a zero score stays ruled out (no override leaks)', () => {
     expect(getInterp(0, 0).level).toBe('unlikely');
   });
 });
@@ -217,14 +212,15 @@ describe('getLevelAInterp', () => {
     expect(getLevelAInterp(23).level).toBe('possible');
   });
 
-  it('history-of-ARF + fever override still wins at any Level A score', () => {
-    expect(getLevelAInterp(0, true).level).toBe('confirmed');
-    expect(getLevelAInterp(20, true).label).toBe('Positive ARF (history of ARF + fever)');
+  it('history-of-ARF + fever has no effect on the Level A verdict (advisory banner only)', () => {
+    const s = buildInputs({ fever: true, historyArf: true, choreaPositive: true });
+    expect(calcLevelA(s)).toBe(5); // chorea is the only contributor
+    expect(getLevelAInterp(calcLevelA(s)).label).toBe('ARF ruled out');
   });
 
-  it('only ever returns unlikely/possible/confirmed', () => {
+  it('only ever returns unlikely/possible', () => {
     for (let i = 0; i <= 28; i++) {
-      expect(['unlikely', 'possible', 'confirmed']).toContain(getLevelAInterp(i).level);
+      expect(['unlikely', 'possible']).toContain(getLevelAInterp(i).level);
     }
   });
 });
@@ -238,8 +234,8 @@ describe('getLevelAActions', () => {
     expect(getLevelAActions(6)).toEqual(getActions(0, 6, 'over2w'));
   });
 
-  it('autoConfirmed → recurrent-ARF protocol', () => {
-    expect(getLevelAActions(0, true)[0]).toMatch(/Positive ARF — known history/);
+  it('zero score → ruled-out actions (no override path remains)', () => {
+    expect(getLevelAActions(0)).toEqual(getActions(0, 0));
   });
 });
 
@@ -287,8 +283,9 @@ describe('Level B confirmation override — retired (2026-08)', () => {
     expect(getInterp(0, 16).level).toBe('confirmed');
   });
 
-  it('history-of-ARF + fever still outranks the bands', () => {
-    expect(getInterp(0, 16, undefined, true).label).toBe('Positive ARF (history of ARF + fever)');
+  it('no bypass remains — fever + history lands on the ladder like anything else', () => {
+    const s = buildInputs({ fever: true, historyArf: true, joint: 5, murmur: true });
+    expect(getInterp(calcLevelA(s), 0).label).toBe('ARF Confirmed'); // total 10 — by score, not bypass
   });
 
   it('confirmed-band actions are the management protocol', () => {

@@ -23,7 +23,6 @@ import {
   getInterp,
   getLevelAActions,
   getLevelAInterp,
-  isAutoConfirmed,
 } from '@/lib/scoring';
 import { formatRecordDate } from '@/lib/format';
 
@@ -166,12 +165,11 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     const scoreA = calcLevelA(inputsFinal);
     const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
     const score = scoreA + scoreB;
-    const autoConfirmed = isAutoConfirmed(inputsFinal);
     // Level A-only saves store the Level A verdict (the Step 3/4 wording);
-    // Level B commits keep the combined tiers.
+    // Level B commits keep the combined tiers. Absolute ladder — no overrides.
     const interp = withLevelB
-      ? getInterp(scoreA, scoreB, inputs.feverDuration, autoConfirmed)
-      : getLevelAInterp(scoreA, autoConfirmed);
+      ? getInterp(scoreA, scoreB, inputs.feverDuration)
+      : getLevelAInterp(scoreA);
     const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
     const now = new Date().toISOString();
     return {
@@ -187,8 +185,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       range: interp.range,
       breakdown,
       actions: withLevelB
-        ? getActions(scoreA, scoreB, inputs.feverDuration, autoConfirmed)
-        : getLevelAActions(scoreA, autoConfirmed),
+        ? getActions(scoreA, scoreB, inputs.feverDuration)
+        : getLevelAActions(scoreA),
       includesLevelB: withLevelB,
       facilityType: inputs.facilityType,
       confirmedDx: '',

@@ -50,13 +50,6 @@ export interface Interp {
 
 /** Shared action lists (referenced by both the combined verdicts and the
  *  Level A preview verdicts so wording can't drift between them). */
-const ACTIONS_AUTO_CONFIRMED: string[] = [
-  'Positive ARF — known history of ARF/RHD with current fever (recurrent episode)',
-  'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
-  'Refer to secondary care for full evaluation',
-  'Initiate or continue long-term secondary prophylaxis',
-  'Educate patient and family about RHD',
-];
 const ACTIONS_POSSIBLE: string[] = [
   'ARF is possible — do not dismiss',
   'Start Benzathine Penicillin G (BPG) prophylaxis',
@@ -84,18 +77,14 @@ const ACTIONS_CONFIRMED: string[] = [
   'Educate patient and family about RHD',
 ];
 
-/** Hard override: a known history of ARF/RHD plus a current fever indicates a
- *  likely recurrent episode — triage as Positive ARF regardless of Jones score. */
+/** Known history of ARF/RHD plus a current fever — drives the advisory
+  *  banner on Steps 3–6 ONLY. Retired as a verdict override (2026-08
+  *  clinical-team feedback): the score ladder is absolute. */
 export function isAutoConfirmed(s: AssessmentInputs): boolean {
   return s.fever === true && s.historyArf === true;
 }
 
-export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): Interp {
-  // Known history of ARF + current fever → likely recurrence; triage as
-  // Positive ARF regardless of the Jones score.
-  if (autoConfirmed) {
-    return { label: 'Positive ARF (history of ARF + fever)', level: 'confirmed', range: 'History of ARF + fever' };
-  }
+export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverDuration): Interp {
   // Final bands per clinical-team feedback (2026-08), one ladder on the
   // combined total: <6 ruled out; 6 fever-dependent; 7–9 likely; ≥10
   // confirmed. The former "Level B > 6 confirms alone" override was retired.
@@ -115,11 +104,7 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
   return { label: 'ARF Confirmed', level: 'confirmed', range: 'Score ≥ 10' };
 }
 
-export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): string[] {
-  // History of ARF + fever → recurrent ARF; full management protocol.
-  if (autoConfirmed) {
-    return ACTIONS_AUTO_CONFIRMED;
-  }
+export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration): string[] {
   const score = scoreA + scoreB;
   if (score < 6) return ACTIONS_RULED_OUT;
   // Score 6 + fever < 2 weeks ago (or no fever) → ARF ruled out.
@@ -142,19 +127,14 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
 
 /** Level A wording per clinical-team feedback (2026-08): a Level A score
  *  below 6 rules ARF out; 6 or more keeps it Possible pending Level B —
- *  there is no "Likely" tier at Level A. The history-of-ARF + fever
- *  override still takes precedence. */
-export function getLevelAInterp(scoreA: number, autoConfirmed = false): Interp {
-  if (autoConfirmed) {
-    return { label: 'Positive ARF (history of ARF + fever)', level: 'confirmed', range: 'History of ARF + fever' };
-  }
+ *  there is no "Likely" tier at Level A. Absolute: no overrides. */
+export function getLevelAInterp(scoreA: number): Interp {
   if (scoreA < 6) return { label: 'ARF ruled out', level: 'unlikely', range: 'Level A < 6' };
   return { label: 'ARF Possible', level: 'possible', range: 'Level A ≥ 6' };
 }
 
 /** Actions matching getLevelAInterp's tiers. */
-export function getLevelAActions(scoreA: number, autoConfirmed = false): string[] {
-  if (autoConfirmed) return ACTIONS_AUTO_CONFIRMED;
+export function getLevelAActions(scoreA: number): string[] {
   if (scoreA < 6) return ACTIONS_RULED_OUT;
   return ACTIONS_POSSIBLE;
 }

@@ -232,7 +232,7 @@ const JOINT_OPTS = [
 
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
-  const interp = getLevelAInterp(scoreA, isAutoConfirmed(inputs));
+  const interp = getLevelAInterp(scoreA);
   const choreaPositive = inputs.chorea === true;
   const autoConfirmed = isAutoConfirmed(inputs);
 
@@ -322,7 +322,7 @@ function Step4() {
   const { inputs, scoreA, referralCode, activeEncounterId, goStep, reset } = useAssessment();
   const records = useRecords();
   const router = useRouter();
-  const interp = getLevelAInterp(scoreA, isAutoConfirmed(inputs));
+  const interp = getLevelAInterp(scoreA);
   const choreaPositive = inputs.chorea === true;
   const autoConfirmed = isAutoConfirmed(inputs);
   const [referredToClinicId, setReferredToClinicId] = useState('');
@@ -339,7 +339,7 @@ function Step4() {
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={4} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA, isAutoConfirmed(inputs))} />
+      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA)} />
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
@@ -492,7 +492,7 @@ function Step5() {
 function Step6() {
   const { inputs, scoreA, scoreB, referralCode, patient, activePatientId, reset } = useAssessment();
   const router = useRouter();
-  const interp = getInterp(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs));
+  const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
   const choreaPositive = inputs.chorea === true;
   const autoConfirmed = isAutoConfirmed(inputs);
 
@@ -500,7 +500,7 @@ function Step6() {
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={6} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration, isAutoConfirmed(inputs))} />
+      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
       <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       {activePatientId ? (
