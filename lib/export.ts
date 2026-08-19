@@ -7,7 +7,7 @@
  * lib/exportCsv.ts; keeping this module pure makes it unit-testable.
  */
 import { BPG_LABEL, DX_LABEL, ENCOUNTER_TYPE_LABEL, capitalize } from './format';
-import { JOINT_DEFS } from './scoring';
+import { calcLevelA, calcLevelB, JOINT_DEFS } from './scoring';
 import { emptyInputs, formatAge, type Clinic, type Encounter, type Patient, type AudioRecord, type PhotoRecord } from './types';
 
 /** Column header + cell values for the encounters sheet. */
@@ -21,7 +21,7 @@ export const ENCOUNTER_EXPORT_COLUMNS = [
   'Referral Code', 'MRN', 'First Name', 'Last Name', 'Date of Birth', 'Age', 'Gender', 'Setting',
   'Phone 1', 'Phone 2', 'Clinic', 'Patient Registered',
   // Encounter block
-  'Encounter Type', 'Encounter Date', 'Score', 'Risk Tier', 'Score Range', 'Recommended Actions', 'Facility',
+  'Encounter Type', 'Encounter Date', 'Level A Score', 'Level B Score', 'Total Score', 'Risk Tier', 'Score Range', 'Recommended Actions', 'Facility',
   // Assessment criteria block (encounter.inputs — the selections behind the
   // score; blank on follow-ups that didn't re-score)
   'Fever', 'Chorea Reported', 'Chorea Positive', 'Alternative Cause', 'History of ARF',
@@ -65,6 +65,21 @@ function triState(value: boolean | null | undefined): string {
 }
 function tick(checked: boolean): string {
   return checked ? 'Yes' : '';
+}
+
+/** Level A / Level B subtotals, recomputed from the stored inputs exactly as
+ *  the wizard scored them (Level B counts only when the encounter includes
+ *  Level B — commit(false) persists score = Level A alone). Blank when the
+ *  encounter was never scored (follow-ups) or the stored inputs are too
+ *  legacy/partial to score (NaN guard). */
+function levelScoreCells(e: Encounter): [string, string] {
+  if (!e.inputs) return ['', ''];
+  const a = calcLevelA(e.inputs);
+  const b = e.includesLevelB ? calcLevelB(e.inputs) : null;
+  return [
+    Number.isFinite(a) ? String(a) : '',
+    b !== null && Number.isFinite(b) ? String(b) : '',
+  ];
 }
 
 /** The 22 assessment-criteria cells (encounter.inputs). Level A + Level B. */
@@ -145,6 +160,7 @@ export function buildEncounterExportRows(input: EncounterExportInput): CsvRow[] 
       p.createdAt,
       ENCOUNTER_TYPE_LABEL[e.type],
       e.date,
+      ...levelScoreCells(e),
       e.score === null || e.score === undefined ? '' : String(e.score),
       e.resultLabel ?? '',
       e.range ?? '',

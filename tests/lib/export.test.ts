@@ -128,7 +128,7 @@ describe('buildEncounterExportRows', () => {
     expect(row[columnIndexOf('Referral Code')]).toBe('ARF-AAAA-BBBB');
     expect(row[columnIndexOf('Clinic')]).toBe('Nausori Health Centre');
     expect(row[columnIndexOf('Encounter Type')]).toBe('Assessment');
-    expect(row[columnIndexOf('Score')]).toBe('4');
+    expect(row[columnIndexOf('Total Score')]).toBe('4');
     expect(row[columnIndexOf('Risk Tier')]).toBe('Likely ARF');
     expect(row[columnIndexOf('Confirmed Dx')]).toBe('ARF Confirmed');
     expect(row[columnIndexOf('BPG Status')]).toBe('Started');
@@ -146,7 +146,7 @@ describe('buildEncounterExportRows', () => {
     });
     expect(rows).toHaveLength(3); // header + 2 encounters
     expect(rows[1][columnIndexOf('Encounter Type')]).toBe('Follow-Up');
-    expect(rows[1][columnIndexOf('Score')]).toBe('');
+    expect(rows[1][columnIndexOf('Total Score')]).toBe('');
     expect(rows[2][columnIndexOf('Encounter Type')]).toBe('Assessment');
   });
 
@@ -214,6 +214,47 @@ describe('assessment criteria block (encounter.inputs)', () => {
       expect(row[columnIndexOf(name)]).toBe('');
     }
     expect(row[columnIndexOf('Includes Level B')]).toBe('No');
+  });
+
+  it('exports Level A and Level B subtotals recomputed from the stored inputs', () => {
+    const rows = buildEncounterExportRows({
+      patients: [patient()],
+      encounters: [encounter({
+        score: 28,
+        includesLevelB: true,
+        inputs: buildInputs({ joint: 5, murmur: true, em: true, wbc: true, aso: true, echo: 'suggestive' }),
+      })],
+      clinics: CLINICS,
+    });
+    const row = rows[1];
+    expect(row[columnIndexOf('Level A Score')]).toBe('15'); // joint 5 + murmur 5 + em 5
+    expect(row[columnIndexOf('Level B Score')]).toBe('13'); // blood 3 + strep 5 + echo 5
+    expect(row[columnIndexOf('Total Score')]).toBe('28'); // the persisted total
+  });
+
+  it('leaves Level B blank on Level-A-only encounters even when Level B fields were touched', () => {
+    const rows = buildEncounterExportRows({
+      patients: [patient()],
+      encounters: [encounter({
+        includesLevelB: false,
+        inputs: buildInputs({ joint: 2, wbc: true }), // commit(false) scores Level A alone
+      })],
+      clinics: CLINICS,
+    });
+    const row = rows[1];
+    expect(row[columnIndexOf('Level A Score')]).toBe('2');
+    expect(row[columnIndexOf('Level B Score')]).toBe('');
+  });
+
+  it('blanks both subtotal columns on unscored follow-ups', () => {
+    const rows = buildEncounterExportRows({
+      patients: [patient()],
+      encounters: [encounter({ type: 'followup', inputs: null, score: null })],
+      clinics: CLINICS,
+    });
+    const row = rows[1];
+    expect(row[columnIndexOf('Level A Score')]).toBe('');
+    expect(row[columnIndexOf('Level B Score')]).toBe('');
   });
 });
 
