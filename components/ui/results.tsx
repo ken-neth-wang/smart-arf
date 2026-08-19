@@ -10,24 +10,21 @@ import { Colors, tierColor } from '@/constants/theme';
 import type { BreakdownRow, TierLevel } from '@/lib/types';
 
 /**
- * Chorea banner — exact per-step text from smart-arf-app.html:
- *   step3 (L1226): "Start Benzathine Penicillin G (BPG) and refer urgently.
- *                   Continue the assessment below for record-keeping.
- *                   Chorea automatically adds +5 to the score."
- *   step4 (L1361): "Start BPG and refer urgently regardless of total score."
- *   step5 (L1412): "Continue documenting Level B findings for the record."
- *   step6 (L1534): "BPG must be started and patient referred urgently regardless of total score."
+ * Chorea banner — originally ported verbatim from smart-arf-app.html
+ * ("ARF Positive… regardless of total score"). Reworded 2026-08 per the
+ * absolute-ladder decision: advisory context only — flags a major Jones
+ * criterion (+5 to the score); never claims a verdict or overrides it.
  */
 const CHOREA_BODIES: Record<3 | 4 | 5 | 6, string> = {
-  3: 'Start Benzathine Penicillin G (BPG) and refer urgently. Continue the assessment below for record-keeping. Chorea automatically adds +5 to the score.',
-  4: 'Start BPG and refer urgently regardless of total score.',
+  3: 'Chorea is a major Jones criterion and adds +5 to the Level A score. Continue the assessment below and interpret the result with heightened suspicion.',
+  4: 'Chorea adds +5 to the score — manage according to the result, with heightened suspicion.',
   5: 'Continue documenting Level B findings for the record.',
-  6: 'BPG must be started and patient referred urgently regardless of total score.',
+  6: 'Manage according to the final score; chorea (a major criterion) keeps suspicion elevated.',
 };
 export function ChoreaBanner({ step }: { step: 3 | 4 | 5 | 6 }) {
   return (
     <View style={choreaStyles.wrap}>
-      <Text style={choreaStyles.title}>⚠ Chorea Confirmed — ARF Positive (major criterion)</Text>
+      <Text style={choreaStyles.title}>⚠ Chorea Present — Major Jones Criterion</Text>
       <Text style={choreaStyles.body}>{CHOREA_BODIES[step]}</Text>
     </View>
   );
