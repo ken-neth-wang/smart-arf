@@ -1,7 +1,8 @@
 /**
  * ARF scoring algorithm. Originally ported from smart-arf-app.html; the app is
- * now the source of truth and evolves per clinical-team review (e.g. the
- * Level-B > 6 confirmation rule was added deliberately, diverging from the HTML).
+ * now the source of truth and evolves per clinical-team review (2026-08: the
+ * Level-B > 6 confirmation override was retired in favour of a single
+ * total-score ladder — see getInterp).
  */
 import type { AssessmentInputs, BreakdownRow, FeverDuration, TierLevel } from './types';
 
@@ -62,6 +63,26 @@ const ACTIONS_POSSIBLE: string[] = [
   'Refer to secondary care for confirmation',
   'Document findings and initiate prophylaxis plan',
 ];
+const ACTIONS_RULED_OUT: string[] = [
+  'ARF ruled out — score below 6',
+  'Consider and evaluate alternative diagnoses',
+  'Treat according to the clinical picture',
+  'Routine follow-up as needed',
+];
+const ACTIONS_LIKELY: string[] = [
+  'ARF is likely — act promptly',
+  'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
+  'Refer to secondary care for full evaluation',
+  'Initiate long-term secondary prophylaxis plan',
+  'Educate patient and family about RHD',
+];
+const ACTIONS_CONFIRMED: string[] = [
+  'ARF confirmed (score ≥ 10) — initiate management protocol',
+  'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
+  'Refer to secondary care for full evaluation',
+  'Initiate long-term secondary prophylaxis plan',
+  'Educate patient and family about RHD',
+];
 
 /** Hard override: a known history of ARF/RHD plus a current fever indicates a
  *  likely recurrent episode — triage as Positive ARF regardless of Jones score. */
@@ -75,12 +96,11 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
   if (autoConfirmed) {
     return { label: 'Positive ARF (history of ARF + fever)', level: 'confirmed', range: 'History of ARF + fever' };
   }
-  // Level B > 6 independently confirms ARF (clinical-team note); takes precedence
-  // over the combined-total tiers below.
-  if (scoreB > 6) return { label: 'Positive ARF (Level B confirmed)', level: 'confirmed', range: 'Level B > 6' };
+  // Final bands per clinical-team feedback (2026-08), one ladder on the
+  // combined total: <6 ruled out; 6 fever-dependent; 7–9 likely; ≥10
+  // confirmed. The former "Level B > 6 confirms alone" override was retired.
   const score = scoreA + scoreB;
-  // Three tiers (the Highly Likely tier was retired per clinical-team review):
-  if (score <= 5) return { label: 'ARF Unlikely', level: 'unlikely', range: 'Score 0–5' };
+  if (score < 6) return { label: 'ARF ruled out', level: 'unlikely', range: 'Score < 6' };
   // Score 6 is borderline: ARF stays "possible" only if the fever was ≥ 2 weeks
   // ago (timing consistent with post-strep ARF); otherwise (recent fever or no
   // fever) it is ruled out. When feverDuration is unknown (live Level A previews,
@@ -89,10 +109,10 @@ export function getInterp(scoreA: number, scoreB: number, feverDuration?: FeverD
     if (feverDuration === 'none' || feverDuration === 'under2w') {
       return { label: 'ARF ruled out', level: 'unlikely', range: 'Score 6 · fever < 2 weeks ago' };
     }
-    return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
+    return { label: 'ARF Possible', level: 'possible', range: 'Score 6' };
   }
-  if (score === 7) return { label: 'ARF Possible', level: 'possible', range: 'Score 6–7' };
-  return { label: 'ARF Likely', level: 'likely', range: 'Score ≥8' };
+  if (score <= 9) return { label: 'ARF Likely', level: 'likely', range: 'Score 7–9' };
+  return { label: 'ARF Confirmed', level: 'confirmed', range: 'Score ≥ 10' };
 }
 
 export function getActions(scoreA: number, scoreB: number, feverDuration?: FeverDuration, autoConfirmed = false): string[] {
@@ -100,24 +120,8 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
   if (autoConfirmed) {
     return ACTIONS_AUTO_CONFIRMED;
   }
-  // Level B > 6 confirms ARF — initiate the full management protocol.
-  if (scoreB > 6) {
-    return [
-      'Positive ARF confirmed (Level B > 6) — initiate management protocol',
-      'Start Benzathine Penicillin G (BPG) prophylaxis',
-      'Refer to secondary care for full evaluation',
-      'Initiate long-term secondary prophylaxis plan',
-      'Educate patient and family about RHD',
-    ];
-  }
   const score = scoreA + scoreB;
-  if (score <= 5) {
-    return [
-      'Treat according to clinical diagnosis',
-      'Arrange appropriate follow-up',
-      'Reassess if fever persists or symptoms change',
-    ];
-  }
+  if (score < 6) return ACTIONS_RULED_OUT;
   // Score 6 + fever < 2 weeks ago (or no fever) → ARF ruled out.
   if (score === 6 && (feverDuration === 'none' || feverDuration === 'under2w')) {
     return [
@@ -127,17 +131,9 @@ export function getActions(scoreA: number, scoreB: number, feverDuration?: Fever
       'Routine follow-up as needed',
     ];
   }
-  if (score <= 7) {
-    return ACTIONS_POSSIBLE;
-  }
-  // Score ≥8 — "Likely" (Highly Likely tier retired; same actions for all high scores).
-  return [
-    'ARF is likely — act promptly',
-    'Start Benzathine Penicillin G (BPG) prophylaxis immediately',
-    'Refer to secondary care for full evaluation',
-    'Initiate long-term secondary prophylaxis plan',
-    'Educate patient and family about RHD',
-  ];
+  if (score === 6) return ACTIONS_POSSIBLE;
+  if (score <= 9) return ACTIONS_LIKELY;
+  return ACTIONS_CONFIRMED;
 }
 
 /* ─────────────────────────────────────────────────────────────────── *
@@ -159,14 +155,7 @@ export function getLevelAInterp(scoreA: number, autoConfirmed = false): Interp {
 /** Actions matching getLevelAInterp's tiers. */
 export function getLevelAActions(scoreA: number, autoConfirmed = false): string[] {
   if (autoConfirmed) return ACTIONS_AUTO_CONFIRMED;
-  if (scoreA < 6) {
-    return [
-      'ARF ruled out — Level A score below 6',
-      'Consider and evaluate alternative diagnoses',
-      'Treat according to the clinical picture',
-      'Routine follow-up as needed',
-    ];
-  }
+  if (scoreA < 6) return ACTIONS_RULED_OUT;
   return ACTIONS_POSSIBLE;
 }
 

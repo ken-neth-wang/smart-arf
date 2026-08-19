@@ -145,15 +145,15 @@ describe('strepAntibodyScore', () => {
  * Interpretation tiers
  * ------------------------------------------------------------------ */
 describe('getInterp', () => {
-  const cases: ReadonlyArray<[number, number, string, string, string]> = [
-    [0, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [5, 0, 'ARF Unlikely', 'unlikely', 'Score 0–5'],
-    [0, 6, 'ARF Possible', 'possible', 'Score 6–7'],   // sum 6
-    [1, 6, 'ARF Possible', 'possible', 'Score 6–7'],   // sum 7 (top of Possible)
-    [2, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 8 (boundary into Likely)
-    [4, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 10
-    [9, 6, 'ARF Likely', 'likely', 'Score ≥8'],        // sum 15 — formerly Highly Likely, now Likely
-    [94, 6, 'ARF Likely', 'likely', 'Score ≥8'],       // sum 100 — formerly Highly Likely, now Likely
+  const cases: readonly [number, number, string, string, string][] = [
+    [0, 0, 'ARF ruled out', 'unlikely', 'Score < 6'],
+    [5, 0, 'ARF ruled out', 'unlikely', 'Score < 6'],
+    [0, 6, 'ARF Possible', 'possible', 'Score 6'],      // sum 6, fever unknown
+    [1, 6, 'ARF Likely', 'likely', 'Score 7–9'],        // sum 7 (bottom of Likely)
+    [4, 5, 'ARF Likely', 'likely', 'Score 7–9'],        // sum 9 (top of Likely)
+    [4, 6, 'ARF Confirmed', 'confirmed', 'Score ≥ 10'], // sum 10 (boundary into Confirmed)
+    [9, 6, 'ARF Confirmed', 'confirmed', 'Score ≥ 10'],
+    [94, 6, 'ARF Confirmed', 'confirmed', 'Score ≥ 10'],
   ];
 
   it.each(cases)('scoreA %i, scoreB %i → { %s, %s, %s }', (scoreA, scoreB, label, level, range) => {
@@ -231,7 +231,7 @@ describe('getLevelAInterp', () => {
 
 describe('getLevelAActions', () => {
   it('below 6 → ruled-out actions', () => {
-    expect(getLevelAActions(3)[0]).toBe('ARF ruled out — Level A score below 6');
+    expect(getLevelAActions(3)[0]).toBe('ARF ruled out — score below 6');
   });
 
   it('6 or more → the shared possible-actions list', () => {
@@ -266,8 +266,8 @@ describe('Score 6 fever-duration rule', () => {
     expect(getInterp(0, 6).level).toBe('possible');
     expect(getInterp(0, 6, '').level).toBe('possible');
   });
-  it('fever only matters at score 6 — score 7 stays possible', () => {
-    expect(getInterp(1, 6, 'none').level).toBe('possible');
+  it('fever only matters at score 6 — score 7 is Likely regardless', () => {
+    expect(getInterp(1, 6, 'none').level).toBe('likely');
   });
   it('score 6 + fever < 2 weeks ago → ruled-out actions', () => {
     expect(getActions(0, 6, 'under2w')[0]).toBe('ARF ruled out — fever was less than 2 weeks ago (or no fever)');
@@ -277,41 +277,24 @@ describe('Score 6 fever-duration rule', () => {
   });
 });
 
-describe('Level B confirmation rule (scoreB > 6)', () => {
-  it('scoreB > 6 → confirmed positive ARF regardless of scoreA', () => {
-    expect(getInterp(0, 7)).toEqual({
-      label: 'Positive ARF (Level B confirmed)',
-      level: 'confirmed',
-      range: 'Level B > 6',
-    });
+describe('Level B confirmation override — retired (2026-08)', () => {
+  it('scoreB > 6 no longer confirms on its own — falls through to the total bands', () => {
+    expect(getInterp(0, 8)).toEqual({ label: 'ARF Likely', level: 'likely', range: 'Score 7–9' });
   });
 
-  it('boundary: scoreB = 6 does NOT confirm (falls to combined tiers)', () => {
-    // 0 + 6 = 6 → 'possible' (Score 6–9), NOT confirmed
-    expect(getInterp(0, 6).level).toBe('possible');
-    expect(getInterp(0, 6).level).not.toBe('confirmed');
-  });
-
-  it('boundary: scoreB = 7 DOES confirm', () => {
-    expect(getInterp(0, 7).level).toBe('confirmed');
-  });
-
-  it('precedence: confirmed beats the combined-total tiers', () => {
-    // combined = 7 would normally be 'possible', but scoreB = 7 confirms
-    expect(getInterp(0, 7).level).toBe('confirmed');
-    expect(getInterp(0, 7).label).toBe('Positive ARF (Level B confirmed)');
-  });
-
-  it('max Level B (16) → confirmed', () => {
+  it('strong labs still confirm once the total reaches 10', () => {
+    expect(getInterp(2, 8).level).toBe('confirmed');
     expect(getInterp(0, 16).level).toBe('confirmed');
   });
 
-  it('getActions returns the confirmed management protocol', () => {
-    const a = getActions(0, 7);
-    expect(a).toEqual(
-      expect.arrayContaining([expect.stringContaining('BPG'), expect.stringContaining('prophylaxis')]),
-    );
-    expect(a[0]).toContain('confirmed');
+  it('history-of-ARF + fever still outranks the bands', () => {
+    expect(getInterp(0, 16, undefined, true).label).toBe('Positive ARF (history of ARF + fever)');
+  });
+
+  it('confirmed-band actions are the management protocol', () => {
+    const a = getActions(4, 6); // total 10
+    expect(a[0]).toBe('ARF confirmed (score ≥ 10) — initiate management protocol');
+    expect(a).toEqual(expect.arrayContaining([expect.stringContaining('BPG')]));
   });
 });
 
@@ -333,16 +316,17 @@ describe('chorea effect on the total', () => {
  * Recommended actions
  * ------------------------------------------------------------------ */
 describe('getActions', () => {
-  it('score 0–5 → 3 plain-text items', () => {
+  it('score < 6 → ruled-out items', () => {
     expect(getActions(5, 0)).toEqual([
-      'Treat according to clinical diagnosis',
-      'Arrange appropriate follow-up',
-      'Reassess if fever persists or symptoms change',
+      'ARF ruled out — score below 6',
+      'Consider and evaluate alternative diagnoses',
+      'Treat according to the clinical picture',
+      'Routine follow-up as needed',
     ]);
   });
 
-  it('score 6–7 → 4 items', () => {
-    const a = getActions(1, 6); // sum 7, scoreB 6 → tier 6–7
+  it('score 6 → 4 possible items', () => {
+    const a = getActions(0, 6, 'over2w'); // sum 6, fever ≥ 2w ago
     expect(a).toHaveLength(4);
     expect(a[0]).toBe('ARF is possible — do not dismiss');
     expect(a[1]).toBe('Start Benzathine Penicillin G (BPG) prophylaxis');
@@ -357,11 +341,11 @@ describe('getActions', () => {
   });
 
   it('boundary scores route to the correct tier', () => {
-    expect(getActions(5, 0)).toHaveLength(3);   // sum 5 → unlikely
-    expect(getActions(0, 6)).toHaveLength(4);   // sum 6 → possible
-    expect(getActions(1, 6)).toHaveLength(4);   // sum 7 → possible
+    expect(getActions(5, 0)).toHaveLength(4);   // sum 5 → ruled out
+    expect(getActions(0, 6, 'over2w')).toHaveLength(4); // sum 6 → possible
+    expect(getActions(1, 6)).toHaveLength(5);   // sum 7 → likely
     expect(getActions(2, 6)).toHaveLength(5);   // sum 8 → likely
-    expect(getActions(9, 6)).toHaveLength(5);   // sum 15 → likely (Highly Likely retired)
+    expect(getActions(9, 6)).toHaveLength(5);   // sum 15 → confirmed
   });
 
   it('never contains residual HTML tags', () => {
