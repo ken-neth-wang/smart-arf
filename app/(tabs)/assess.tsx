@@ -1,12 +1,14 @@
 /**
- * Assessment wizard — Steps 1–6, a faithful port of the `step1`–`step6` sections
- * and their handlers in smart-arf-app.html. Driven by AssessmentContext.
- * Source of truth: smart-arf-app.html.
+ * Assessment wizard. New visits use ARF-FAST v2; saved legacy visits keep
+ * their original screens and scoring. Driven by AssessmentContext.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WizardHeader } from '@/components/WizardHeader';
+import { FastEntry, UrgentCheck, AutomaticFeatures, FastScore } from '@/components/FastAssessment';
+import { FastResultCard } from '@/components/FastResultCard';
+import { fastBreakdown, isFast } from '@/lib/arfFast';
 import { PhotoCard } from '@/components/PhotoCard';
 import { AudioCard } from '@/components/AudioCard';
 import { VoiceFillCard } from '@/components/VoiceFillCard';
@@ -43,7 +45,7 @@ import { useAuth } from '@/state/AuthContext';
 import { Colors } from '@/constants/theme';
 import { fullName } from '@/lib/format';
 import { getActions, getInterp, getLevelAActions, getLevelAInterp, isAutoConfirmed, jointIdForPoints, jointPoints, levelADisplayBreakdown, finalDisplayBreakdown } from '@/lib/scoring';
-import type { EchoValue, FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
+import type { FacilityType, FeverDuration, Gender, Setting } from '@/lib/types';
 import { approxDobFromAge, ageFromDateOfBirth, maskDobInput, normalizeDobEntry } from '@/lib/types';
 import { validatePatientFields } from '@/lib/validation';
 
@@ -59,7 +61,7 @@ const SETTING_OPTS = [
 ];
 
 export default function AssessScreen() {
-  const { step } = useAssessment();
+  const { step, inputs } = useAssessment();
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -70,7 +72,10 @@ export default function AssessScreen() {
       <WizardHeader />
       <View style={styles.container}>
         {step === 1 && <Step1 />}
-        {step === 2 && <Step2 />}
+        {step === 2 && (isFast(inputs) ? <FastEntry /> : <Step2 />)}
+        {step === 'urgent' && <UrgentCheck />}
+        {step === 'automatic' && <AutomaticFeatures />}
+        {step === 'fast-score' && <FastScore />}
         {step === 3 && <Step3 />}
         {step === 4 && <Step4 />}
         {step === 5 && <Step5 />}
@@ -233,8 +238,8 @@ const JOINT_OPTS = [
 function Step3() {
   const { inputs, setInputs, scoreA, goStep, commitLevelA, signedBy, setSignedBy } = useAssessment();
   const interp = getLevelAInterp(scoreA);
-  const choreaPositive = inputs.chorea === true;
-  const autoConfirmed = isAutoConfirmed(inputs);
+  const choreaPositive = !isFast(inputs) && inputs.chorea === true;
+  const autoConfirmed = !isFast(inputs) && isAutoConfirmed(inputs);
 
   return (
     <>
@@ -323,8 +328,8 @@ function Step4() {
   const records = useRecords();
   const router = useRouter();
   const interp = getLevelAInterp(scoreA);
-  const choreaPositive = inputs.chorea === true;
-  const autoConfirmed = isAutoConfirmed(inputs);
+  const choreaPositive = !isFast(inputs) && inputs.chorea === true;
+  const autoConfirmed = !isFast(inputs) && isAutoConfirmed(inputs);
   const [referredToClinicId, setReferredToClinicId] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
   const clinics = records.clinics;
@@ -339,7 +344,7 @@ function Step4() {
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={4} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA)} />
+      {isFast(inputs) ? <FastResultCard inputs={inputs} /> : <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA)} />}
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
@@ -361,12 +366,13 @@ function Step4() {
         }} />
       </Card>
 
-      <ScoreBreakdown title="Level A Score Breakdown" rows={levelADisplayBreakdown(inputs, scoreA)} />
+      <ScoreBreakdown title="Level A Score Breakdown" rows={isFast(inputs) ? fastBreakdown(inputs) : levelADisplayBreakdown(inputs, scoreA)} />
+      {isFast(inputs) && <><AudioCard /><PhotoCard /><SecondaryButton title="Back to Level A" onPress={() => goStep('fast-score')} /></>}
 
       <Card>
         <StepBadge>Optional — Level B</StepBadge>
         <CardTitle>Add Enhanced Findings?</CardTitle>
-        <CardSubtitle>If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.</CardSubtitle>
+        <CardSubtitle>{isFast(inputs) ? 'If laboratory tests, ECG, or echo results are available, add Level B findings. Points are recorded separately from ARF-FAST.' : 'If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.'}</CardSubtitle>
         <PrimaryButton title="Add Level B Findings" onPress={() => goStep(5)} />
         <SecondaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       </Card>
@@ -383,10 +389,10 @@ const FACILITY_OPTS = [
 
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
-  const choreaPositive = inputs.chorea === true;
-  const autoConfirmed = isAutoConfirmed(inputs);
+  const choreaPositive = !isFast(inputs) && inputs.chorea === true;
+  const autoConfirmed = !isFast(inputs) && isAutoConfirmed(inputs);
   const total = scoreA + scoreB;
-  const feverRequired = total === 6 && !inputs.feverDuration;
+  const feverRequired = !isFast(inputs) && total === 6 && !inputs.feverDuration;
 
   const setNA = (section: 'naBlood' | 'naEcg' | 'naEcho', on: boolean) => {
     if (on) {
@@ -405,7 +411,7 @@ function Step5() {
       {choreaPositive ? <ChoreaBanner step={5} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={5} /> : null}
       <Card>
-        <StepBadge>Step 5 — Level B: Jones Criteria</StepBadge>
+        <StepBadge>{isFast(inputs) ? 'Level B — Enhanced Findings' : 'Step 5 — Level B: Jones Criteria'}</StepBadge>
         <CardTitle>Enhanced Findings</CardTitle>
         <CardSubtitle>Check all available investigation results. Mark a section as <Text style={{ fontWeight: '800' }}>Not Available</Text> if the test was not performed.</CardSubtitle>
 
@@ -461,14 +467,14 @@ function Step5() {
 
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
-            <LiveScoreCard score={scoreA} label="" subtitle="Level A" />
+            {isFast(inputs) ? <CardSubtitle>Level A · ARF-FAST is shown separately on the results page.</CardSubtitle> : <LiveScoreCard score={scoreA} label="" subtitle="Level A" />}
           </View>
           <View style={{ flex: 1 }}>
             <LiveScoreCard score={scoreB} label="" subtitle="Level B" />
           </View>
         </View>
 
-        <PrimaryButton title="View Final Result" disabled={feverRequired} onPress={async () => {
+        <PrimaryButton title={isFast(inputs) ? 'View Level A + Level B Results' : 'View Final Result'} disabled={feverRequired} onPress={async () => {
           try {
             await commitFinal();
             goStep(6);
@@ -493,16 +499,16 @@ function Step6() {
   const { inputs, scoreA, scoreB, referralCode, patient, activePatientId, reset } = useAssessment();
   const router = useRouter();
   const interp = getInterp(scoreA, scoreB, inputs.feverDuration);
-  const choreaPositive = inputs.chorea === true;
-  const autoConfirmed = isAutoConfirmed(inputs);
+  const choreaPositive = !isFast(inputs) && inputs.chorea === true;
+  const autoConfirmed = !isFast(inputs) && isAutoConfirmed(inputs);
 
   return (
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={6} /> : null}
-      <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />
+      {isFast(inputs) ? <FastResultCard inputs={inputs} withLevelB /> : <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />}
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
-      <ScoreBreakdown title="Complete Score Breakdown" rows={finalDisplayBreakdown(inputs, scoreA, scoreB)} />
+      <ScoreBreakdown title="Complete Score Breakdown" rows={isFast(inputs) ? fastBreakdown(inputs, true) : finalDisplayBreakdown(inputs, scoreA, scoreB)} />
       {activePatientId ? (
         <SecondaryButton
           title="Record Final Diagnosis"

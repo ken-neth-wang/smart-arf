@@ -7,14 +7,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert as RNAlert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
+import { FastResultCard } from '@/components/FastResultCard';
+import { fastBreakdown, fastResult, isFast } from '@/lib/arfFast';
 import { ScoreBreakdown } from '@/components/ui/results';
 import { useRecords } from '@/state/RecordsContext';
 import { useAssessment } from '@/state/AssessmentContext';
 import { useAuth } from '@/state/AuthContext';
 import { canEditPatient } from '@/lib/permissions';
 import { Colors, tierColor } from '@/constants/theme';
-import { fullName, maskMRN, maskPhone, DX_LABEL, BPG_LABEL, ENCOUNTER_TYPE_LABEL as TYPE_LABEL } from '@/lib/format';
-import { formatAge, type DeleteReason, type Encounter } from '@/lib/types';
+import { fullName, DX_LABEL, BPG_LABEL, ENCOUNTER_TYPE_LABEL as TYPE_LABEL } from '@/lib/format';
+import { formatAge, type DeleteReason } from '@/lib/types';
 
 const REASON_OPTS: SelectOption[] = [
   { label: 'Duplicate entry', value: 'duplicate' },
@@ -69,7 +71,8 @@ export default function RecordScreen() {
   const score = initialEncounter?.score ?? null;
   const level = initialEncounter?.level ?? null;
   const color = (level && tierColor[level]) ?? Colors.gray;
-  const breakdownRows = initialEncounter?.breakdown
+  const fast = isFast(initialEncounter?.inputs);
+  const breakdownRows = fast && initialEncounter?.inputs ? fastBreakdown(initialEncounter.inputs, initialEncounter.includesLevelB) : initialEncounter?.breakdown
     ? [...initialEncounter.breakdown, { label: 'Total', points: initialEncounter.score ?? 0, kind: 'total' as const }]
     : [];
 
@@ -114,7 +117,7 @@ export default function RecordScreen() {
         ) : null}
         <Text style={styles.dateSync}>Registered {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : '—'}</Text>
 
-        {score != null && initialEncounter ? (
+        {fast && initialEncounter?.inputs ? <FastResultCard inputs={initialEncounter.inputs} withLevelB={initialEncounter.includesLevelB} /> : score != null && initialEncounter ? (
           <View style={[styles.scoreBox, { backgroundColor: color + '1A', borderColor: color }]}>
             <Text style={[styles.scoreNum, { color }]}>{score}</Text>
             <Text style={[styles.scoreLabel, { color }]}>{initialEncounter.resultLabel || '—'}</Text>
@@ -153,7 +156,9 @@ export default function RecordScreen() {
                 <Text style={styles.encDate}>{e.date || '—'}</Text>
               </View>
               <View style={styles.encBody}>
-                {e.type === 'initial' && e.score != null ? (
+                {isFast(e.inputs) && e.inputs ? (
+                  <Text style={styles.encRow}>ARF-FAST v2 · {fastResult(e.inputs).label} · {fastResult(e.inputs).scoreA == null ? 'Automatic criteria met' : `Level A ${fastResult(e.inputs).scoreA}/7`}{e.includesLevelB ? ` · Level B ${fastResult(e.inputs, true).scoreB} · Combined interpretation pending clinical review` : ''}</Text>
+                ) : e.type === 'initial' && e.score != null ? (
                   <Text style={styles.encRow}><Text style={styles.encKey}>Score: </Text>{e.score} · {e.resultLabel || '—'}</Text>
                 ) : null}
                 {e.confirmedDx ? <Text style={styles.encRow}><Text style={styles.encKey}>Diagnosis: </Text>{DX_LABEL[e.confirmedDx]}{e.finalDx ? ` — ${e.finalDx}` : ''}</Text> : null}

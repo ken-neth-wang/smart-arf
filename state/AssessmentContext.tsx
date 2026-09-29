@@ -1,5 +1,5 @@
 /**
- * AssessmentContext — the in-memory wizard state. Drives Steps 1–6.
+ * AssessmentContext — versioned in-memory wizard state.
  *
  * Patient-anchored model: on commit, it upserts a Patient (reusing an existing
  * one by MRN when possible) and upserts an 'initial' Encounter that carries the
@@ -12,7 +12,7 @@ import { useAuth } from './AuthContext';
 import { ALL_CLINICS } from './actingClinic';
 import { clinicsForUser } from '@/lib/permissions';
 import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
-import { emptyInputs } from '@/lib/types';
+import { fastResult, fastScoringSnapshot, fastValidation, isFast, newAssessmentInputs, restoreAssessmentInputs } from '@/lib/arfFast';
 import {
   buildBreakdownArray,
   buildFullBreakdownArray,
@@ -43,7 +43,8 @@ function emptyPatient(): PatientFields {
   return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, dobApproximate: false, gender: '', setting: '', isTest: false };
 }
 
-export type Step = 1 | 2 | 3 | 4 | 5 | 6;
+// Legacy step IDs stay stable; named screens insert version-2 stages before results.
+export type Step = 1 | 2 | 3 | 4 | 5 | 6 | 'urgent' | 'automatic' | 'fast-score';
 
 interface AssessmentContextValue {
   /** True once any patient/assessment input exists — acting clinic is locked. */
@@ -63,9 +64,9 @@ interface AssessmentContextValue {
   goStep: (n: Step) => void;
   /** Commit Level A → upsert patient + create/update initial encounter. */
   commitLevelA: () => Promise<{ patientId: string; encounterId: string }>;
-  /** Commit Level A + B → update encounter with combined score. */
+  /** Commit Level B; v2 stores separate subtotals with no combined interpretation. */
   commitFinal: () => Promise<{ patientId: string; encounterId: string }>;
-  /** Rehydrate state from a saved patient + encounter to resume/edit (jumps to Step 3). */
+  /** Resume the saved version: legacy scoring or v2 entry review. */
   loadRecordForEdit: (patient: Patient, encounter: Encounter) => void;
   scoreA: number;
   scoreB: number;
@@ -77,7 +78,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const records = useRecords();
   const { user, activeClinicId, setActiveClinic } = useAuth();
   const [patient, setPatientState] = useState<PatientFields>(emptyPatient);
-  const [inputs, setInputsState] = useState<AssessmentInputs>(emptyInputs);
+  const [inputs, setInputsState] = useState<AssessmentInputs>(newAssessmentInputs);
   const [step, setStep] = useState<Step>(1);
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [activeEncounterId, setActiveEncounterId] = useState<string | null>(null);
@@ -90,7 +91,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const hasDraft = useMemo(
     () =>
       JSON.stringify(patient) !== JSON.stringify(emptyPatient()) ||
-      JSON.stringify(inputs) !== JSON.stringify(emptyInputs()),
+      JSON.stringify(inputs) !== JSON.stringify(newAssessmentInputs()),
     [patient, inputs],
   );
 
@@ -118,7 +119,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
 
   const reset = () => {
     setPatientState(emptyPatient());
-    setInputsState(emptyInputs());
+    setInputsState(newAssessmentInputs());
     setStep(1);
     setActivePatientId(null);
     setActiveEncounterId(null);
@@ -128,8 +129,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
 
   const goStep = (n: Step) => setStep(n);
 
-  const scoreA = useMemo(() => calcLevelA(inputs), [inputs]);
-  const scoreB = useMemo(() => calcLevelB(inputs), [inputs]);
+  const scoreA = useMemo(() => isFast(inputs) ? fastResult(inputs).scoreA ?? 0 : calcLevelA(inputs), [inputs]);
+  const scoreB = useMemo(() => isFast(inputs) ? fastResult(inputs, true).scoreB ?? 0 : calcLevelB(inputs), [inputs]);
 
   /** Build the Patient object from wizard state, reusing existing ids when editing. */
   const buildPatient = (): Patient => {
@@ -162,15 +163,17 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   /** Build an 'initial' encounter from the scoring state. */
   const buildEncounter = (patientId: string, withLevelB: boolean): Encounter => {
     const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
-    const scoreA = calcLevelA(inputsFinal);
-    const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
-    const score = scoreA + scoreB;
-    // Level A-only saves store the Level A verdict (the Step 3/4 wording);
-    // Level B commits keep the combined tiers. Absolute ladder — no overrides.
-    const interp = withLevelB
-      ? getInterp(scoreA, scoreB, inputs.feverDuration)
-      : getLevelAInterp(scoreA);
-    const breakdown = withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal);
+    const scoring = isFast(inputsFinal) ? fastScoringSnapshot(inputsFinal, withLevelB) : (() => {
+      const scoreA = calcLevelA(inputsFinal);
+      const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
+      const interp = withLevelB ? getInterp(scoreA, scoreB, inputs.feverDuration) : getLevelAInterp(scoreA);
+      return {
+        inputs: inputsFinal, score: scoreA + scoreB, level: interp.level,
+        resultLabel: interp.label, range: interp.range,
+        breakdown: withLevelB ? buildFullBreakdownArray(inputsFinal) : buildBreakdownArray(inputsFinal),
+        actions: withLevelB ? getActions(scoreA, scoreB, inputs.feverDuration) : getLevelAActions(scoreA),
+      };
+    })();
     const now = new Date().toISOString();
     return {
       id: activeEncounterId ?? 'enc-' + Date.now(),
@@ -178,15 +181,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       type: 'initial',
       inactive: false,
       date: formatRecordDate(),
-      inputs: { ...inputsFinal },
-      score,
-      level: interp.level,
-      resultLabel: interp.label,
-      range: interp.range,
-      breakdown,
-      actions: withLevelB
-        ? getActions(scoreA, scoreB, inputs.feverDuration)
-        : getLevelAActions(scoreA),
+      ...scoring,
       includesLevelB: withLevelB,
       facilityType: inputs.facilityType,
       confirmedDx: '',
@@ -203,6 +198,11 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   };
 
   const commit = async (withLevelB: boolean): Promise<{ patientId: string; encounterId: string }> => {
+    if (isFast(inputs)) {
+      const error = fastValidation(inputs);
+      if (error) throw new Error(error);
+      if (!signedBy.trim()) throw new Error('Clinician sign-off is required.');
+    }
     // Upsert the patient (RecordsContext dedups by MRN at the data layer when
     // the UI lookup is not used).
     const savedPatient = await records.upsertPatient(buildPatient());
@@ -220,6 +220,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
         encounter.id = existing.id;
         encounter.date = existing.date;
         encounter.referredTo = existing.referredTo;
+        encounter.referredToClinicId = existing.referredToClinicId;
         encounter.confirmedDx = existing.confirmedDx;
         encounter.finalDx = existing.finalDx;
         encounter.bpgStatus = existing.bpgStatus;
@@ -255,11 +256,12 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       setting: p.setting,
       isTest: p.isTest,
     });
-    setInputsState({ ...emptyInputs(), ...(e.inputs ?? emptyInputs()), facilityType: e.facilityType ?? null });
+    setInputsState({ ...restoreAssessmentInputs(e.inputs), facilityType: e.facilityType ?? null });
+    setSignedBy(e.signedBy ?? '');
     setActivePatientId(p.id);
     setActiveEncounterId(e.id);
     setReferralCode(p.referralCode);
-    setStep(3);
+    setStep(isFast(e.inputs) ? 2 : 3);
   };
 
   const value: AssessmentContextValue = {

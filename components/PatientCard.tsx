@@ -6,6 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fastResult, isFast } from '@/lib/arfFast';
 import { Colors, tierColor } from '@/constants/theme';
 import { formatAge, type PatientSummary } from '@/lib/types';
 import { fullName, initials, maskMRN } from '@/lib/format';
@@ -39,6 +40,7 @@ export function PatientCard({ summary, onPress }: { summary: PatientSummary; onP
 
   const score = latestInitial?.score;
   const resultLabel = latestInitial?.resultLabel;
+  const fast = isFast(latestInitial?.inputs) && latestInitial?.inputs ? fastResult(latestInitial.inputs, latestInitial.includesLevelB) : null;
 
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && { borderColor: Colors.primary }]} onPress={onPress}>
@@ -48,7 +50,9 @@ export function PatientCard({ summary, onPress }: { summary: PatientSummary; onP
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{name}{patient.isTest ? '  (test)' : ''}</Text>
         <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
-        {score != null && resultLabel ? (
+        {fast ? (
+          <Text style={[styles.result, { color: Colors.primary }]}>{fast.label} · {fast.scoreA == null ? 'Automatic criteria met' : `Level A ${fast.scoreA}/7`}{fast.scoreB != null ? ` · Level B ${fast.scoreB} · Combined interpretation pending` : ''}</Text>
+        ) : score != null && resultLabel ? (
           <Text style={[styles.result, { color: (level && tierColor[level]) ?? Colors.gray }]}>
             Score {score} · {resultLabel}
           </Text>

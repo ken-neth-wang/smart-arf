@@ -6,6 +6,7 @@
  * that visit. Platform delivery (web download / native share sheet) lives in
  * lib/exportCsv.ts; keeping this module pure makes it unit-testable.
  */
+import { AUTO_FEATURES, ENTRY_FEATURES, FAST_JOINTS, fastResult, isFast } from './arfFast';
 import { BPG_LABEL, DX_LABEL, ENCOUNTER_TYPE_LABEL, capitalize } from './format';
 import { calcLevelA, calcLevelB, JOINT_DEFS } from './scoring';
 import { emptyInputs, formatAge, type Clinic, type Encounter, type Patient, type AudioRecord, type PhotoRecord } from './types';
@@ -34,6 +35,11 @@ export const ENCOUNTER_EXPORT_COLUMNS = [
   'Signed By', 'Signed At', 'Recorded At',
   // Media block (signed Storage links; expire after EXPORT_LINK_EXPIRY_SECONDS)
   'Photo Links', 'Audio Links',
+  'Assessment Version', 'ARF-FAST Result', 'ARF-FAST Result Method', 'Combined Interpretation',
+  ...ENTRY_FEATURES.map(f => `Entry: ${f.label}`),
+  'Entry Reviewed', 'Urgent Needs Acknowledged', 'Automatic Features Reviewed',
+  ...AUTO_FEATURES.map(f => `Automatic: ${f.label}`),
+  'ARF-FAST Joint Finding', 'Measured Fever ≥38°C', 'First-Degree Family History', 'Documented Previous ARF/RHD',
 ] as const;
 
 export interface EncounterExportInput {
@@ -74,10 +80,10 @@ function tick(checked: boolean): string {
  *  legacy/partial to score (NaN guard). */
 function levelScoreCells(e: Encounter): [string, string] {
   if (!e.inputs) return ['', ''];
-  const a = calcLevelA(e.inputs);
-  const b = e.includesLevelB ? calcLevelB(e.inputs) : null;
+  const a = isFast(e.inputs) ? fastResult(e.inputs).scoreA : calcLevelA(e.inputs);
+  const b = e.includesLevelB ? (isFast(e.inputs) ? fastResult(e.inputs, true).scoreB : calcLevelB(e.inputs)) : null;
   return [
-    Number.isFinite(a) ? String(a) : '',
+    a !== null && Number.isFinite(a) ? String(a) : '',
     b !== null && Number.isFinite(b) ? String(b) : '',
   ];
 }
@@ -85,18 +91,19 @@ function levelScoreCells(e: Encounter): [string, string] {
 /** The 22 assessment-criteria cells (encounter.inputs). Level A + Level B. */
 function criteriaCells(e: Encounter): string[] {
   const s = e.inputs ?? emptyInputs();
+  const legacy = !isFast(e.inputs);
   return [
-    triState(s.fever),
-    triState(s.chorea),
-    tick(s.choreaPositive),
-    triState(s.altCause),
-    triState(s.historyArf),
-    JOINT_LABEL[s.joint] ?? '',
-    tick(s.murmur),
-    [s.sob ? 'SOB' : '', s.edema ? 'Edema' : ''].filter(Boolean).join(', '),
-    tick(s.em),
-    tick(s.sn),
-    tick(s.noad),
+    legacy ? triState(s.fever) : '',
+    legacy ? triState(s.chorea) : '',
+    legacy ? tick(s.choreaPositive) : '',
+    legacy ? triState(s.altCause) : '',
+    legacy ? triState(s.historyArf) : '',
+    legacy ? JOINT_LABEL[s.joint] ?? '' : '',
+    legacy ? tick(s.murmur) : '',
+    legacy ? [s.sob ? 'SOB' : '', s.edema ? 'Edema' : ''].filter(Boolean).join(', ') : '',
+    legacy ? tick(s.em) : '',
+    legacy ? tick(s.sn) : '',
+    legacy ? tick(s.noad) : '',
     tick(s.naBlood),
     tick(s.naEcg),
     tick(s.naEcho),
@@ -109,6 +116,22 @@ function criteriaCells(e: Encounter): string[] {
     FEVER_DURATION_LABEL[s.feverDuration] ?? '',
     e.includesLevelB ? 'Yes' : 'No',
   ];
+}
+
+
+function versionCells(e: Encounter): string[] {
+  const s = e.inputs;
+  const count = 4 + ENTRY_FEATURES.length + 3 + AUTO_FEATURES.length + 4;
+  if (!s) return Array(count).fill('');
+  if (!isFast(s)) return [String(s.assessmentVersion ?? 1), ...Array(count - 1).fill('')];
+  const f = s.arfFast;
+  const result = fastResult(s, e.includesLevelB);
+  return ['2', result.label, result.method, result.combinedInterpretation ?? '',
+    ...ENTRY_FEATURES.map(k => triState(f?.entry?.[k.id])),
+    triState(f?.entryReviewed), triState(f?.urgentAcknowledged), triState(f?.automaticReviewed),
+    ...AUTO_FEATURES.map(k => triState(f?.automatic?.[k.id])),
+    FAST_JOINTS.find(j => j.id === f?.joint)?.name ?? '',
+    triState(f?.measuredFever), triState(f?.familyHistory), triState(f?.previousArfRhd)];
 }
 
 /**
@@ -161,8 +184,8 @@ export function buildEncounterExportRows(input: EncounterExportInput): CsvRow[] 
       ENCOUNTER_TYPE_LABEL[e.type],
       e.date,
       ...levelScoreCells(e),
-      e.score === null || e.score === undefined ? '' : String(e.score),
-      e.resultLabel ?? '',
+      isFast(e.inputs) || e.score === null || e.score === undefined ? '' : String(e.score),
+      isFast(e.inputs) ? '' : e.resultLabel ?? '',
       e.range ?? '',
       (e.actions ?? []).join(' ; '),
       e.facilityType ?? '',
@@ -181,6 +204,7 @@ export function buildEncounterExportRows(input: EncounterExportInput): CsvRow[] 
       e.createdAt,
       linksFor(photosByEncounter.get(e.id) ?? [], photoUrls),
       linksFor(audioByEncounter.get(e.id) ?? [], audioUrls),
+      ...versionCells(e),
     ]);
   }
   return rows;

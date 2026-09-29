@@ -20,6 +20,9 @@ export type FeverDuration = '' | 'none' | 'under2w' | 'over2w';
 
 /** Raw clinical inputs — same shape as the HTML `S` object's clinical fields. */
 export interface AssessmentInputs {
+  /** Missing means legacy version 1. Version is per encounter, never per patient. */
+  assessmentVersion?: 1 | 2;
+  arfFast?: import('./arfFast').FastInputs;
   fever: boolean | null;
   chorea: boolean | null;
   altCause: boolean | null;

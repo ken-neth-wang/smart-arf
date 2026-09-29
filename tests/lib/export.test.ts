@@ -1,3 +1,4 @@
+import { newAssessmentInputs, fastScoringSnapshot } from '@/lib/arfFast';
 import {
   buildEncounterExportRows,
   csvField,
@@ -341,5 +342,40 @@ describe('toCsv', () => {
   it('renders undefined cells as empty fields instead of crashing (legacy inputs rows)', () => {
     expect(() => toCsv([['a', undefined as unknown as string, 'b'], ['1', undefined as unknown as string]])).not.toThrow();
     expect(toCsv([['a', undefined as unknown as string, 'b']])).toBe('\uFEFFa,,b\r\n');
+  });
+});
+
+// Versioned screening must never be recalculated with the legacy score weights.
+describe('versioned ARF-FAST exports', () => {
+  it('exports separate subtotals, all new answers and no combined risk tier', () => {
+    const s = newAssessmentInputs();
+    Object.assign(s.arfFast!, { joint: 'polyarthralgia', measuredFever: false, familyHistory: false, previousArfRhd: false, entryReviewed: true, urgentAcknowledged: true, automaticReviewed: true });
+    s.arfFast!.entry.joints = true; s.aso = true;
+    const e = encounter({ ...fastScoringSnapshot(s, true), includesLevelB: true });
+    const rows = buildEncounterExportRows({ patients: [patient()], encounters: [e], clinics: [] });
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(rows[1]).toHaveLength(rows[0].length);
+    expect(value('Assessment Version')).toBe('2');
+    expect(value('Level A Score')).toBe('2');
+    expect(value('Level B Score')).toBe('5');
+    expect(value('Total Score')).toBe('');
+    expect(value('Risk Tier')).toBe('');
+    expect(value('ARF-FAST Result')).toBe('ARF-FAST positive');
+    expect(value('Combined Interpretation')).toBe('pending');
+    expect(value('Entry: Joint symptoms')).toBe('Yes');
+    expect(value('Measured Fever ≥38°C')).toBe('No');
+    expect(value('Joint Finding')).toBe('');
+  });
+  it('leaves an automatic positive score blank and old new-fields uncollected', () => {
+    const s = newAssessmentInputs(); s.arfFast!.automatic.murmur = true;
+    const newer = encounter({ ...fastScoringSnapshot(s, false) });
+    const legacy = encounter({ id: 'old', inputs: buildInputs({ joint: 3 }) });
+    const rows = buildEncounterExportRows({ patients: [patient()], encounters: [newer, legacy], clinics: [] });
+    const newRow = rows.find(r => r[columnIndexOf('Assessment Version')] === '2')!;
+    const oldRow = rows.find(r => r[columnIndexOf('Assessment Version')] === '1')!;
+    expect(newRow[columnIndexOf('Level A Score')]).toBe('');
+    expect(newRow[columnIndexOf('ARF-FAST Result Method')]).toBe('automatic');
+    expect(oldRow[columnIndexOf('Level A Score')]).toBe('3');
+    expect(oldRow[columnIndexOf('Entry: Joint symptoms')]).toBe('');
   });
 });

@@ -8,17 +8,21 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAssessment } from '@/state/AssessmentContext';
 import { Colors } from '@/constants/theme';
+import { isFast } from '@/lib/arfFast';
 import { formatAge } from '@/lib/types';
 import { maskMRN, maskPhone } from '@/lib/format';
 
 export function WizardHeader() {
-  const { patient, step, scoreA, referralCode } = useAssessment();
+  const { patient, step, scoreA, referralCode, inputs } = useAssessment();
   const top = useSafeAreaInsets().top;
   const ageStr = formatAge(patient.dateOfBirth, patient.dobApproximate);
 
-  const fill = step >= 6 ? 100 : ((step - 1) / 4) * 100;
-  const label = step >= 6 ? 'Complete' : `Step ${step} of 5`;
-  const showTally = step === 3;
+  const fast = isFast(inputs);
+  const progressStep = typeof step === 'number' ? step : ({ urgent: 3, automatic: 4, 'fast-score': 5 } as const)[step];
+  const isResult = step === 4 || step === 6;
+  const fill = fast ? (isResult || step === 5 ? 100 : ((progressStep - 1) / 4) * 100) : progressStep >= 6 ? 100 : ((progressStep - 1) / 4) * 100;
+  const label = fast ? (isResult ? 'Results' : step === 5 ? 'Level B' : `Step ${progressStep} of 5`) : progressStep >= 6 ? 'Complete' : `Step ${progressStep} of 5`;
+  const showTally = !fast && step === 3;
 
   const name = `${patient.firstName} ${patient.lastName}`.trim();
   const meta = [
