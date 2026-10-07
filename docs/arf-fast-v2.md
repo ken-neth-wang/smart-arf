@@ -36,7 +36,8 @@ columns which do not describe the new questions remain blank on version-2 rows.
 
 - Entry criteria: if none are checked, ask for explicit confirmation to proceed;
   do not assign a negative result or silently exclude the patient.
-- Urgent needs must be acknowledged before proceeding.
+- Urgent-needs page (2026-10: informational only — the instrument's Step-2
+  safety wording plus Next; no acknowledgement recorded, nothing blocks).
 - Continue on automatic features confirms that checklist was reviewed. Any
   selected finding skips the scoring questions and opens clinician sign-off.
 - Numerical scoring requires an explicit joint selection and all three yes/no
@@ -47,9 +48,9 @@ columns which do not describe the new questions remain blank on version-2 rows.
 - Existing voice autofill describes legacy fields and remains available only in
   the legacy flow. It is not used to infer the new clinical definitions.
 
-Internal legacy step IDs 1–6 remain stable. New named screens `urgent`,
-`automatic`, and `fast-score` display as Steps 3–5; results and investigations use
-stage labels rather than the legacy numbering in version 2.
+Internal legacy step IDs 1–6 remain stable. Named screens `urgent`,
+`automatic`, and `fast-score` insert FAST stages before results; results and
+investigations use stage labels rather than the legacy numbering.
 
 ## Clinical review still needed
 

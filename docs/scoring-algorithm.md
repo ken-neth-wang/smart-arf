@@ -1,6 +1,12 @@
 # SMART-ARF Scoring & Verdict Specification
 
-**Status: active.** The executable source of truth is `lib/scoring.ts`, pinned
+**Status: active for versions 1–2 only.** New assessments are ARF-FAST v3.1
+(assessment version 3), which has **no Level B points, no combined score, and
+no verdict ladder** — see [arf-fast-v31.md](arf-fast-v31.md). This document
+specifies the legacy Jones path (`lib/scoring.ts`) that saved v1/v2 records and
+the v2 Level B subtotals keep using.
+
+The executable source of truth is `lib/scoring.ts`, pinned
 by `tests/lib/scoring.test.ts` — this document is the human-readable spec those
 implement. When rules change, change all three together.
 

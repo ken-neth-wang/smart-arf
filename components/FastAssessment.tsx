@@ -30,14 +30,16 @@ export function FastEntry() {
     <SecondaryButton title="Back" onPress={() => goStep(1)} />
   </Card>;
 }
+/** Informational page for the instrument's Step 2 — wording only, no
+ *  acknowledgement, nothing recorded. Shared by v2 and v3 flows. */
 export function UrgentCheck() {
-  const { form, patch, goStep } = useFastForm();
+  const { goStep } = useAssessment();
   return <Card>
-    <StepBadge>Step 3 — Urgent Check</StepBadge><CardTitle>Urgent Check</CardTitle>
-    <Alert variant="warning">If the child appears seriously or critically ill, or needs immediate treatment, prioritize emergency assessment and stabilization now. Do not delay urgent care to finish this assessment.</Alert>
-    <CardSubtitle>This step is a safety check, separate from the ARF-FAST result.</CardSubtitle>
-    <CheckboxRow label="Urgent needs assessed and addressed" checked={form.urgentAcknowledged} onToggle={() => patch({ urgentAcknowledged: !form.urgentAcknowledged })} />
-    <PrimaryButton title="Continue" disabled={!form.urgentAcknowledged} onPress={() => goStep('automatic')} />
+    <StepBadge>Step 3 — Urgent / Emergency Needs</StepBadge>
+    <CardTitle>First Check for Urgent / Emergency Needs</CardTitle>
+    <Alert variant="warning">If the child appears seriously or critically ill, or has any other condition requiring immediate treatment or urgent referral, prioritize emergency assessment, stabilization, and/or referral according to local protocols.</Alert>
+    <Alert>Do not delay urgent care in order to complete ARF-FAST. The emergency pathway is a safety rule and is separate from the ARF-FAST positive/negative classification.</Alert>
+    <PrimaryButton title="Next" onPress={() => goStep('automatic')} />
     <SecondaryButton title="Back" onPress={() => goStep(2)} />
   </Card>;
 }

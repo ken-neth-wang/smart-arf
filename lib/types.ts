@@ -10,6 +10,10 @@
  * truth for scoring values; the patient/encounter split is a clean data-model
  * layer that the HTML's fused `PatientRecord` only approximated.
  */
+import type { FastInputs } from './arfFast';
+import type { Fast31Inputs, FastCareRecord, ScreeningAmendment } from './arfFast31';
+import type { PartBRecord } from './partB';
+
 
 export type Gender = '' | 'male' | 'female' | 'other';
 export type Setting = '' | 'endemic' | 'nonendemic' | 'unknown';
@@ -20,9 +24,24 @@ export type FeverDuration = '' | 'none' | 'under2w' | 'over2w';
 
 /** Raw clinical inputs — same shape as the HTML `S` object's clinical fields. */
 export interface AssessmentInputs {
-  /** Missing means legacy version 1. Version is per encounter, never per patient. */
-  assessmentVersion?: 1 | 2;
-  arfFast?: import('./arfFast').FastInputs;
+  /** Missing means legacy version 1. Version is per encounter, never per patient.
+   *  v3 = ARF-FAST v3.1 screening + Part B (no Level B scoring). */
+  assessmentVersion?: 1 | 2 | 3;
+  arfFast?: FastInputs;
+  /** v3 answers. Frozen after the first save (CRF: do not change Part A later);
+   *  changes go through amendments, never silent edits. */
+  arfFast31?: Fast31Inputs;
+  /** v3: optional study identifier, typed once, shown on screening + Part B. */
+  studyId?: string;
+  /** v3: action record (BPG / referral / other) attached to the screening. */
+  careRecord?: FastCareRecord;
+  /** v3: definitive investigations + treating-team reference diagnosis. */
+  partB?: PartBRecord;
+  /** v3: audit trail for post-save screening corrections. */
+  screeningAmendments?: ScreeningAmendment[];
+  /** v3: the original answers as first saved, before any amendment. Exports
+   *  carry both this and the corrected values. */
+  screeningOriginal?: Fast31Inputs;
   fever: boolean | null;
   chorea: boolean | null;
   altCause: boolean | null;

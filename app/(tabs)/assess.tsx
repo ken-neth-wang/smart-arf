@@ -7,7 +7,14 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WizardHeader } from '@/components/WizardHeader';
 import { FastEntry, UrgentCheck, AutomaticFeatures, FastScore } from '@/components/FastAssessment';
+import { AutomaticFeatures31, FastEntry31, FastScore31, ScreeningLockBanner } from '@/components/FastAssessment31';
 import { FastResultCard } from '@/components/FastResultCard';
+import { FastResultCard31 } from '@/components/FastResultCard31';
+import { FastCareRecordForm } from '@/components/FastCareRecord';
+import { PartBForm } from '@/components/PartBForm';
+import { PartBResult } from '@/components/PartBResult';
+import { fast31Breakdown, isFast31 } from '@/lib/arfFast31';
+import { restorePartB } from '@/lib/partB';
 import { fastBreakdown, isFast } from '@/lib/arfFast';
 import { PhotoCard } from '@/components/PhotoCard';
 import { AudioCard } from '@/components/AudioCard';
@@ -55,8 +62,8 @@ const GENDER_OPTS = [
   { label: 'Other / Not specified', value: 'other' },
 ];
 const SETTING_OPTS = [
-  { label: 'RHD Endemic Area', value: 'endemic' },
-  { label: 'Non-Endemic Area', value: 'nonendemic' },
+  { label: 'ARF/RHD endemic or moderate/high-risk area', value: 'endemic' },
+  { label: 'Low-risk (non-endemic) area', value: 'nonendemic' },
   { label: 'Unknown', value: 'unknown' },
 ];
 
@@ -72,10 +79,10 @@ export default function AssessScreen() {
       <WizardHeader />
       <View style={styles.container}>
         {step === 1 && <Step1 />}
-        {step === 2 && (isFast(inputs) ? <FastEntry /> : <Step2 />)}
+        {step === 2 && (isFast31(inputs) ? <><ScreeningLockBanner /><FastEntry31 /></> : isFast(inputs) ? <FastEntry /> : <Step2 />)}
         {step === 'urgent' && <UrgentCheck />}
-        {step === 'automatic' && <AutomaticFeatures />}
-        {step === 'fast-score' && <FastScore />}
+        {step === 'automatic' && (isFast31(inputs) ? <><ScreeningLockBanner /><AutomaticFeatures31 /></> : <AutomaticFeatures />)}
+        {step === 'fast-score' && (isFast31(inputs) ? <><ScreeningLockBanner /><FastScore31 /></> : <FastScore />)}
         {step === 3 && <Step3 />}
         {step === 4 && <Step4 />}
         {step === 5 && <Step5 />}
@@ -93,7 +100,7 @@ const styles = StyleSheet.create({
 
 /* ============== STEP 1 — Patient ============== */
 function Step1() {
-  const { patient, setPatient, goStep } = useAssessment();
+  const { patient, setPatient, goStep, inputs } = useAssessment();
   const records = useRecords();
   const { user } = useAuth();
   const [err, setErr] = useState('');
@@ -154,6 +161,15 @@ function Step1() {
 
       <TextField label="MRN / Patient ID" value={patient.mrn} onChangeText={(v) => setPatient({ mrn: v })} placeholder="e.g. 00123456" />
 
+      {isFast31(inputs) ? (
+        <TextField
+          label="Study ID (optional)"
+          value={patient.studyId}
+          onChangeText={(v) => setPatient({ studyId: v })}
+          placeholder="Study log identifier — links Part A and Part B"
+          hint="Shown on the screening and Part B and in exports. The referral code is kept alongside it for cross-checking."
+        />
+      ) : null}
       <TextField label="Primary Phone" required value={patient.phone1} onChangeText={(v) => setPatient({ phone1: v })} placeholder="e.g. +249 91 234 5678" keyboardType="phone-pad" />
 
       <TextField label="Secondary Phone" value={patient.phone2} onChangeText={(v) => setPatient({ phone2: v })} placeholder="Alternate contact number" keyboardType="phone-pad" />
@@ -344,11 +360,11 @@ function Step4() {
     <>
       {choreaPositive ? <ChoreaBanner step={4} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={4} /> : null}
-      {isFast(inputs) ? <FastResultCard inputs={inputs} /> : <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA)} />}
+      {isFast31(inputs) ? <FastResultCard31 inputs={inputs} /> : isFast(inputs) ? <FastResultCard inputs={inputs} /> : <ResultCard level={interp.level} scoreA={scoreA} label={interp.label} actions={getLevelAActions(scoreA)} />}
 
       {referralCode ? <PatientCodeCard code={referralCode} step={4} /> : null}
 
-      <Card>
+      {isFast31(inputs) ? <FastCareRecordForm /> : <Card>
         <StepBadge>Referral</StepBadge>
         <CardTitle>Refer Patient</CardTitle>
         <CardSubtitle>Record where the patient is being referred for follow-up evaluation.</CardSubtitle>
@@ -364,16 +380,22 @@ function Step4() {
             // Save failed — RecordsContext alerted with the cause; no success flash.
           }
         }} />
-      </Card>
+      </Card>}
 
-      <ScoreBreakdown title="Level A Score Breakdown" rows={isFast(inputs) ? fastBreakdown(inputs) : levelADisplayBreakdown(inputs, scoreA)} />
+      <ScoreBreakdown title={isFast31(inputs) ? 'ARF-FAST Score Breakdown' : 'Level A Score Breakdown'} rows={isFast31(inputs) ? fast31Breakdown(inputs) : isFast(inputs) ? fastBreakdown(inputs) : levelADisplayBreakdown(inputs, scoreA)} />
       {isFast(inputs) && <><AudioCard /><PhotoCard /><SecondaryButton title="Back to Level A" onPress={() => goStep('fast-score')} /></>}
 
       <Card>
-        <StepBadge>Optional — Level B</StepBadge>
-        <CardTitle>Add Enhanced Findings?</CardTitle>
-        <CardSubtitle>{isFast(inputs) ? 'If laboratory tests, ECG, or echo results are available, add Level B findings. Points are recorded separately from ARF-FAST.' : 'If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.'}</CardSubtitle>
-        <PrimaryButton title="Add Level B Findings" onPress={() => goStep(5)} />
+        <StepBadge>Optional — {isFast31(inputs) ? 'Part B' : 'Level B'}</StepBadge>
+        <CardTitle>{isFast31(inputs) ? 'Add Part B — Investigations & Final Diagnosis?' : 'Add Enhanced Findings?'}</CardTitle>
+        <CardSubtitle>
+          {isFast31(inputs)
+            ? 'Completed later by the treating team, after definitive investigations. Records results and the reference diagnosis — no points, no combined score.'
+            : isFast(inputs)
+              ? 'If laboratory tests, ECG, or echo results are available, add Level B findings. Points are recorded separately from ARF-FAST.'
+              : 'If laboratory tests, ECG, or handheld echo results are available, proceed to Level B for a refined Jones Criteria assessment.'}
+        </CardSubtitle>
+        <PrimaryButton title={isFast31(inputs) ? 'Add Part B' : 'Add Level B Findings'} onPress={() => goStep(5)} />
         <SecondaryButton title="Start New Assessment" onPress={() => { reset(); router.navigate('/'); }} />
       </Card>
     </>
@@ -389,6 +411,10 @@ const FACILITY_OPTS = [
 
 function Step5() {
   const { inputs, setInputs, scoreA, scoreB, goStep, commitFinal } = useAssessment();
+  // v3: this step is the Part B investigation + reference-diagnosis form —
+  // Level B points, the combined score, and the fever tie-breaker do not
+  // exist on the version-3 path.
+  if (isFast31(inputs)) return <PartBForm />;
   const choreaPositive = !isFast(inputs) && inputs.chorea === true;
   const autoConfirmed = !isFast(inputs) && isAutoConfirmed(inputs);
   const total = scoreA + scoreB;
@@ -506,9 +532,10 @@ function Step6() {
     <>
       {choreaPositive ? <ChoreaBanner step={6} /> : null}
       {autoConfirmed ? <HistoryArfBanner step={6} /> : null}
-      {isFast(inputs) ? <FastResultCard inputs={inputs} withLevelB /> : <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />}
+      {isFast31(inputs) ? <FastResultCard31 inputs={inputs} /> : isFast(inputs) ? <FastResultCard inputs={inputs} withLevelB /> : <ResultCard level={interp.level} scoreA={scoreA} scoreB={scoreB} label={interp.label} actions={getActions(scoreA, scoreB, inputs.feverDuration)} />}
       {referralCode ? <PatientCodeCard code={referralCode} step={6} /> : null}
-      <ScoreBreakdown title="Complete Score Breakdown" rows={isFast(inputs) ? fastBreakdown(inputs, true) : finalDisplayBreakdown(inputs, scoreA, scoreB)} />
+      {isFast31(inputs) && inputs.partB ? <PartBResult record={restorePartB(inputs)} /> : null}
+      {!isFast31(inputs) ? <ScoreBreakdown title="Complete Score Breakdown" rows={isFast(inputs) ? fastBreakdown(inputs, true) : finalDisplayBreakdown(inputs, scoreA, scoreB)} /> : null}
       {activePatientId ? (
         <SecondaryButton
           title="Record Final Diagnosis"

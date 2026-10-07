@@ -1,4 +1,7 @@
-import { newAssessmentInputs, fastScoringSnapshot } from '@/lib/arfFast';
+import { emptyFast, fastScoringSnapshot } from '@/lib/arfFast';
+import { newAssessmentInputs } from '@/lib/arfFast';
+import { fast31ScoringSnapshot } from '@/lib/arfFast31';
+import { emptyPartB } from '@/lib/partB';
 import {
   buildEncounterExportRows,
   csvField,
@@ -6,7 +9,14 @@ import {
   toCsv,
 } from '@/lib/export';
 import { buildInputs } from '../helpers/fixtures';
-import type { AudioRecord, Clinic, Encounter, Patient, PhotoRecord } from '@/lib/types';
+import { emptyInputs, type AssessmentInputs, type AudioRecord, type Clinic, type Encounter, type Patient, type PhotoRecord } from '@/lib/types';
+
+/** Saved version-2 shape — no longer the wizard default (new = v3). */
+function v2Inputs(): AssessmentInputs {
+  const s: AssessmentInputs = { ...emptyInputs(), assessmentVersion: 2, arfFast: emptyFast() };
+  Object.assign(s.arfFast!, { entryReviewed: true, urgentAcknowledged: true, automaticReviewed: true, joint: 'none', measuredFever: false, familyHistory: false, previousArfRhd: false });
+  return s;
+}
 
 /* ------------------------------------------------------------------ *
  * Fixtures — minimal valid Patient / Encounter / media rows
@@ -348,7 +358,7 @@ describe('toCsv', () => {
 // Versioned screening must never be recalculated with the legacy score weights.
 describe('versioned ARF-FAST exports', () => {
   it('exports separate subtotals, all new answers and no combined risk tier', () => {
-    const s = newAssessmentInputs();
+    const s = v2Inputs();
     Object.assign(s.arfFast!, { joint: 'polyarthralgia', measuredFever: false, familyHistory: false, previousArfRhd: false, entryReviewed: true, urgentAcknowledged: true, automaticReviewed: true });
     s.arfFast!.entry.joints = true; s.aso = true;
     const e = encounter({ ...fastScoringSnapshot(s, true), includesLevelB: true });
@@ -367,7 +377,7 @@ describe('versioned ARF-FAST exports', () => {
     expect(value('Joint Finding')).toBe('');
   });
   it('leaves an automatic positive score blank and old new-fields uncollected', () => {
-    const s = newAssessmentInputs(); s.arfFast!.automatic.murmur = true;
+    const s = v2Inputs(); s.arfFast!.automatic.murmur = true;
     const newer = encounter({ ...fastScoringSnapshot(s, false) });
     const legacy = encounter({ id: 'old', inputs: buildInputs({ joint: 3 }) });
     const rows = buildEncounterExportRows({ patients: [patient()], encounters: [newer, legacy], clinics: [] });
@@ -377,5 +387,100 @@ describe('versioned ARF-FAST exports', () => {
     expect(newRow[columnIndexOf('ARF-FAST Result Method')]).toBe('automatic');
     expect(oldRow[columnIndexOf('Level A Score')]).toBe('3');
     expect(oldRow[columnIndexOf('Entry: Joint symptoms')]).toBe('');
+  });
+});
+
+describe('version-3 ARF-FAST + Part B exports', () => {
+  function v3Screening(joint: 'polyarthralgia' | 'monoarthralgia') {
+    const s = newAssessmentInputs();
+    Object.assign(s.arfFast31!, { entryReviewed: true, urgentAcknowledged: true, automaticReviewed: true, joint, measuredFever: false, familyHistory: 'unknown', previousArfRhd: 'no' });
+    return s;
+  }
+  const rowsFor = (s: AssessmentInputs) =>
+    buildEncounterExportRows({ patients: [patient()], encounters: [encounter({ ...fast31ScoringSnapshot(s), includesLevelB: false })], clinics: [] });
+
+  it('exports the v3 screening block with no Level B, combined score, or diagnosis inference', () => {
+    const s = v3Screening('polyarthralgia'); // 2 points → positive
+    s.arfFast31!.entry.joints = true;
+    const rows = rowsFor(s);
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(rows[1]).toHaveLength(rows[0].length);
+    expect(value('Assessment Version')).toBe('3');
+    expect(value('Level A Score')).toBe('2');
+    expect(value('Level B Score')).toBe('');
+    expect(value('Total Score')).toBe('');
+    expect(value('Risk Tier')).toBe('');
+    expect(value('ARF-FAST Result')).toBe('ARF-FAST positive — suspected ARF');
+    expect(value('Combined Interpretation')).toBe('');
+    expect(value('First-Degree Family History')).toBe('Unknown');
+    expect(value('v3: Family History (raw)')).toBe('Unknown');
+    expect(value('Entry: Joint symptoms')).toBe('Yes');
+  });
+
+  it('exports Part B values, units, not-done states, and the reference classification', () => {
+    const s = v3Screening('monoarthralgia'); // 1 point → negative
+    const pb = emptyPartB();
+    Object.assign(pb.investigations, {
+      esrDone: true, esrValue: ' 42 ',
+      crpDone: true, crpValue: '12', crpUnit: 'mg/L',
+      asoDone: false,
+      throatCulture: 'positive',
+      ecgStatus: 'done', ecgPrMs: '180', ecgProlongedForAge: 'yes',
+      echoStatus: 'abnormal', echoMrPathological: 'uncertain', echoArPathological: 'no',
+    });
+    pb.diagnosis.classification = 'definite-probable';
+    pb.diagnosis.basis = 'two-major-gas';
+    pb.diagnosis.episode = 'first';
+    pb.savedAt = '2026-09-01T10:00:00.000Z';
+    pb.savedBy = 'Dr B';
+    s.partB = pb;
+    const rows = rowsFor(s);
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(value('ARF-FAST Result')).toBe('ARF-FAST negative — ARF treatment/referral threshold not met');
+    expect(value('Part B: ESR (mm/hour)')).toBe('42');
+    expect(value('Part B: ASO Value')).toBe('Not done');
+    expect(value('Part B: CRP Unit')).toBe('mg/L');
+    expect(value('Part B: Throat Culture')).toBe('Positive');
+    expect(value('Part B: PR Interval (ms)')).toBe('180');
+    expect(value('Part B: PR Prolonged for Age')).toBe('Yes');
+    expect(value('Part B: Pathological Mitral Regurgitation')).toBe('Uncertain');
+    expect(value('Part B: Pathological Aortic Regurgitation')).toBe('No');
+    expect(value('Part B: Study Reference Classification')).toBe('Definite / probable ARF');
+    expect(value('Part B: Diagnostic Basis')).toContain('Two major');
+    expect(value('Part B: Saved By')).toBe('Dr B');
+    // The screening result stays separate and unchanged.
+    expect(value('Level A Score')).toBe('1');
+  });
+
+  it('keeps a positive screening separate from a later ARF-excluded classification', () => {
+    const s = v3Screening('polyarthralgia');
+    const pb = emptyPartB();
+    pb.diagnosis.classification = 'excluded';
+    s.partB = pb;
+    const rows = rowsFor(s);
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(value('ARF-FAST Result')).toBe('ARF-FAST positive — suspected ARF');
+    expect(value('Part B: Study Reference Classification')).toBe('ARF excluded');
+  });
+
+  it('exports the care record and the screening amendment trail', () => {
+    const s = v3Screening('polyarthralgia');
+    s.careRecord = { bpgAction: 'given', referred: true, otherAction: '', actionAt: '2026-09-01T08:00:00.000Z', provider: 'Dr A', facility: 'Clinic X', recordedAt: '2026-09-01T08:05:00.000Z' };
+    s.screeningAmendments = [{ at: '2026-09-05T00:00:00.000Z', by: 'Dr A', reason: 'typo at entry', field: 'Joint manifestation category', before: 'monoarthralgia', after: 'polyarthralgia' }];
+    const rows = rowsFor(s);
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(value('Care: BPG')).toBe('BPG given');
+    expect(value('Care: Referred')).toBe('Yes');
+    expect(value('Care: Action At')).toBe('2026-09-01T08:00:00.000Z');
+    expect(value('Screening Amendments')).toContain('monoarthralgia → polyarthralgia');
+    expect(value('Screening Amendments')).toContain('typo at entry');
+  });
+
+  it('leaves the version-3 block blank on v1/v2 rows', () => {
+    const rows = buildEncounterExportRows({ patients: [patient()], encounters: [encounter({ inputs: buildInputs({ joint: 3 }) })], clinics: [] });
+    const value = (name: string) => rows[1][columnIndexOf(name)];
+    expect(value('Part B: Study Reference Classification')).toBe('');
+    expect(value('Study ID')).toBe('');
+    expect(value('Screening Amendments')).toBe('');
   });
 });

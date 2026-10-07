@@ -9,6 +9,11 @@
 import { AUTO_FEATURES, ENTRY_FEATURES, FAST_JOINTS, fastResult, isFast } from './arfFast';
 import { BPG_LABEL, DX_LABEL, ENCOUNTER_TYPE_LABEL, capitalize } from './format';
 import { calcLevelA, calcLevelB, JOINT_DEFS } from './scoring';
+import { CARE_BPG_LABEL, FAST31_JOINTS, fast31Result, isFast31 } from './arfFast31';
+import {
+  BASIS_LABEL, CLASSIFICATION_LABEL, ECG_STATUS_LABEL, ECHO_STATUS_LABEL, EPISODE_LABEL,
+  MICRO_LABEL, PAIRED_RISE_LABEL, VALVE_LABEL,
+} from './partB';
 import { emptyInputs, formatAge, type Clinic, type Encounter, type Patient, type AudioRecord, type PhotoRecord } from './types';
 
 /** Column header + cell values for the encounters sheet. */
@@ -40,6 +45,25 @@ export const ENCOUNTER_EXPORT_COLUMNS = [
   'Entry Reviewed', 'Urgent Needs Acknowledged', 'Automatic Features Reviewed',
   ...AUTO_FEATURES.map(f => `Automatic: ${f.label}`),
   'ARF-FAST Joint Finding', 'Measured Fever ≥38°C', 'First-Degree Family History', 'Documented Previous ARF/RHD',
+  // Version-3 block (ARF-FAST v3.1 + Part B). Blank on v1/v2 rows; the v3
+  // screening reuses the shared Entry/Automatic columns above where the
+  // question is the same, so a mixed-version sheet stays readable.
+  'Study ID',
+  'v3: Significant Breathlessness', 'v3: Orthopnea', 'v3: Edema', 'v3: Marked Activity Reduction',
+  'v3: Chorea — Episodes Only With Loss of Awareness', 'v3: Murmur — Previously Documented Innocent',
+  'v3: Migratory Polyarthritis', 'v3: Erythema Marginatum', 'v3: Subcutaneous Nodules',
+  'v3: Family History (raw)', 'v3: Previous ARF/RHD (raw)',
+  'Care: BPG', 'Care: Referred', 'Care: Other Action', 'Care: Action At', 'Care: Provider', 'Care: Facility', 'Care: Recorded At',
+  'Screening Amendments',
+  'Part B: ESR (mm/hour)', 'Part B: CRP', 'Part B: CRP Unit',
+  'Part B: ASO Value', 'Part B: ASO Unit', 'Part B: ASO Upper Limit', 'Part B: ASO Paired Rise',
+  'Part B: Anti-DNase B Value', 'Part B: Anti-DNase B Unit', 'Part B: Anti-DNase B Upper Limit', 'Part B: Anti-DNase B Paired Rise',
+  'Part B: Throat Culture', 'Part B: Rapid GAS Antigen',
+  'Part B: ECG Status', 'Part B: PR Interval (ms)', 'Part B: PR Prolonged for Age',
+  'Part B: Echo', 'Part B: Pathological Mitral Regurgitation', 'Part B: Pathological Aortic Regurgitation', 'Part B: Echo Other Finding', 'Part B: Other Investigations',
+  'Part B: Diagnostic Assessment Completed', 'Part B: Not Completed Reason', 'Part B: Study Reference Classification',
+  'Part B: Diagnostic Basis', 'Part B: Episode', 'Part B: Treating-Team Diagnosis', 'Part B: Unable-to-Classify Reason',
+  'Part B: Saved At', 'Part B: Saved By',
 ] as const;
 
 export interface EncounterExportInput {
@@ -80,6 +104,11 @@ function tick(checked: boolean): string {
  *  legacy/partial to score (NaN guard). */
 function levelScoreCells(e: Encounter): [string, string] {
   if (!e.inputs) return ['', ''];
+  // v3 has no Level B; the Part B record never feeds a score.
+  if (isFast31(e.inputs)) {
+    const a = fast31Result(e.inputs).scoreA;
+    return [a !== null && Number.isFinite(a) ? String(a) : '', ''];
+  }
   const a = isFast(e.inputs) ? fastResult(e.inputs).scoreA : calcLevelA(e.inputs);
   const b = e.includesLevelB ? (isFast(e.inputs) ? fastResult(e.inputs, true).scoreB : calcLevelB(e.inputs)) : null;
   return [
@@ -124,6 +153,26 @@ function versionCells(e: Encounter): string[] {
   const count = 4 + ENTRY_FEATURES.length + 3 + AUTO_FEATURES.length + 4;
   if (!s) return Array(count).fill('');
   if (!isFast(s)) return [String(s.assessmentVersion ?? 1), ...Array(count - 1).fill('')];
+  if (isFast31(s)) {
+    const f = s.arfFast31;
+    const result = fast31Result(s);
+    // The shared Automatic columns carry the QUALIFYING booleans (definition
+    // met, carve-outs applied); the raw sub-findings follow in v3Cells.
+    const qualifying: Record<string, boolean> = {
+      chorea: !!f?.chorea && f?.choreaEpisodicBlackout === false,
+      murmur: !!f?.murmur && f?.murmurDocumentedInnocent !== true,
+      carditis: f?.breathlessness === true && (f?.orthopnea === true || f?.edema === true || f?.activityReduction === true),
+      skin: !!f?.em || !!f?.sn,
+      arthritis: !!f?.migratoryArthritis,
+    };
+    const tri = (v: string | null | undefined) => v == null ? '' : capitalize(v);
+    return ['3', result.label, result.method, '',
+      ...ENTRY_FEATURES.map(k => triState(f?.entry?.[k.id])),
+      triState(f?.entryReviewed), triState(f?.urgentAcknowledged), triState(f?.automaticReviewed),
+      ...AUTO_FEATURES.map(k => qualifying[k.id] ? 'Yes' : 'No'),
+      FAST31_JOINTS.find(j => j.id === f?.joint)?.name ?? '',
+      triState(f?.measuredFever), tri(f?.familyHistory), tri(f?.previousArfRhd)];
+  }
   const f = s.arfFast;
   const result = fastResult(s, e.includesLevelB);
   return ['2', result.label, result.method, result.combinedInterpretation ?? '',
@@ -132,6 +181,77 @@ function versionCells(e: Encounter): string[] {
     ...AUTO_FEATURES.map(k => triState(f?.automatic?.[k.id])),
     FAST_JOINTS.find(j => j.id === f?.joint)?.name ?? '',
     triState(f?.measuredFever), triState(f?.familyHistory), triState(f?.previousArfRhd)];
+}
+
+/** Value / "Not done" / '' for a numeric investigation. */
+function numericCell(done: boolean | null | undefined, value: string | undefined): string {
+  if (done === false) return 'Not done';
+  if (done === true && value?.trim()) return value.trim();
+  return '';
+}
+
+/** The version-3 detail block. Blank on v1/v2 rows. Screening amendments
+ *  serialize as field: before → after (by, date; reason) so the sheet shows
+ *  the correction trail without a second sheet. */
+function v3Cells(e: Encounter): string[] {
+  const s = e.inputs;
+  const blank = Array(50).fill('') as string[];
+  if (!s || !isFast31(s)) return blank;
+  const f = s.arfFast31!;
+  const care = s.careRecord;
+  const pb = s.partB;
+  const inv = pb?.investigations;
+  const dz = pb?.diagnosis;
+  const tri = (v: boolean | null | undefined) => v == null ? '' : v ? 'Yes' : 'No';
+  const amendments = (s.screeningAmendments ?? [])
+    .map(a => `${a.field}: ${a.before} → ${a.after} (${a.by}, ${a.at.slice(0, 10)}; reason: ${a.reason})`)
+    .join(' ; ');
+  return [
+    s.studyId ?? '',
+    tri(f.breathlessness), tri(f.orthopnea), tri(f.edema), tri(f.activityReduction),
+    tri(f.choreaEpisodicBlackout), tri(f.murmurDocumentedInnocent),
+    f.migratoryArthritis ? 'Yes' : 'No', f.em ? 'Yes' : 'No', f.sn ? 'Yes' : 'No',
+    f.familyHistory == null ? '' : capitalize(f.familyHistory),
+    f.previousArfRhd == null ? '' : capitalize(f.previousArfRhd),
+    care ? CARE_BPG_LABEL[care.bpgAction] : '',
+    care ? (care.referred ? 'Yes' : 'No') : '',
+    care?.otherAction ?? '',
+    care?.actionAt ?? '',
+    care?.provider ?? '',
+    care?.facility ?? '',
+    care?.recordedAt ?? '',
+    amendments,
+    numericCell(inv?.esrDone, inv?.esrValue),
+    numericCell(inv?.crpDone, inv?.crpValue),
+    inv?.crpUnit ?? '',
+    numericCell(inv?.asoDone, inv?.asoValue),
+    inv?.asoUnit ?? '',
+    inv?.asoUpperLimit ?? '',
+    inv?.asoPairedRise ? PAIRED_RISE_LABEL[inv.asoPairedRise] : '',
+    numericCell(inv?.dnaseDone, inv?.dnaseValue),
+    inv?.dnaseUnit ?? '',
+    inv?.dnaseUpperLimit ?? '',
+    inv?.dnasePairedRise ? PAIRED_RISE_LABEL[inv.dnasePairedRise] : '',
+    inv ? MICRO_LABEL[inv.throatCulture] : '',
+    inv ? MICRO_LABEL[inv.rapidGas] : '',
+    inv ? ECG_STATUS_LABEL[inv.ecgStatus] : '',
+    inv?.ecgPrMs ?? '',
+    inv ? (inv.ecgProlongedForAge === 'yes' ? 'Yes' : inv.ecgProlongedForAge === 'no' ? 'No' : '') : '',
+    inv ? ECHO_STATUS_LABEL[inv.echoStatus] : '',
+    inv ? VALVE_LABEL[inv.echoMrPathological] : '',
+    inv ? VALVE_LABEL[inv.echoArPathological] : '',
+    inv?.echoOther ?? '',
+    inv?.otherInvestigations ?? '',
+    dz ? (dz.assessmentCompleted === 'yes' ? 'Yes' : dz.assessmentCompleted === 'no' ? 'No' : '') : '',
+    dz?.notCompletedReason ?? '',
+    dz ? CLASSIFICATION_LABEL[dz.classification] : '',
+    dz ? BASIS_LABEL[dz.basis] : '',
+    dz ? EPISODE_LABEL[dz.episode] : '',
+    dz?.treatingTeamDx ?? '',
+    dz?.unableReason ?? '',
+    pb?.savedAt ?? '',
+    pb?.savedBy ?? '',
+  ];
 }
 
 /**
@@ -205,6 +325,7 @@ export function buildEncounterExportRows(input: EncounterExportInput): CsvRow[] 
       linksFor(photosByEncounter.get(e.id) ?? [], photoUrls),
       linksFor(audioByEncounter.get(e.id) ?? [], audioUrls),
       ...versionCells(e),
+      ...v3Cells(e),
     ]);
   }
   return rows;

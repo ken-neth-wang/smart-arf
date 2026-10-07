@@ -147,6 +147,7 @@ export function SelectField({
   onChange,
   required,
   style,
+  disabled = false,
 }: {
   label?: React.ReactNode;
   value: string;
@@ -155,13 +156,14 @@ export function SelectField({
   onChange: (value: string) => void;
   required?: boolean;
   style?: ViewStyle;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <FieldLabel required={required}>{label}</FieldLabel> : null}
-      <Pressable style={[selectStyles.trigger, style]} onPress={() => setOpen(true)}>
+      <Pressable style={[selectStyles.trigger, style, disabled && { opacity: 0.5 }]} onPress={() => (disabled ? undefined : setOpen(true))} pointerEvents={disabled ? 'none' : 'auto'}>
         <Text style={[selectStyles.triggerText, !selected && { color: Colors.gray }]}>{selected ? selected.label : placeholder}</Text>
         <Ionicons name="chevron-down" size={18} color={Colors.gray} />
       </Pressable>
@@ -215,12 +217,14 @@ const selectStyles = StyleSheet.create({
 export function YesNoGroup({
   value,
   onChange,
+  disabled = false,
 }: {
   value: boolean | null;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <View style={ynStyles.wrap}>
+    <View style={[ynStyles.wrap, disabled && { opacity: 0.5 }]} pointerEvents={disabled ? 'none' : 'auto'}>
       <Pressable
         style={[ynStyles.btn, value === true && ynStyles.btnYes]}
         onPress={() => onChange(true)}
@@ -255,13 +259,15 @@ export function RadioList({
   options,
   selectedId,
   onSelect,
+  disabled = false,
 }: {
   options: RadioOption[];
   selectedId: string;
   onSelect: (id: string) => void;
+  disabled?: boolean;
 }) {
   return (
-    <View>
+    <View pointerEvents={disabled ? 'none' : 'auto'} style={disabled ? { opacity: 0.5 } : undefined}>
       {options.map((o) => {
         const selected = o.id === selectedId;
         return (
@@ -308,6 +314,7 @@ export function CheckboxRow({
   muted,
   image,
   imageLabel,
+  disabled = false,
 }: {
   label: string;
   sub?: string;
@@ -318,11 +325,13 @@ export function CheckboxRow({
   /** Optional reference image shown under the label; tapping opens a full-screen lightbox. */
   image?: ImageSourcePropType;
   imageLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
-      style={[chkStyles.item, checked && chkStyles.itemChecked]}
+      style={[chkStyles.item, checked && chkStyles.itemChecked, disabled && { opacity: 0.5 }]}
       onPress={onToggle}
+      pointerEvents={disabled ? 'none' : 'auto'}
     >
       <View style={[chkStyles.box, checked && { backgroundColor: Colors.primary, borderColor: Colors.primary }]}>
         {checked ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}

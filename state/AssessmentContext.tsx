@@ -13,6 +13,8 @@ import { ALL_CLINICS } from './actingClinic';
 import { clinicsForUser } from '@/lib/permissions';
 import { ageFromDateOfBirth, type AssessmentInputs, type Encounter, type Gender, type Patient, type Setting } from '@/lib/types';
 import { fastResult, fastScoringSnapshot, fastValidation, isFast, newAssessmentInputs, restoreAssessmentInputs } from '@/lib/arfFast';
+import { applyScreeningAmendment, fast31Result, fast31ScoringSnapshot, fast31Validation, isFast31, mergeCareRecord, type FastCareRecord } from '@/lib/arfFast31';
+import { normalizePartB, validatePartB, type PartBData, type PartBDiagnosis } from '@/lib/partB';
 import {
   buildBreakdownArray,
   buildFullBreakdownArray,
@@ -37,13 +39,15 @@ export interface PatientFields {
   gender: Gender;
   setting: Setting;
   isTest: boolean;
+  /** v3: optional study identifier shown on screening + Part B and in exports. */
+  studyId: string;
 }
 
 function emptyPatient(): PatientFields {
-  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, dobApproximate: false, gender: '', setting: '', isTest: false };
+  return { firstName: '', lastName: '', mrn: '', phone1: '', phone2: '', dateOfBirth: null, dobApproximate: false, gender: '', setting: '', isTest: false, studyId: '' };
 }
 
-// Legacy step IDs stay stable; named screens insert version-2 stages before results.
+// Legacy step IDs stay stable; named screens insert FAST stages before results.
 export type Step = 1 | 2 | 3 | 4 | 5 | 6 | 'urgent' | 'automatic' | 'fast-score';
 
 interface AssessmentContextValue {
@@ -66,8 +70,24 @@ interface AssessmentContextValue {
   commitLevelA: () => Promise<{ patientId: string; encounterId: string }>;
   /** Commit Level B; v2 stores separate subtotals with no combined interpretation. */
   commitFinal: () => Promise<{ patientId: string; encounterId: string }>;
-  /** Resume the saved version: legacy scoring or v2 entry review. */
-  loadRecordForEdit: (patient: Patient, encounter: Encounter) => void;
+  /** v3: save the ARF-FAST action record (BPG / referral / other) on the
+   *  saved screening encounter. Referral fields stay the single source of
+   *  truth for destination. */
+  commitCareRecord: (
+    patch: Partial<Omit<FastCareRecord, 'recordedAt'>>,
+    referral: { referredTo: string; referredToClinicId: string | null },
+  ) => Promise<void>;
+  /** v3: save Part B investigations + reference diagnosis on the same encounter. */
+  commitPartB: (data: PartBData, diagnosis: PartBDiagnosis) => Promise<void>;
+  /** Resume the saved version: legacy scoring, v2 entry review, or locked v3. */
+  loadRecordForEdit: (patient: Patient, encounter: Encounter, opts?: { toPartB?: boolean }) => void;
+  /** v3: true once the screening for the loaded encounter is saved and frozen. */
+  screeningLocked: boolean;
+  /** v3: non-empty while an amendment is in progress (reason is required). */
+  amendReason: string;
+  setAmendReason: (reason: string) => void;
+  startAmend: (reason: string) => void;
+  cancelAmend: () => void;
   scoreA: number;
   scoreB: number;
 }
@@ -84,6 +104,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const [activeEncounterId, setActiveEncounterId] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
+  const [amendMode, setAmendMode] = useState(false);
+  const [amendReason, setAmendReason] = useState('');
 
   /** True once the user has entered anything — the assessment draft is live.
    *  While a draft exists the acting clinic is LOCKED (switching would
@@ -125,12 +147,21 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     setActiveEncounterId(null);
     setReferralCode(null);
     setSignedBy('');
+    setAmendMode(false);
+    setAmendReason('');
   };
 
   const goStep = (n: Step) => setStep(n);
 
-  const scoreA = useMemo(() => isFast(inputs) ? fastResult(inputs).scoreA ?? 0 : calcLevelA(inputs), [inputs]);
-  const scoreB = useMemo(() => isFast(inputs) ? fastResult(inputs, true).scoreB ?? 0 : calcLevelB(inputs), [inputs]);
+  const scoreA = useMemo(
+    () => isFast31(inputs) ? fast31Result(inputs).scoreA ?? 0 : isFast(inputs) ? fastResult(inputs).scoreA ?? 0 : calcLevelA(inputs),
+    [inputs],
+  );
+  // v3 has no Level B; the separate Part B record never feeds a score.
+  const scoreB = useMemo(
+    () => isFast(inputs) && !isFast31(inputs) ? fastResult(inputs, true).scoreB ?? 0 : isFast31(inputs) ? 0 : calcLevelB(inputs),
+    [inputs],
+  );
 
   /** Build the Patient object from wizard state, reusing existing ids when editing. */
   const buildPatient = (): Patient => {
@@ -160,10 +191,11 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     };
   };
 
-  /** Build an 'initial' encounter from the scoring state. */
-  const buildEncounter = (patientId: string, withLevelB: boolean): Encounter => {
-    const inputsFinal: AssessmentInputs = { ...inputs, choreaPositive: inputs.chorea === true };
-    const scoring = isFast(inputsFinal) ? fastScoringSnapshot(inputsFinal, withLevelB) : (() => {
+  /** Build an 'initial' encounter from the scoring state. `source` lets the
+   *  v3 path hand in the amendment-merged inputs; defaults to wizard state. */
+  const buildEncounter = (patientId: string, withLevelB: boolean, source: AssessmentInputs = inputs): Encounter => {
+    const inputsFinal: AssessmentInputs = { ...source, choreaPositive: source.chorea === true };
+    const scoring = isFast31(inputsFinal) ? fast31ScoringSnapshot(inputsFinal) : isFast(inputsFinal) ? fastScoringSnapshot(inputsFinal, withLevelB) : (() => {
       const scoreA = calcLevelA(inputsFinal);
       const scoreB = withLevelB ? calcLevelB(inputsFinal) : 0;
       const interp = withLevelB ? getInterp(scoreA, scoreB, inputs.feverDuration) : getLevelAInterp(scoreA);
@@ -182,8 +214,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       inactive: false,
       date: formatRecordDate(),
       ...scoring,
-      includesLevelB: withLevelB,
-      facilityType: inputs.facilityType,
+      includesLevelB: isFast31(inputsFinal) ? false : withLevelB,
+      facilityType: source.facilityType,
       confirmedDx: '',
       finalDx: '',
       bpgStatus: '',
@@ -198,7 +230,18 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   };
 
   const commit = async (withLevelB: boolean): Promise<{ patientId: string; encounterId: string }> => {
-    if (isFast(inputs)) {
+    const existingBefore = activeEncounterId
+      ? records.getEncountersForPatient(activePatientId ?? '').find((e) => e.id === activeEncounterId)
+      : undefined;
+    if (isFast31(inputs)) {
+      const error = fast31Validation(inputs);
+      if (error) throw new Error(error);
+      if (!signedBy.trim()) throw new Error('Clinician sign-off is required.');
+      // Screening lock: saved v3 answers change only through an amendment.
+      if (existingBefore && !amendMode) {
+        throw new Error('This screening is locked. To correct a saved answer, use "Amend answers" and state the reason.');
+      }
+    } else if (isFast(inputs)) {
       const error = fastValidation(inputs);
       if (error) throw new Error(error);
       if (!signedBy.trim()) throw new Error('Clinician sign-off is required.');
@@ -211,39 +254,94 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     // update); otherwise an MRN-less patient would mint a new id and duplicate.
     setActivePatientId(savedPatient.id);
     setReferralCode(savedPatient.referralCode);
-    // Preserve the patient's stable id/code + createdAt after dedup.
-    const encounter = buildEncounter(savedPatient.id, withLevelB);
+
+    // v3: carry the study id and, when amending, append the audit trail on top
+    // of the SAVED inputs — the wizard state never holds the only copy of
+    // careRecord / partB, so those ride along untouched.
+    let effective: AssessmentInputs = { ...inputs, studyId: patient.studyId.trim() || inputs.studyId || '' };
+    if (existingBefore?.inputs && isFast31(existingBefore.inputs)) {
+      effective = amendMode
+        ? applyScreeningAmendment(existingBefore.inputs, effective.arfFast31!, amendReason.trim(), signedBy.trim(), new Date().toISOString()).inputs
+        : existingBefore.inputs;
+    } else if (isFast31(effective)) {
+      // First save: freeze the original answers for the export's before/after.
+      effective.screeningOriginal = effective.arfFast31 ? { ...effective.arfFast31 } : undefined;
+    }
+    const encounter = buildEncounter(savedPatient.id, withLevelB, effective);
     // Preserve date + referral on edit (don't overwrite a prior encounter's date).
-    if (activeEncounterId) {
-      const existing = records.getEncountersForPatient(savedPatient.id).find((e) => e.id === activeEncounterId);
-      if (existing) {
-        encounter.id = existing.id;
-        encounter.date = existing.date;
-        encounter.referredTo = existing.referredTo;
-        encounter.referredToClinicId = existing.referredToClinicId;
-        encounter.confirmedDx = existing.confirmedDx;
-        encounter.finalDx = existing.finalDx;
-        encounter.bpgStatus = existing.bpgStatus;
-        encounter.echoFindings = existing.echoFindings;
-        encounter.complications = existing.complications;
-        encounter.notes = existing.notes;
-        encounter.createdAt = existing.createdAt;
-        // Preserve the sign-off stamp on re-commit (Level B); the name itself
-        // comes from the current `signedBy` state (editable in Step 3).
-        encounter.signedBy = encounter.signedBy || existing.signedBy;
-        encounter.signedByUserId = existing.signedByUserId;
-        encounter.signedAt = existing.signedAt;
-      }
+    if (existingBefore) {
+      encounter.id = existingBefore.id;
+      encounter.date = existingBefore.date;
+      encounter.referredTo = existingBefore.referredTo;
+      encounter.referredToClinicId = existingBefore.referredToClinicId;
+      encounter.confirmedDx = existingBefore.confirmedDx;
+      encounter.finalDx = existingBefore.finalDx;
+      encounter.bpgStatus = existingBefore.bpgStatus;
+      encounter.echoFindings = existingBefore.echoFindings;
+      encounter.complications = existingBefore.complications;
+      encounter.notes = existingBefore.notes;
+      encounter.createdAt = existingBefore.createdAt;
+      // Preserve the sign-off stamp on re-commit; the name itself comes from
+      // the current `signedBy` state (editable on the scoring step).
+      encounter.signedBy = encounter.signedBy || existingBefore.signedBy;
+      encounter.signedByUserId = existingBefore.signedByUserId;
+      encounter.signedAt = existingBefore.signedAt;
     }
     await records.upsertEncounter(encounter);
     setActiveEncounterId(encounter.id);
+    if (effective !== inputs) setInputsState(effective);
+    if (amendMode) { setAmendMode(false); setAmendReason(''); }
     return { patientId: savedPatient.id, encounterId: encounter.id };
   };
 
   const commitLevelA = () => commit(false);
   const commitFinal = () => commit(true);
 
-  const loadRecordForEdit = (p: Patient, e: Encounter) => {
+  const findActiveEncounter = (): Encounter | undefined =>
+    activeEncounterId && activePatientId
+      ? records.getEncountersForPatient(activePatientId).find((e) => e.id === activeEncounterId)
+      : undefined;
+
+  /** v3 action record. Written straight onto the SAVED encounter — screening
+   *  answers are untouched, and mergeCareRecord keeps the first action time
+   *  + recordedAt unless the editor explicitly changes them. */
+  const commitCareRecord = async (
+    patch: Partial<Omit<FastCareRecord, 'recordedAt'>>,
+    referral: { referredTo: string; referredToClinicId: string | null },
+  ) => {
+    const existing = findActiveEncounter();
+    if (!existing?.inputs) throw new Error('Save the screening before recording actions.');
+    const patientClinicId = records.patients.find((p) => p.id === existing.patientId)?.clinicId ?? activeClinicId;
+    const facilityDefault = records.clinics.find((c) => c.id === patientClinicId)?.name ?? '';
+    const now = new Date().toISOString();
+    const careRecord = mergeCareRecord(existing.inputs.careRecord, patch, now, {
+      provider: existing.signedBy || signedBy.trim(),
+      facility: facilityDefault,
+    });
+    await records.upsertEncounter({
+      ...existing,
+      inputs: { ...existing.inputs, careRecord },
+      referredTo: referral.referredTo,
+      referredToClinicId: referral.referredToClinicId,
+      updatedAt: now,
+    });
+  };
+
+  /** v3 Part B. Also written onto the SAVED encounter; the screening block
+   *  is never rewritten. First-save attribution (savedAt/savedBy) is frozen. */
+  const commitPartB = async (data: PartBData, diagnosis: PartBDiagnosis) => {
+    const existing = findActiveEncounter();
+    if (!existing?.inputs) throw new Error('Save the screening before entering Part B.');
+    const error = validatePartB(data, diagnosis);
+    if (error) throw new Error(error);
+    const { investigations, diagnosis: dz } = normalizePartB(data, diagnosis);
+    const now = new Date().toISOString();
+    const prev = existing.inputs.partB;
+    const partB = { investigations, diagnosis: dz, savedAt: prev?.savedAt || now, savedBy: prev?.savedBy || signedBy.trim() };
+    await records.upsertEncounter({ ...existing, inputs: { ...existing.inputs, partB }, updatedAt: now });
+  };
+
+  const loadRecordForEdit = (p: Patient, e: Encounter, opts?: { toPartB?: boolean }) => {
     setPatientState({
       firstName: p.firstName,
       lastName: p.lastName,
@@ -255,14 +353,29 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       gender: p.gender,
       setting: p.setting,
       isTest: p.isTest,
+      studyId: e.inputs?.studyId ?? '',
     });
     setInputsState({ ...restoreAssessmentInputs(e.inputs), facilityType: e.facilityType ?? null });
     setSignedBy(e.signedBy ?? '');
     setActivePatientId(p.id);
     setActiveEncounterId(e.id);
     setReferralCode(p.referralCode);
-    setStep(isFast(e.inputs) ? 2 : 3);
+    setAmendMode(false);
+    setAmendReason('');
+    setStep(isFast31(e.inputs) ? (opts?.toPartB ? 5 : 2) : isFast(e.inputs) ? 2 : 3);
   };
+  /** v3 lock: answers of a SAVED v3 screening are frozen until an amendment
+   *  with a stated reason opens them. */
+  const screeningLocked = !!activeEncounterId && isFast31(inputs) && !amendMode;
+  const startAmend = (reason: string) => {
+    setAmendReason(reason);
+    setAmendMode(true);
+  };
+  const cancelAmend = () => {
+    setAmendMode(false);
+    setAmendReason('');
+  };
+
 
   const value: AssessmentContextValue = {
     patient,
@@ -281,7 +394,14 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     goStep,
     commitLevelA,
     commitFinal,
+    commitCareRecord,
+    commitPartB,
     loadRecordForEdit,
+    screeningLocked,
+    amendReason,
+    setAmendReason,
+    startAmend,
+    cancelAmend,
     scoreA,
     scoreB,
   };

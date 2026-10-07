@@ -1,27 +1,40 @@
-import { AUTO_FEATURES, FAST_JOINTS, automaticReasons, fastBreakdown, fastResult, fastScoringSnapshot, fastValidation, isFast, newAssessmentInputs, restoreAssessmentInputs } from '@/lib/arfFast';
+import { AUTO_FEATURES, FAST_JOINTS, automaticReasons, emptyFast, fastBreakdown, fastResult, fastScoringSnapshot, fastValidation, isFast, newAssessmentInputs, restoreAssessmentInputs } from '@/lib/arfFast';
+import { isFast31 } from '@/lib/arfFast31';
 import { calcLevelA, getInterp, getLevelAInterp } from '@/lib/scoring';
-import { emptyInputs } from '@/lib/types';
+import { emptyInputs, type AssessmentInputs } from '@/lib/types';
+
+/** Version-2 inputs are no longer the wizard default (new = v3); saved v2
+ *  records keep this shape, so tests build it explicitly. */
+function v2(): AssessmentInputs {
+  return { ...emptyInputs(), assessmentVersion: 2, arfFast: emptyFast() };
+}
 
 function complete() {
-  const s = newAssessmentInputs();
+  const s = v2();
   Object.assign(s.arfFast!, { entryReviewed: true, urgentAcknowledged: true, automaticReviewed: true, joint: 'none', measuredFever: false, familyHistory: false, previousArfRhd: false });
   return s;
 }
 
 describe('assessment versions', () => {
-  it('starts new assessments at v2 and restores unversioned records as v1', () => {
+  it('starts new assessments at v3 and restores each saved version as saved', () => {
+    expect(newAssessmentInputs().assessmentVersion).toBe(3);
+    expect(isFast31(newAssessmentInputs())).toBe(true);
     expect(isFast(newAssessmentInputs())).toBe(true);
+    const savedV2 = v2();
+    expect(isFast(savedV2)).toBe(true);
+    expect(isFast31(savedV2)).toBe(false);
     const original = { ...emptyInputs(), joint: 3, aso: true };
     const restored = restoreAssessmentInputs(JSON.parse(JSON.stringify(original)));
     expect(restored.assessmentVersion).toBe(1);
     expect(restored.arfFast).toBeUndefined();
+    expect(restored.arfFast31).toBeUndefined();
     expect(calcLevelA(restored)).toBe(3);
     expect(getLevelAInterp(calcLevelA(restored)).label).toBe('ARF ruled out');
     expect(getInterp(calcLevelA(restored), 5).label).toBe('ARF Likely');
     expect(original).not.toHaveProperty('assessmentVersion');
   });
   it('round trips new answers and automatic reasons without converting missing answers to no', () => {
-    const s = newAssessmentInputs();
+    const s = v2();
     s.arfFast!.automatic.murmur = true;
     const restored = restoreAssessmentInputs(JSON.parse(JSON.stringify(s)));
     expect(restored).toEqual(s);
@@ -62,11 +75,10 @@ describe('ARF-FAST rules', () => {
     expect(fastResult(s)).toMatchObject({ method: 'incomplete', scoreA: null });
     expect(fastValidation(s)).toMatch(/Answer all/);
   });
-  it('requires reviewed entry/automatic checks and urgent acknowledgement before saving', () => {
+  it('requires reviewed entry/automatic checks; the urgent acknowledgement is informational, not a gate', () => {
     const s = complete();
     s.arfFast!.urgentAcknowledged = false;
-    expect(fastValidation(s)).toMatch(/urgent/);
-    s.arfFast!.urgentAcknowledged = true;
+    expect(fastValidation(s)).toBeNull();
     s.arfFast!.automaticReviewed = false;
     expect(fastValidation(s)).toMatch(/automatic/);
     s.arfFast!.entryReviewed = false;

@@ -39,6 +39,10 @@ interface EncRow {
  *  (follow-ups, or inputs too partial to score). Pure — unit-testable. */
 export function rescore(e: EncRow): { result_label: string; level: string; range: string; actions: string[] } | null {
   if (!e.inputs) return null;
+  // Version guard: this backfill re-derives LEGACY JONES verdicts only.
+  // ARF-FAST rows (v2) and v3.1/Part B rows must never be rewritten with the
+  // legacy ladder — their stored snapshots are the record.
+  if (e.inputs.assessmentVersion !== undefined) return null;
   const a = calcLevelA(e.inputs);
   const b = e.includes_level_b ? calcLevelB(e.inputs) : 0;
   if (!Number.isFinite(a) || !Number.isFinite(b)) return null; // legacy partial inputs

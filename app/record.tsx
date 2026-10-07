@@ -8,6 +8,11 @@ import { Alert as RNAlert, Modal, Platform, Pressable, ScrollView, StyleSheet, T
 import { Ionicons } from '@expo/vector-icons';
 import { Card, CardSubtitle, CardTitle, PrimaryButton, SecondaryButton, SelectField, StepBadge, type SelectOption } from '@/components/ui/primitives';
 import { FastResultCard } from '@/components/FastResultCard';
+import { FastResultCard31 } from '@/components/FastResultCard31';
+import { CareRecordSummary } from '@/components/FastCareRecord';
+import { PartBResult } from '@/components/PartBResult';
+import { fast31Breakdown, fast31Result, isFast31 } from '@/lib/arfFast31';
+import { CLASSIFICATION_LABEL, restorePartB } from '@/lib/partB';
 import { fastBreakdown, fastResult, isFast } from '@/lib/arfFast';
 import { ScoreBreakdown } from '@/components/ui/results';
 import { useRecords } from '@/state/RecordsContext';
@@ -72,9 +77,11 @@ export default function RecordScreen() {
   const level = initialEncounter?.level ?? null;
   const color = (level && tierColor[level]) ?? Colors.gray;
   const fast = isFast(initialEncounter?.inputs);
-  const breakdownRows = fast && initialEncounter?.inputs ? fastBreakdown(initialEncounter.inputs, initialEncounter.includesLevelB) : initialEncounter?.breakdown
-    ? [...initialEncounter.breakdown, { label: 'Total', points: initialEncounter.score ?? 0, kind: 'total' as const }]
-    : [];
+  const v3 = isFast31(initialEncounter?.inputs);
+  const breakdownRows = v3 && initialEncounter?.inputs ? fast31Breakdown(initialEncounter.inputs)
+    : fast && initialEncounter?.inputs ? fastBreakdown(initialEncounter.inputs, initialEncounter.includesLevelB) : initialEncounter?.breakdown
+      ? [...initialEncounter.breakdown, { label: 'Total', points: initialEncounter.score ?? 0, kind: 'total' as const }]
+      : [];
 
   const confirmDelete = async () => {
     await softDelete(patient.id, reason as DeleteReason);
@@ -115,9 +122,12 @@ export default function RecordScreen() {
         {patient.referralCode ? (
           <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.primary, marginTop: 2 }}>Referral Code: {patient.referralCode}</Text>
         ) : null}
+        {initialEncounter?.inputs?.studyId ? (
+          <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text, marginTop: 2 }}>Study ID: {initialEncounter.inputs.studyId}</Text>
+        ) : null}
         <Text style={styles.dateSync}>Registered {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : '—'}</Text>
 
-        {fast && initialEncounter?.inputs ? <FastResultCard inputs={initialEncounter.inputs} withLevelB={initialEncounter.includesLevelB} /> : score != null && initialEncounter ? (
+        {v3 && initialEncounter?.inputs ? <FastResultCard31 inputs={initialEncounter.inputs} /> : fast && initialEncounter?.inputs ? <FastResultCard inputs={initialEncounter.inputs} withLevelB={initialEncounter.includesLevelB} /> : score != null && initialEncounter ? (
           <View style={[styles.scoreBox, { backgroundColor: color + '1A', borderColor: color }]}>
             <Text style={[styles.scoreNum, { color }]}>{score}</Text>
             <Text style={[styles.scoreLabel, { color }]}>{initialEncounter.resultLabel || '—'}</Text>
@@ -144,6 +154,33 @@ export default function RecordScreen() {
         </Card>
       ) : null}
 
+      {initialEncounter?.inputs?.careRecord ? (
+        <CareRecordSummary care={initialEncounter.inputs.careRecord} referredTo={initialEncounter.referredTo || undefined} />
+      ) : null}
+
+      {v3 && initialEncounter?.inputs?.partB ? (
+        <PartBResult record={restorePartB(initialEncounter.inputs)} />
+      ) : null}
+
+      {v3 && initialEncounter?.inputs?.screeningAmendments?.length ? (
+        <Card>
+          <CardTitle>Screening Amendments</CardTitle>
+          {initialEncounter.inputs.screeningAmendments.map((a, i) => (
+            <Text key={i} style={styles.encRow}>
+              {a.field}: {a.before} → {a.after} — {a.by}, {a.at.slice(0, 10)} ({a.reason})
+            </Text>
+          ))}
+          <CardSubtitle>The original answers are kept and exported alongside the corrected values.</CardSubtitle>
+        </Card>
+      ) : null}
+
+      {v3 && initialEncounter ? (
+        <PrimaryButton
+          title={initialEncounter.inputs?.partB ? '✏ Update Part B — Investigations & Final Diagnosis' : '🧪 Complete Part B — Investigations & Final Diagnosis'}
+          onPress={() => { loadRecordForEdit(patient, initialEncounter, { toPartB: true }); router.navigate('/(tabs)/assess'); }}
+        />
+      ) : null}
+
       <Card>
         <CardTitle>Encounters{encounters.length ? ` (${encounters.length})` : ''}</CardTitle>
         {encounters.length === 0 ? (
@@ -156,7 +193,9 @@ export default function RecordScreen() {
                 <Text style={styles.encDate}>{e.date || '—'}</Text>
               </View>
               <View style={styles.encBody}>
-                {isFast(e.inputs) && e.inputs ? (
+                {isFast31(e.inputs) && e.inputs ? (
+                  <Text style={styles.encRow}>ARF-FAST v3.1 · {fast31Result(e.inputs).label} · {fast31Result(e.inputs).scoreA == null ? 'Automatic criteria met' : `Score ${fast31Result(e.inputs).scoreA}/7`}{e.inputs.partB?.diagnosis.classification ? ` · Part B: ${CLASSIFICATION_LABEL[e.inputs.partB.diagnosis.classification]}` : ''}{e.inputs.screeningAmendments?.length ? ` · ${e.inputs.screeningAmendments.length} amendment${e.inputs.screeningAmendments.length > 1 ? 's' : ''}` : ''}</Text>
+                ) : isFast(e.inputs) && e.inputs ? (
                   <Text style={styles.encRow}>ARF-FAST v2 · {fastResult(e.inputs).label} · {fastResult(e.inputs).scoreA == null ? 'Automatic criteria met' : `Level A ${fastResult(e.inputs).scoreA}/7`}{e.includesLevelB ? ` · Level B ${fastResult(e.inputs, true).scoreB} · Combined interpretation pending clinical review` : ''}</Text>
                 ) : e.type === 'initial' && e.score != null ? (
                   <Text style={styles.encRow}><Text style={styles.encKey}>Score: </Text>{e.score} · {e.resultLabel || '—'}</Text>

@@ -6,6 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fast31Result, isFast31 } from '@/lib/arfFast31';
 import { fastResult, isFast } from '@/lib/arfFast';
 import { Colors, tierColor } from '@/constants/theme';
 import { formatAge, type PatientSummary } from '@/lib/types';
@@ -40,8 +41,8 @@ export function PatientCard({ summary, onPress }: { summary: PatientSummary; onP
 
   const score = latestInitial?.score;
   const resultLabel = latestInitial?.resultLabel;
-  const fast = isFast(latestInitial?.inputs) && latestInitial?.inputs ? fastResult(latestInitial.inputs, latestInitial.includesLevelB) : null;
-
+  const fast31 = isFast31(latestInitial?.inputs) && latestInitial?.inputs ? fast31Result(latestInitial.inputs) : null;
+  const fast = !fast31 && isFast(latestInitial?.inputs) && latestInitial?.inputs ? fastResult(latestInitial.inputs, latestInitial.includesLevelB) : null;
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && { borderColor: Colors.primary }]} onPress={onPress}>
       <View style={[styles.dot, { backgroundColor: dot }]}>
@@ -50,7 +51,9 @@ export function PatientCard({ summary, onPress }: { summary: PatientSummary; onP
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{name}{patient.isTest ? '  (test)' : ''}</Text>
         <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
-        {fast ? (
+        {fast31 ? (
+          <Text style={[styles.result, { color: Colors.primary }]}>{fast31.label} · {fast31.scoreA == null ? 'Automatic criteria met' : `Score ${fast31.scoreA}/7`}</Text>
+        ) : fast ? (
           <Text style={[styles.result, { color: Colors.primary }]}>{fast.label} · {fast.scoreA == null ? 'Automatic criteria met' : `Level A ${fast.scoreA}/7`}{fast.scoreB != null ? ` · Level B ${fast.scoreB} · Combined interpretation pending` : ''}</Text>
         ) : score != null && resultLabel ? (
           <Text style={[styles.result, { color: (level && tierColor[level]) ?? Colors.gray }]}>

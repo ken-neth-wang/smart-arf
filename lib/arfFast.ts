@@ -1,6 +1,9 @@
-/** Version 2 screening. Legacy Jones scoring remains in scoring.ts unchanged. */
+/** Version 2 screening (saved records). New assessments are version 3 —
+ *  ARF-FAST v3.1 + Part B — see arfFast31.ts / partB.ts. Legacy Jones
+ *  scoring remains in scoring.ts unchanged. */
 import { calcLevelB } from './scoring';
 import { emptyInputs, type AssessmentInputs, type BreakdownRow, type Encounter } from './types';
+import { emptyFast31, restoreFast31 } from './arfFast31';
 
 export const ENTRY_FEATURES = [
   { id: 'joints', label: 'Joint symptoms', description: 'Pain, swelling, or painful restriction in one or more joints, especially large joints.' },
@@ -43,7 +46,7 @@ export interface FastResult {
   combinedInterpretation: 'pending' | null;
 }
 export function isFast(s: AssessmentInputs | null | undefined): boolean {
-  return s?.assessmentVersion === 2;
+  return s?.assessmentVersion === 2 || s?.assessmentVersion === 3;
 }
 export function emptyFast(): FastInputs {
   return {
@@ -54,12 +57,17 @@ export function emptyFast(): FastInputs {
   };
 }
 export function newAssessmentInputs(): AssessmentInputs {
-  return { ...emptyInputs(), assessmentVersion: 2, arfFast: emptyFast() };
+  return { ...emptyInputs(), assessmentVersion: 3, arfFast31: emptyFast31() };
 }
-/** Never infer version 2 for an unversioned legacy record. */
+/** Never infer a FAST version for an unversioned legacy record. */
 export function restoreAssessmentInputs(s: AssessmentInputs | null): AssessmentInputs {
   const restored = { ...emptyInputs(), ...s, assessmentVersion: s?.assessmentVersion ?? 1 };
-  if (isFast(s)) restored.arfFast = { ...emptyFast(), ...s?.arfFast, entry: { ...emptyFast().entry, ...s?.arfFast?.entry }, automatic: { ...emptyFast().automatic, ...s?.arfFast?.automatic } };
+  if (s?.assessmentVersion === 2) {
+    restored.arfFast = { ...emptyFast(), ...s.arfFast, entry: { ...emptyFast().entry, ...s.arfFast?.entry }, automatic: { ...emptyFast().automatic, ...s.arfFast?.automatic } };
+  }
+  if (s?.assessmentVersion === 3) {
+    restored.arfFast31 = restoreFast31(s);
+  }
   return restored;
 }
 export function automaticReasons(s: AssessmentInputs) {
@@ -78,7 +86,6 @@ export function fastResult(s: AssessmentInputs, withLevelB = false): FastResult 
 }
 export function fastValidation(s: AssessmentInputs): string | null {
   if (!s.arfFast?.entryReviewed) return 'Review the entry criteria before continuing.';
-  if (!s.arfFast.urgentAcknowledged) return 'Confirm that urgent needs have been assessed and addressed.';
   if (!s.arfFast.automaticReviewed) return 'Review automatic-positive features before continuing.';
   if (fastResult(s).method === 'incomplete') return 'Answer all Level A scoring questions before continuing.';
   return null;
